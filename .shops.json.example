@@ -1,0 +1,12 @@
+[
+  {
+    "name": "my-dev-shop",
+    "domain": "my-dev-shop.myshopify.com",
+    "accessToken": "shpat_example_token_for_dev_shop"
+  },
+  {
+    "name": "my-test-shop",
+    "domain": "my-test-shop.myshopify.com",
+    "accessToken": "shpat_example_token_for_test_shop"
+  }
+]
