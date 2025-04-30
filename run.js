@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-// Check for --prod flag before loading environment variables
-const isProd = process.argv.includes("--prod");
 const path = require("path");
 const fs = require("fs");
 const { program } = require("commander");
@@ -47,7 +45,6 @@ function getShopConfig(shopName) {
 class MetaobjectSyncCli {
   constructor(options = {}) {
     this.options = options;
-    this.isProd = isProd;
     this.debug = options.debug;
 
     // Source shop configuration
@@ -104,7 +101,6 @@ class MetaobjectSyncCli {
       .option("--type <type>", "Specific metaobject definition type to sync (if not specified, will display available types and exit)")
       .option("--definitions-only", "Sync only the metaobject definitions, not the data")
       .option("--data-only", "Sync only the metaobject data, not the definitions")
-      .option("--prod", "Use production environment (.env.production)")
       .option("--not-a-drill", "Make actual changes (default is dry run)", false)
       .option("--debug", "Enable debug logging", false)
       .parse(process.argv);
@@ -761,8 +757,7 @@ class MetaobjectSyncCli {
     let definitionResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
-    // Display environment info
-    console.log(`Environment: ${isProd ? 'Production' : 'Development'}`);
+    // Display info
     console.log(`Dry Run: ${!this.options.notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     console.log(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
     console.log('');

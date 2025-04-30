@@ -69,3 +69,92 @@ node run.js --source my-dev-shop --target my-test-shop --type custom.my_metaobje
 - Copy metaobject definitions from development to test environment
 - Copy test data from one store to another
 - Back up metaobject data by copying to a development store
+
+## Real-World Examples
+
+### Viewing Available Metaobject Types
+
+```
+➜  metasync git:(main) ✗ node run.js --source production-store-redacted --target tapestry-dev
+Dry Run: Yes (no changes will be made)
+Debug: Disabled
+
+No metaobject type specified. Fetching available types...
+
+Available metaobject types:
+- member_roles (Roles)
+- territory (Territories)
+- shopify--color-pattern (Color)
+- shopify--bedding-size (Bedding size)
+- sales_rep_zip_code_mapping (Sales Rep Zip Code Mapping)
+- app--6171699--shopify-forms297263 (claims-form)
+- email_templates (Email Templates)
+- shopify--fabric (Fabric)
+- global_swatches (Global Swatches)
+- promos (Promos)
+
+Please run the command again with --type <type> to specify which metaobject type to sync.
+```
+
+### Dry Run - Seeing What Changes Would Be Made
+
+```
+➜  metasync git:(main) ✗ node run.js --source production-store-redacted --target tapestry-dev --type email_templates
+Dry Run: Yes (no changes will be made)
+Debug: Disabled
+
+Found 1 metaobject definition(s) in source shop for type: email_templates
+Found 1 metaobject definition(s) in target shop
+Creating metaobject definition: email_templates
+[DRY RUN] Would create metaobject definition email_templates
+Syncing metaobjects for type: email_templates
+Found 6 metaobject(s) in source shop for type email_templates
+Found 0 metaobject(s) in target shop for type email_templates
+Creating metaobject: account-application-declined
+[DRY RUN] Would create metaobject account-application-declined with 3 fields
+Creating metaobject: account-application-approved
+[DRY RUN] Would create metaobject account-application-approved with 3 fields
+Creating metaobject: registration-confirmation
+[DRY RUN] Would create metaobject registration-confirmation with 3 fields
+Creating metaobject: default-territory-notification
+[DRY RUN] Would create metaobject default-territory-notification with 3 fields
+Creating metaobject: project-collaboration-invite
+[DRY RUN] Would create metaobject project-collaboration-invite with 3 fields
+Creating metaobject: project-note-notification
+[DRY RUN] Would create metaobject project-note-notification with 3 fields
+
+Sync completed:
+Metaobject Definitions: 1 created, 0 updated, 0 failed
+Metaobject Data: 6 created, 0 updated, 0 failed
+```
+
+### Actual Sync With Changes
+
+```
+➜  metasync git:(main) ✗ node run.js --source production-store-redacted --target tapestry-dev --type email_templates --not-a-drill
+Dry Run: No (changes will be made)
+Debug: Disabled
+
+Found 1 metaobject definition(s) in source shop for type: email_templates
+Found 1 metaobject definition(s) in target shop
+Creating metaobject definition: email_templates
+Syncing metaobjects for type: email_templates
+Found 6 metaobject(s) in source shop for type email_templates
+Found 0 metaobject(s) in target shop for type email_templates
+Creating metaobject: account-application-declined
+Creating metaobject: account-application-declined with 3 fields
+Creating metaobject: account-application-approved
+Creating metaobject: account-application-approved with 3 fields
+Creating metaobject: registration-confirmation
+Creating metaobject: registration-confirmation with 3 fields
+Creating metaobject: default-territory-notification
+Creating metaobject: default-territory-notification with 3 fields
+Creating metaobject: project-collaboration-invite
+Creating metaobject: project-collaboration-invite with 3 fields
+Creating metaobject: project-note-notification
+Creating metaobject: project-note-notification with 3 fields
+
+Sync completed:
+Metaobject Definitions: 1 created, 0 updated, 0 failed
+Metaobject Data: 6 created, 0 updated, 0 failed
+```
