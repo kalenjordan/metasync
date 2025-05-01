@@ -4,6 +4,8 @@ const path = require("path");
 const fs = require("fs");
 const { program } = require("commander");
 const Shopify = require('shopify-api-node');
+const ShopifyClientWrapper = require('./shopifyClientWrapper'); // Import the wrapper
+const consola = require('consola'); // Import consola
 
 /**
  * Get shop configuration from .shops.json file by shop name
@@ -37,7 +39,7 @@ function getShopConfig(shopName) {
     // Find the shop by name
     return shopsConfig.find(s => s.name === shopName) || null;
   } catch (error) {
-    console.error('Error reading .shops.json:', error.message);
+    consola.error('Error reading .shops.json:', error.message);
     return null;
   }
 }
@@ -70,27 +72,31 @@ class MetaobjectSyncCli {
     }
 
     // Create Shopify clients
-    this.sourceShopifyClient = new Shopify({
+    const sourceClientInstance = new Shopify({
       shopName: sourceShopConfig.domain.replace('.myshopify.com', ''),
       accessToken: sourceShopConfig.accessToken,
-      apiVersion: '2023-07',
+      apiVersion: '2024-10',
       autoLimit: this.options.debug ? false : true
     });
 
-    this.targetShopifyClient = new Shopify({
+    const targetClientInstance = new Shopify({
       shopName: targetShopConfig.domain.replace('.myshopify.com', ''),
       accessToken: targetShopConfig.accessToken,
-      apiVersion: '2023-07',
+      apiVersion: '2024-10',
       autoLimit: this.options.debug ? false : true
     });
 
-    // Add event listeners for call limits if debug is enabled
-    if (this.options.debug) {
-      this.sourceShopifyClient.on('callLimits', limits => console.log('Source shop call limits:', limits));
-      this.sourceShopifyClient.on('callGraphqlLimits', limits => console.log('Source shop GraphQL limits:', limits));
-      this.targetShopifyClient.on('callLimits', limits => console.log('Target shop call limits:', limits));
-      this.targetShopifyClient.on('callGraphqlLimits', limits => console.log('Target shop GraphQL limits:', limits));
-    }
+    // Wrap clients for centralized logging/handling
+    this.sourceClient = new ShopifyClientWrapper(sourceClientInstance, this.options.debug);
+    this.targetClient = new ShopifyClientWrapper(targetClientInstance, this.options.debug);
+
+    // Add event listeners for call limits if debug is enabled - HANDLED BY WRAPPER NOW
+    // if (this.options.debug) {
+    //   this.sourceShopifyClient.on('callLimits', limits => console.log('Source shop call limits:', limits));
+    //   this.sourceShopifyClient.on('callGraphqlLimits', limits => console.log('Source shop GraphQL limits:', limits));
+    //   this.targetShopifyClient.on('callLimits', limits => console.log('Target shop call limits:', limits));
+    //   this.targetShopifyClient.on('callGraphqlLimits', limits => console.log('Target shop GraphQL limits:', limits));
+    // }
   }
 
   static setupCommandLineOptions() {
@@ -99,11 +105,13 @@ class MetaobjectSyncCli {
       .option("--source <name>", "Source shop name (must exist in .shops.json)")
       .option("--target <name>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
       .option("--resource-type <type>", "Type of resource to sync (metaobjects or product_metafields)", "metaobjects")
-      .option("--key <key>", "Specific definition key/type to sync (e.g., 'my_app.my_definition_type' for metaobjects or 'custom.my_field_key' for metafields)")
+      .option("--key <key>", "Specific definition key/type to sync (e.g., 'my_app.my_def' for metaobjects, 'namespace.key' for metafields - optional for metafields if --namespace is used)")
+      .option("--namespace <namespace>", "Namespace to sync (required for product_metafields)")
       .option("--definitions-only", "Sync only the definitions, not the data (Metaobject data sync only)")
       .option("--data-only", "Sync only the data, not the definitions (Metaobject data sync only)")
       .option("--not-a-drill", "Make actual changes (default is dry run)", false)
       .option("--debug", "Enable debug logging", false)
+      .option("--limit <number>", "Limit the number of items to process per run", (value) => parseInt(value, 10), 3)
       .parse(process.argv);
 
     return program.opts();
@@ -259,17 +267,7 @@ class MetaobjectSyncCli {
 
     if (this.options.notADrill) {
       // Log the input for better debugging
-      console.log(`Creating metaobject: ${metaobject.handle || 'unknown'} with ${fields.length} fields`);
-      if (this.debug) {
-        console.log({
-          action: 'createMetaobject',
-          handle: metaobject.handle || 'unknown',
-          type: definitionType,
-          fieldCount: fields.length,
-          fields: fields.map(f => ({ key: f.key, valueLength: f.value ? f.value.length : 0 }))
-        });
-      }
-
+      consola.info(`Creating metaobject: ${input.handle || 'unknown'} with ${fields.length} fields`);
       const result = await client.graphql(mutation, { metaobject: input });
 
       if (result.metaobjectCreate.userErrors.length > 0) {
@@ -279,15 +277,7 @@ class MetaobjectSyncCli {
 
       return result.metaobjectCreate.metaobject;
     } else {
-      console.log(`[DRY RUN] Would create metaobject ${metaobject.handle || 'unknown'} with ${fields.length} fields`);
-      if (this.debug) {
-        console.log({
-          action: 'dryRun',
-          handle: metaobject.handle || 'unknown',
-          type: definitionType,
-          fieldCount: fields.length
-        });
-      }
+      consola.info(`[DRY RUN] Would create metaobject ${metaobject.handle || 'unknown'} with ${fields.length} fields`);
       return { id: "dry-run-id", handle: metaobject.handle || "dry-run-handle" };
     }
   }
@@ -336,13 +326,7 @@ class MetaobjectSyncCli {
 
       return result.metaobjectUpdate.metaobject;
     } else {
-      console.log(`[DRY RUN] Would update metaobject ${metaobject.handle || 'unknown'}`);
-      if (this.debug) {
-        console.log({
-          id: existingMetaobject.id,
-          metaobject: input
-        });
-      }
+      consola.info(`[DRY RUN] Would update metaobject ${metaobject.handle || 'unknown'}`);
       return { id: existingMetaobject.id, handle: metaobject.handle || existingMetaobject.handle };
     }
   }
@@ -355,7 +339,7 @@ class MetaobjectSyncCli {
       description: definition.description || "",
       fieldDefinitions: definition.fieldDefinitions.map(field => this.processFieldDefinition(field)),
       capabilities: definition.capabilities || {},
-      access: definition.access || { admin: "MERCHANT_READ_WRITE", storefront: "PUBLIC_READ" }
+      access: { admin: "PUBLIC_READ_WRITE", storefront: "PUBLIC_READ" }
     };
 
     const mutation = `#graphql
@@ -379,23 +363,13 @@ class MetaobjectSyncCli {
 
       if (result.metaobjectDefinitionCreate.userErrors.length > 0) {
         const errors = result.metaobjectDefinitionCreate.userErrors;
-        console.error(`Failed to create metaobject definition ${definition.type}: ${JSON.stringify(errors)}`);
-        if (this.debug) {
-          console.error({
-            errors,
-            definition: input,
-            type: definition.type
-          });
-        }
+        consola.error(`Failed to create metaobject definition ${definition.type}:`, errors);
         return null;
       }
 
       return result.metaobjectDefinitionCreate.metaobjectDefinition;
     } else {
-      console.log(`[DRY RUN] Would create metaobject definition ${definition.type}`);
-      if (this.debug) {
-        console.log({ definition: input });
-      }
+      consola.info(`[DRY RUN] Would create metaobject definition ${definition.type}`);
       return { id: "dry-run-id", type: definition.type };
     }
   }
@@ -444,7 +418,7 @@ class MetaobjectSyncCli {
       description: definition.description || "",
       fieldDefinitions: fieldDefinitions,
       capabilities: definition.capabilities || {},
-      access: definition.access || { admin: "MERCHANT_READ_WRITE", storefront: "PUBLIC_READ" }
+      access: { admin: "PUBLIC_READ_WRITE", storefront: "PUBLIC_READ" }
     };
 
     const mutation = `#graphql
@@ -471,24 +445,13 @@ class MetaobjectSyncCli {
 
       if (result.metaobjectDefinitionUpdate.userErrors.length > 0) {
         const errors = result.metaobjectDefinitionUpdate.userErrors;
-        console.error(`Failed to update metaobject definition ${definition.type}: ${JSON.stringify(errors)}`);
-        if (this.debug) {
-          console.error({
-            errors,
-            id: existingDefinition.id,
-            definition: input,
-            type: definition.type
-          });
-        }
+        consola.error(`Failed to update metaobject definition ${definition.type}:`, errors);
         return null;
       }
 
       return result.metaobjectDefinitionUpdate.metaobjectDefinition;
     } else {
-      console.log(`[DRY RUN] Would update metaobject definition ${definition.type}`);
-      if (this.debug) {
-        console.log({ id: existingDefinition.id, definition: input });
-      }
+      consola.info(`[DRY RUN] Would update metaobject definition ${definition.type}`);
       return { id: existingDefinition.id, type: definition.type };
     }
   }
@@ -547,26 +510,26 @@ class MetaobjectSyncCli {
   async syncDefinitions() {
     // Always fetch all definitions and then filter by type if needed
     const sourceDefinitions = await this.fetchMetaobjectDefinitions(
-      this.sourceShopifyClient,
+      this.sourceClient,
       this.options.key
     );
 
     if (sourceDefinitions.length === 0) {
       if (this.options.key) {
-        console.log(`No metaobject definitions found in source shop for type: ${this.options.key}`);
+        consola.warn(`No metaobject definitions found in source shop for type: ${this.options.key}`);
       } else {
-        console.log(`No metaobject definitions found in source shop.`);
+        consola.warn(`No metaobject definitions found in source shop.`);
       }
       return { results: { created: 0, updated: 0, skipped: 0, failed: 0 }, definitionTypes: [] };
     }
 
-    console.log(`Found ${sourceDefinitions.length} metaobject definition(s) in source shop${this.options.key ? ` for type: ${this.options.key}` : ''}`);
+    consola.info(`Found ${sourceDefinitions.length} metaobject definition(s) in source shop${this.options.key ? ` for type: ${this.options.key}` : ''}`);
 
     const targetDefinitions = await this.fetchMetaobjectDefinitions(
-      this.targetShopifyClient
+      this.targetClient
     );
 
-    console.log(`Found ${targetDefinitions.length} metaobject definition(s) in target shop`);
+    consola.info(`Found ${targetDefinitions.length} metaobject definition(s) in target shop`);
 
     // Create a map of target definitions by type for quick lookup
     const targetDefinitionMap = {};
@@ -581,13 +544,19 @@ class MetaobjectSyncCli {
       failed: 0,
     };
 
-    // Process each source definition
+    // Process each source definition, respecting the limit
+    let processedCount = 0;
     for (const definition of sourceDefinitions) {
+      if (processedCount >= this.options.limit) {
+          consola.info(`Reached processing limit (${this.options.limit}). Stopping definition sync.`);
+          break;
+      }
+
       if (targetDefinitionMap[definition.type]) {
         // Definition exists in target, update it
-        console.log(`Updating metaobject definition: ${definition.type}`);
+        consola.info(`Updating metaobject definition: ${definition.type}`);
         const updated = await this.updateMetaobjectDefinition(
-          this.targetShopifyClient,
+          this.targetClient,
           definition,
           targetDefinitionMap[definition.type]
         );
@@ -599,9 +568,9 @@ class MetaobjectSyncCli {
         }
       } else {
         // Definition doesn't exist in target, create it
-        console.log(`Creating metaobject definition: ${definition.type}`);
+        consola.info(`Creating metaobject definition: ${definition.type}`);
         const created = await this.createMetaobjectDefinition(
-          this.targetShopifyClient,
+          this.targetClient,
           definition
         );
 
@@ -611,6 +580,7 @@ class MetaobjectSyncCli {
           results.failed++;
         }
       }
+      processedCount++;
     }
 
     return {
@@ -629,16 +599,16 @@ class MetaobjectSyncCli {
 
     // Process each definition type
     for (const definitionType of definitionTypes) {
-      console.log(`Syncing metaobjects for type: ${definitionType}`);
+      consola.start(`Syncing metaobjects for type: ${definitionType}`);
 
       // Fetch the definition to check required fields
       const sourceDefinitions = await this.fetchMetaobjectDefinitions(
-        this.sourceShopifyClient,
+        this.sourceClient,
         definitionType
       );
 
       if (sourceDefinitions.length === 0) {
-        console.log(`No definition found for type: ${definitionType}, skipping`);
+        consola.warn(`No definition found for type: ${definitionType}, skipping`);
         continue;
       }
 
@@ -658,11 +628,11 @@ class MetaobjectSyncCli {
       }
 
       // Fetch metaobjects for this definition
-      const sourceMetaobjects = await this.fetchMetaobjects(this.sourceShopifyClient, definitionType);
-      console.log(`Found ${sourceMetaobjects.length} metaobject(s) in source shop for type ${definitionType}`);
+      const sourceMetaobjects = await this.fetchMetaobjects(this.sourceClient, definitionType);
+      consola.info(`Found ${sourceMetaobjects.length} metaobject(s) in source shop for type ${definitionType}`);
 
-      const targetMetaobjects = await this.fetchMetaobjects(this.targetShopifyClient, definitionType);
-      console.log(`Found ${targetMetaobjects.length} metaobject(s) in target shop for type ${definitionType}`);
+      const targetMetaobjects = await this.fetchMetaobjects(this.targetClient, definitionType);
+      consola.info(`Found ${targetMetaobjects.length} metaobject(s) in target shop for type ${definitionType}`);
 
       // Create a map of target metaobjects by handle for quick lookup
       const targetMetaobjectMap = {};
@@ -672,8 +642,14 @@ class MetaobjectSyncCli {
         }
       });
 
-      // Process each source metaobject
+      // Process each source metaobject, respecting the limit for this type
+      let processedCount = 0;
       for (const metaobject of sourceMetaobjects) {
+        if (processedCount >= this.options.limit) {
+            consola.info(`Reached processing limit (${this.options.limit}) for type ${definitionType}. Moving to next type.`);
+            break;
+        }
+
         // Create a map of existing fields by key
         const existingFieldMap = {};
         metaobject.fields.forEach(field => {
@@ -686,13 +662,13 @@ class MetaobjectSyncCli {
 
         // Log required fields for debugging
         if (Object.keys(requiredFields).length > 0 && this.debug) {
-          console.log(`Metaobject ${metaobject.handle || 'unknown'} has ${Object.keys(requiredFields).length} required fields: ${Object.keys(requiredFields).join(', ')}`);
+          consola.debug(`Metaobject ${metaobject.handle || 'unknown'} has ${Object.keys(requiredFields).length} required fields: ${Object.keys(requiredFields).join(', ')}`);
         }
 
         // Add missing required fields with default values
         for (const [key, fieldInfo] of Object.entries(requiredFields)) {
           if (!existingFieldMap[key] || existingFieldMap[key].value === null || existingFieldMap[key].value === undefined) {
-            console.log(`Adding missing required field '${fieldInfo.name}' (${key}) to metaobject ${metaobject.handle || 'unknown'}`);
+            consola.warn(`Adding missing required field '${fieldInfo.name}' (${key}) to metaobject ${metaobject.handle || 'unknown'}`);
 
             // Provide default value based on field type
             let defaultValue = "";
@@ -720,9 +696,9 @@ class MetaobjectSyncCli {
 
         if (metaobject.handle && targetMetaobjectMap[metaobject.handle]) {
           // Metaobject exists in target, update it
-          console.log(`Updating metaobject: ${metaobject.handle || 'unknown'}`);
+          consola.info(`Updating metaobject: ${metaobject.handle || 'unknown'}`);
           const updated = await this.updateMetaobject(
-            this.targetShopifyClient,
+            this.targetClient,
             processedMetaobject,
             targetMetaobjectMap[metaobject.handle]
           );
@@ -734,9 +710,9 @@ class MetaobjectSyncCli {
           }
         } else {
           // Metaobject doesn't exist in target, create it
-          console.log(`Creating metaobject: ${metaobject.handle || 'unknown'}`);
+          consola.info(`Creating metaobject: ${metaobject.handle || 'unknown'}`);
           const created = await this.createMetaobject(
-            this.targetShopifyClient,
+            this.targetClient,
             processedMetaobject,
             definitionType
           );
@@ -747,7 +723,9 @@ class MetaobjectSyncCli {
             results.failed++;
           }
         }
+        processedCount++;
       }
+      consola.success(`Finished syncing metaobjects for type: ${definitionType}`);
     }
 
     return results;
@@ -761,62 +739,90 @@ class MetaobjectSyncCli {
     // Validate resource type
     const validResourceTypes = ['metaobjects', 'product_metafields'];
     if (!validResourceTypes.includes(this.options.resourceType)) {
-      console.error(`Error: Invalid resource type "${this.options.resourceType}". Valid types are: ${validResourceTypes.join(', ')}`);
+      consola.error(`Error: Invalid resource type "${this.options.resourceType}". Valid types are: ${validResourceTypes.join(', ')}`);
       process.exit(1);
     }
 
     // Validate options based on resource type
-    if (this.options.resourceType === 'product_metafields' && (this.options.dataOnly || this.options.definitionsOnly === false)) {
+    if (this.options.resourceType === 'product_metafields') {
+        // Namespace is required for product metafields
+        if (!this.options.namespace) {
+            consola.error("Error: --namespace is required when --resource-type is product_metafields.");
+            process.exit(1);
+        }
+
+        // If key is provided, ensure it matches the namespace
+        if (this.options.key && !this.options.key.startsWith(this.options.namespace + '.')) {
+             consola.error(`Error: Provided --key "${this.options.key}" does not start with the provided --namespace "${this.options.namespace}".`);
+             process.exit(1);
+        }
+
         // Currently, only definition sync is supported for product metafields
         if (this.options.dataOnly) {
-            console.error("Error: --data-only is not supported for product_metafields.");
+            consola.error("Error: --data-only is not supported for product_metafields.");
             process.exit(1);
         }
         if (!this.options.definitionsOnly && !this.options.dataOnly) {
              // If neither --definitions-only nor --data-only is set, the default is both.
              // We need to explicitly set definitionsOnly for metafields.
-             console.warn("Warning: Only definition sync is supported for product_metafields. Proceeding with definitions only.");
+             consola.warn("Warning: Only definition sync is supported for product_metafields. Proceeding with definitions only.");
              this.options.definitionsOnly = true;
         }
     }
 
     // Display info
-    console.log(`Syncing Resource Type: ${this.options.resourceType}`);
-    console.log(`Dry Run: ${!this.options.notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
-    console.log(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
-    console.log('');
+    consola.info(`Syncing Resource Type: ${this.options.resourceType}`);
+    consola.info(`Dry Run: ${!this.options.notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
+    consola.info(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
+    consola.info(`Limit: ${this.options.limit}`);
 
-    // If no specific key was provided, show available types/keys and exit
-    if (!this.options.key) {
-      console.log(`No specific key specified for ${this.options.resourceType}. Fetching available definitions...`);
-      let definitions = [];
-      if (this.options.resourceType === 'metaobjects') {
-         definitions = await this.fetchMetaobjectDefinitions(this.sourceShopifyClient);
-      } else if (this.options.resourceType === 'product_metafields') {
-         // Fetch all product metafield definitions from the source shop
-         definitions = await this.fetchProductMetafieldDefinitions(this.sourceShopifyClient);
-      }
+    // Determine if we need to list definitions and exit
+    let shouldListAndExit = false;
+    let listPrompt = "";
 
-      if (definitions.length === 0) {
-        console.log(`No ${this.options.resourceType} definitions found in source shop.`);
-        return;
-      }
+    if (this.options.resourceType === 'metaobjects' && !this.options.key) {
+        shouldListAndExit = true;
+        listPrompt = "\nPlease run the command again with --key <type> to specify which metaobject type to sync.";
+        consola.info(`No specific metaobject type specified (--key). Fetching available types...`);
+    } else if (this.options.resourceType === 'product_metafields' && !this.options.namespace) {
+        // This case is now handled by the validation above, but we keep the structure
+        // If validation were removed, this would list all product metafields.
+        shouldListAndExit = true; // Although validation exits first
+        listPrompt = "\nPlease run the command again with --namespace <namespace> to specify which product metafield namespace to sync.";
+        consola.info(`No namespace specified (--namespace). Fetching all available product metafield definitions...`);
+    }
 
-      console.log(`\nAvailable ${this.options.resourceType} definition keys/types:`);
-      definitions.forEach(def => {
-        // Metaobjects use 'type', metafields use 'key' and 'namespace'
-        let identifier = "unknown";
-        let name = def.name || "No name";
+    // If no specific key/namespace was provided (as required), show available definitions and exit
+    if (shouldListAndExit) {
+        // console.log(`No specific key specified for ${this.options.resourceType}. Fetching available definitions...`);
+        let definitions = [];
         if (this.options.resourceType === 'metaobjects') {
-            identifier = def.type;
-        } else if (this.options.resourceType === 'product_metafields' && def.namespace && def.key) {
-            identifier = `${def.namespace}.${def.key}`;
+            definitions = await this.fetchMetaobjectDefinitions(this.sourceClient);
+        } else if (this.options.resourceType === 'product_metafields') {
+            // Fetch all product metafield definitions from the source shop
+            definitions = await this.fetchProductMetafieldDefinitions(this.sourceClient);
         }
-        console.log(`- ${identifier} (${def.name || "No name"})`);
-      });
 
-      console.log(`\nPlease run the command again with --key <key> to specify which ${this.options.resourceType} definition to sync.`);
-      return;
+        if (definitions.length === 0) {
+            consola.warn(`No ${this.options.resourceType} definitions found in source shop.`);
+            return;
+        }
+
+        consola.info(`\nAvailable ${this.options.resourceType} definition keys/types:`);
+        definitions.forEach(def => {
+            // Metaobjects use 'type', metafields use 'key' and 'namespace'
+            let identifier = "unknown";
+            let name = def.name || "No name";
+            if (this.options.resourceType === 'metaobjects') {
+                identifier = def.type;
+            } else if (this.options.resourceType === 'product_metafields' && def.namespace && def.key) {
+                identifier = `${def.namespace}.${def.key}`;
+            }
+            consola.log(`- ${identifier} (${name})`);
+        });
+
+        consola.info(listPrompt);
+        return;
     }
 
     // Sync definitions if needed
@@ -826,18 +832,18 @@ class MetaobjectSyncCli {
            definitionKeys = defSync.definitionTypes; // Actually types for metaobjects
            definitionResults = defSync.results;
        } else if (this.options.resourceType === 'product_metafields') {
-           // TODO: Implement syncMetafieldDefinitions
-           console.log("Syncing product metafield definitions is not yet implemented.");
+           consola.start("Syncing product metafield definitions...");
            const defSync = await this.syncMetafieldDefinitions();
            definitionKeys = defSync.definitionKeys;
            definitionResults = defSync.results;
+           consola.success("Finished syncing product metafield definitions.");
        }
     } else if (this.options.key && this.options.resourceType === 'metaobjects') {
       // If only syncing data for a specific metaobject type
       definitionKeys = [this.options.key]; // Use key here which maps to type for metaobjects
     } else if (this.options.dataOnly && this.options.resourceType === 'product_metafields') {
         // This case is already handled by the validation above, but adding a safeguard.
-        console.error("Error: Data sync (--data-only) is not supported for product_metafields.");
+        consola.error("Error: Data sync (--data-only) is not supported for product_metafields.");
         return;
     }
 
@@ -847,31 +853,30 @@ class MetaobjectSyncCli {
     }
 
     // Display summary
-    console.log("\nSync completed:");
+    consola.success("Sync completed:");
 
     if (!this.options.dataOnly) {
-      console.log(`${this.options.resourceType === 'metaobjects' ? 'Metaobject' : 'Product Metafield'} Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
+      consola.info(`${this.options.resourceType === 'metaobjects' ? 'Metaobject' : 'Product Metafield'} Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
     }
 
     if (!this.options.definitionsOnly && this.options.resourceType === 'metaobjects') {
-      console.log(`Metaobject Data: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.failed} failed`);
+      consola.info(`Metaobject Data: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.failed} failed`);
     }
   }
 
   // --- Metafield Definition Sync Methods ---
 
-  async fetchProductMetafieldDefinitions(client, key = null) {
-    let namespace = null;
+  async fetchProductMetafieldDefinitions(client, namespace = null, key = null) {
     let definitionKey = null;
 
     if (key) {
       // Key is expected in "namespace.key" format
       const parts = key.split('.');
       if (parts.length >= 2) {
-        namespace = parts[0];
+        // We already filter by namespace separately, so just extract the key part
         definitionKey = parts.slice(1).join('.'); // Handle keys with dots
       } else {
-        console.warn(`Invalid key format for metafield definition: ${key}. Expected 'namespace.key'. Fetching all product metafields.`);
+        consola.warn(`Invalid key format for metafield definition: ${key}. Expected 'namespace.key'. Ignoring key filter.`);
       }
     }
 
@@ -903,16 +908,13 @@ class MetaobjectSyncCli {
 
     const variables = { ownerType: 'PRODUCT' };
     if (namespace) variables.namespace = namespace;
-    if (definitionKey) variables.key = definitionKey;
+    if (definitionKey !== null) variables.key = definitionKey;
 
     try {
         const response = await client.graphql(query, variables);
         return response.metafieldDefinitions.nodes;
     } catch (error) {
-        console.error(`Error fetching product metafield definitions: ${error.message}`);
-        if (this.debug) {
-            console.error({ query, variables, error });
-        }
+        consola.error(`Error fetching product metafield definitions: ${error.message}`);
         return []; // Return empty array on error
     }
   }
@@ -926,7 +928,13 @@ class MetaobjectSyncCli {
       description: definition.description || "",
       type: definition.type.name, // Ensure we use the type name string
       validations: definition.validations || [],
-      access: definition.access || { admin: "MERCHANT_READ_WRITE", storefront: "PUBLIC_READ" },
+      // Conditionally replace MERCHANT_READ_WRITE for update, otherwise use source or default
+      access: {
+        admin: (definition.access?.admin === 'MERCHANT_READ_WRITE')
+                 ? 'PUBLIC_READ_WRITE'
+                 : (definition.access?.admin || 'PUBLIC_READ_WRITE'), // Default to PUBLIC_READ_WRITE if source is null/other
+        storefront: definition.access?.storefront || 'PUBLIC_READ' // Default to PUBLIC_READ
+      },
       // Add other fields like pin, capabilities if needed from source definition
     };
 
@@ -953,26 +961,17 @@ class MetaobjectSyncCli {
 
           if (result.metafieldDefinitionCreate.userErrors.length > 0) {
             const errors = result.metafieldDefinitionCreate.userErrors;
-            console.error(`Failed to create product metafield definition ${input.namespace}.${input.key}: ${JSON.stringify(errors)}`);
-            if (this.debug) {
-              console.error({ errors, definition: input });
-            }
+            consola.error(`Failed to create product metafield definition ${input.namespace}.${input.key}:`, errors);
             return null;
           }
 
           return result.metafieldDefinitionCreate.createdDefinition;
       } catch (error) {
-          console.error(`Error creating product metafield definition ${input.namespace}.${input.key}: ${error.message}`);
-           if (this.debug) {
-              console.error({ error, mutation, input });
-            }
+          consola.error(`Error creating product metafield definition ${input.namespace}.${input.key}: ${error.message}`);
           return null;
       }
     } else {
-      console.log(`[DRY RUN] Would create product metafield definition ${input.namespace}.${input.key}`);
-      if (this.debug) {
-        console.log({ definition: input });
-      }
+      consola.info(`[DRY RUN] Would create product metafield definition ${input.namespace}.${input.key}`);
       return { id: "dry-run-id", namespace: input.namespace, key: input.key };
     }
   }
@@ -987,7 +986,13 @@ class MetaobjectSyncCli {
             name: definition.name,
             description: definition.description || "",
             validations: definition.validations || [],
-            access: definition.access || { admin: "MERCHANT_READ_WRITE", storefront: "PUBLIC_READ" },
+            // Conditionally replace MERCHANT_READ_WRITE for update, otherwise use source or default
+            access: {
+                admin: (definition.access?.admin === 'MERCHANT_READ_WRITE')
+                         ? 'PUBLIC_READ_WRITE'
+                         : (definition.access?.admin || 'PUBLIC_READ_WRITE'), // Default to PUBLIC_READ_WRITE if source is null/other
+                storefront: definition.access?.storefront || 'PUBLIC_READ' // Default to PUBLIC_READ
+            },
             // Add other updatable fields like pin, capabilities if needed
         };
 
@@ -1017,53 +1022,45 @@ class MetaobjectSyncCli {
 
                 if (result.metafieldDefinitionUpdate.userErrors.length > 0) {
                     const errors = result.metafieldDefinitionUpdate.userErrors;
-                    console.error(`Failed to update product metafield definition ${definition.namespace}.${definition.key}: ${JSON.stringify(errors)}`);
-                     if (this.debug) {
-                        console.error({ errors, id: existingDefinition.id, definition: input });
-                    }
+                    consola.error(`Failed to update product metafield definition ${definition.namespace}.${definition.key}:`, errors);
                     return null;
                 }
 
                 return result.metafieldDefinitionUpdate.updatedDefinition;
             } catch (error) {
-                 console.error(`Error updating product metafield definition ${definition.namespace}.${definition.key}: ${error.message}`);
-                 if (this.debug) {
-                    console.error({ error, mutation, id: existingDefinition.id, input });
-                 }
+                 consola.error(`Error updating product metafield definition ${definition.namespace}.${definition.key}: ${error.message}`);
                  return null;
             }
         } else {
-            console.log(`[DRY RUN] Would update product metafield definition ${definition.namespace}.${definition.key}`);
-            if (this.debug) {
-                console.log({ id: existingDefinition.id, definition: input });
-            }
+            consola.info(`[DRY RUN] Would update product metafield definition ${definition.namespace}.${definition.key}`);
             return { id: existingDefinition.id, namespace: definition.namespace, key: definition.key };
         }
     }
 
   async syncMetafieldDefinitions() {
     const sourceDefinitions = await this.fetchProductMetafieldDefinitions(
-      this.sourceShopifyClient,
-      this.options.key // Pass the specific key if provided
+      this.sourceClient,
+      this.options.namespace,
+      this.options.key
     );
 
     if (sourceDefinitions.length === 0) {
       if (this.options.key) {
-        console.log(`No product metafield definitions found in source shop for key: ${this.options.key}`);
+        consola.warn(`No product metafield definitions found in source shop for key: ${this.options.key}`);
       } else {
-        console.log(`No product metafield definitions found in source shop.`);
+        consola.warn(`No product metafield definitions found in source shop for namespace: ${this.options.namespace}`);
       }
       return { results: { created: 0, updated: 0, skipped: 0, failed: 0 }, definitionKeys: [] };
     }
 
-    console.log(`Found ${sourceDefinitions.length} product metafield definition(s) in source shop${this.options.key ? ` for key: ${this.options.key}` : ''}`);
+    consola.info(`Found ${sourceDefinitions.length} product metafield definition(s) in source shop${this.options.key ? ` for key: ${this.options.key}` : this.options.namespace ? ` for namespace: ${this.options.namespace}`: ''}`);
 
     // Fetch all target definitions for comparison (cannot filter update/create by namespace+key efficiently in one go)
     const targetDefinitions = await this.fetchProductMetafieldDefinitions(
-      this.targetShopifyClient
+      this.targetClient
     );
 
-    console.log(`Found ${targetDefinitions.length} product metafield definition(s) in target shop`);
+    consola.info(`Found ${targetDefinitions.length} product metafield definition(s) in target shop`);
 
     // Create a map of target definitions by "namespace.key" for quick lookup
     const targetDefinitionMap = {};
@@ -1080,16 +1077,22 @@ class MetaobjectSyncCli {
 
     const definitionKeys = [];
 
-    // Process each source definition
+    // Process each source definition, respecting the limit
+    let processedCount = 0;
     for (const definition of sourceDefinitions) {
+       if (processedCount >= this.options.limit) {
+          consola.info(`Reached processing limit (${this.options.limit}). Stopping metafield definition sync.`);
+          break;
+      }
+
       const definitionFullKey = `${definition.namespace}.${definition.key}`;
       definitionKeys.push(definitionFullKey);
 
       if (targetDefinitionMap[definitionFullKey]) {
         // Definition exists in target, update it
-        console.log(`Updating product metafield definition: ${definitionFullKey}`);
+        consola.info(`Updating product metafield definition: ${definitionFullKey}`);
         const updated = await this.updateProductMetafieldDefinition(
-          this.targetShopifyClient,
+          this.targetClient,
           definition,
           targetDefinitionMap[definitionFullKey]
         );
@@ -1101,9 +1104,9 @@ class MetaobjectSyncCli {
         }
       } else {
         // Definition doesn't exist in target, create it
-        console.log(`Creating product metafield definition: ${definitionFullKey}`);
+        consola.info(`Creating product metafield definition: ${definitionFullKey}`);
         const created = await this.createProductMetafieldDefinition(
-          this.targetShopifyClient,
+          this.targetClient,
           definition
         );
 
@@ -1113,6 +1116,7 @@ class MetaobjectSyncCli {
           results.failed++;
         }
       }
+      processedCount++;
     }
 
     return {
@@ -1127,20 +1131,25 @@ class MetaobjectSyncCli {
 async function main() {
   const options = MetaobjectSyncCli.setupCommandLineOptions();
 
+  // Set consola log level based on debug flag
+  if (options.debug) {
+    consola.level = 3; // Revert to assignment
+  }
+
   // Validate we have minimal required configuration
   if (!options.source) {
-    console.error("Error: Source shop name is required");
+    consola.error("Error: Source shop name is required");
     process.exit(1);
   }
 
   if (!getShopConfig(options.source)) {
-    console.error("Error: Source shop not found in .shops.json");
+    consola.error("Error: Source shop not found in .shops.json");
     process.exit(1);
   }
 
   // Additional safety check for target name containing 'prod'
   if (options.target && (options.target.toLowerCase().includes('prod') || options.target.toLowerCase().includes('production'))) {
-    console.error(`Error: Cannot use "${options.target}" as target - shops with "production" or "prod" in the name are protected for safety.`);
+    consola.error(`Error: Cannot use "${options.target}" as target - shops with "production" or "prod" in the name are protected for safety.`);
     process.exit(1);
   }
 
@@ -1149,6 +1158,6 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error("Error:", error);
+  consola.fatal("Unhandled Error:", error);
   process.exit(1);
 });
