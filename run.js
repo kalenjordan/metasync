@@ -95,12 +95,13 @@ class MetaobjectSyncCli {
 
   static setupCommandLineOptions() {
     program
-      .description("Sync metaobject definitions and data between Shopify stores")
+      .description("Sync metaobject or product metafield definitions and data between Shopify stores")
       .option("--source <name>", "Source shop name (must exist in .shops.json)")
       .option("--target <name>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
-      .option("--type <type>", "Specific metaobject definition type to sync (if not specified, will display available types and exit)")
-      .option("--definitions-only", "Sync only the metaobject definitions, not the data")
-      .option("--data-only", "Sync only the metaobject data, not the definitions")
+      .option("--resource-type <type>", "Type of resource to sync (metaobjects or product_metafields)", "metaobjects")
+      .option("--key <key>", "Specific definition key/type to sync (e.g., 'my_app.my_definition_type' for metaobjects or 'custom.my_field_key' for metafields)")
+      .option("--definitions-only", "Sync only the definitions, not the data (Metaobject data sync only)")
+      .option("--data-only", "Sync only the data, not the definitions (Metaobject data sync only)")
       .option("--not-a-drill", "Make actual changes (default is dry run)", false)
       .option("--debug", "Enable debug logging", false)
       .parse(process.argv);
@@ -547,19 +548,19 @@ class MetaobjectSyncCli {
     // Always fetch all definitions and then filter by type if needed
     const sourceDefinitions = await this.fetchMetaobjectDefinitions(
       this.sourceShopifyClient,
-      this.options.type
+      this.options.key
     );
 
     if (sourceDefinitions.length === 0) {
-      if (this.options.type) {
-        console.log(`No metaobject definitions found in source shop for type: ${this.options.type}`);
+      if (this.options.key) {
+        console.log(`No metaobject definitions found in source shop for type: ${this.options.key}`);
       } else {
         console.log(`No metaobject definitions found in source shop.`);
       }
       return { results: { created: 0, updated: 0, skipped: 0, failed: 0 }, definitionTypes: [] };
     }
 
-    console.log(`Found ${sourceDefinitions.length} metaobject definition(s) in source shop${this.options.type ? ` for type: ${this.options.type}` : ''}`);
+    console.log(`Found ${sourceDefinitions.length} metaobject definition(s) in source shop${this.options.key ? ` for type: ${this.options.key}` : ''}`);
 
     const targetDefinitions = await this.fetchMetaobjectDefinitions(
       this.targetShopifyClient
@@ -753,64 +754,374 @@ class MetaobjectSyncCli {
   }
 
   async run() {
-    let definitionTypes = [];
+    let definitionKeys = [];
     let definitionResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
+    // Validate resource type
+    const validResourceTypes = ['metaobjects', 'product_metafields'];
+    if (!validResourceTypes.includes(this.options.resourceType)) {
+      console.error(`Error: Invalid resource type "${this.options.resourceType}". Valid types are: ${validResourceTypes.join(', ')}`);
+      process.exit(1);
+    }
+
+    // Validate options based on resource type
+    if (this.options.resourceType === 'product_metafields' && (this.options.dataOnly || this.options.definitionsOnly === false)) {
+        // Currently, only definition sync is supported for product metafields
+        if (this.options.dataOnly) {
+            console.error("Error: --data-only is not supported for product_metafields.");
+            process.exit(1);
+        }
+        if (!this.options.definitionsOnly && !this.options.dataOnly) {
+             // If neither --definitions-only nor --data-only is set, the default is both.
+             // We need to explicitly set definitionsOnly for metafields.
+             console.warn("Warning: Only definition sync is supported for product_metafields. Proceeding with definitions only.");
+             this.options.definitionsOnly = true;
+        }
+    }
+
     // Display info
+    console.log(`Syncing Resource Type: ${this.options.resourceType}`);
     console.log(`Dry Run: ${!this.options.notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     console.log(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
     console.log('');
 
-    // If no specific type was provided, show available types and exit
-    if (!this.options.type) {
-      console.log("No metaobject type specified. Fetching available types...");
-      const sourceDefinitions = await this.fetchMetaobjectDefinitions(this.sourceShopifyClient);
+    // If no specific key was provided, show available types/keys and exit
+    if (!this.options.key) {
+      console.log(`No specific key specified for ${this.options.resourceType}. Fetching available definitions...`);
+      let definitions = [];
+      if (this.options.resourceType === 'metaobjects') {
+         definitions = await this.fetchMetaobjectDefinitions(this.sourceShopifyClient);
+      } else if (this.options.resourceType === 'product_metafields') {
+         // Fetch all product metafield definitions from the source shop
+         definitions = await this.fetchProductMetafieldDefinitions(this.sourceShopifyClient);
+      }
 
-      if (sourceDefinitions.length === 0) {
-        console.log("No metaobject definitions found in source shop.");
+      if (definitions.length === 0) {
+        console.log(`No ${this.options.resourceType} definitions found in source shop.`);
         return;
       }
 
-      console.log("\nAvailable metaobject types:");
-      sourceDefinitions.forEach(def => {
-        console.log(`- ${def.type} (${def.name || "No name"})`);
+      console.log(`\nAvailable ${this.options.resourceType} definition keys/types:`);
+      definitions.forEach(def => {
+        // Metaobjects use 'type', metafields use 'key' and 'namespace'
+        let identifier = "unknown";
+        let name = def.name || "No name";
+        if (this.options.resourceType === 'metaobjects') {
+            identifier = def.type;
+        } else if (this.options.resourceType === 'product_metafields' && def.namespace && def.key) {
+            identifier = `${def.namespace}.${def.key}`;
+        }
+        console.log(`- ${identifier} (${def.name || "No name"})`);
       });
 
-      console.log("\nPlease run the command again with --type <type> to specify which metaobject type to sync.");
+      console.log(`\nPlease run the command again with --key <key> to specify which ${this.options.resourceType} definition to sync.`);
       return;
     }
 
     // Sync definitions if needed
     if (!this.options.dataOnly) {
-      const defSync = await this.syncDefinitions();
-      definitionTypes = defSync.definitionTypes;
-      definitionResults = defSync.results;
-    } else if (this.options.type) {
-      // If only syncing data for a specific type
-      definitionTypes = [this.options.type];
-    } else {
-      // This should never be reached now, but keeping for safety
-      const sourceDefinitions = await this.fetchMetaobjectDefinitions(this.sourceShopifyClient);
-      definitionTypes = sourceDefinitions.map(def => def.type);
+       if (this.options.resourceType === 'metaobjects') {
+           const defSync = await this.syncDefinitions(); // Existing metaobject sync
+           definitionKeys = defSync.definitionTypes; // Actually types for metaobjects
+           definitionResults = defSync.results;
+       } else if (this.options.resourceType === 'product_metafields') {
+           // TODO: Implement syncMetafieldDefinitions
+           console.log("Syncing product metafield definitions is not yet implemented.");
+           const defSync = await this.syncMetafieldDefinitions();
+           definitionKeys = defSync.definitionKeys;
+           definitionResults = defSync.results;
+       }
+    } else if (this.options.key && this.options.resourceType === 'metaobjects') {
+      // If only syncing data for a specific metaobject type
+      definitionKeys = [this.options.key]; // Use key here which maps to type for metaobjects
+    } else if (this.options.dataOnly && this.options.resourceType === 'product_metafields') {
+        // This case is already handled by the validation above, but adding a safeguard.
+        console.error("Error: Data sync (--data-only) is not supported for product_metafields.");
+        return;
     }
 
-    // Sync data if needed
-    if (!this.options.definitionsOnly) {
-      dataResults = await this.syncMetaobjectData(definitionTypes);
+    // Sync data if needed (only for metaobjects currently)
+    if (!this.options.definitionsOnly && this.options.resourceType === 'metaobjects') {
+      dataResults = await this.syncMetaobjectData(definitionKeys); // Pass metaobject types
     }
 
     // Display summary
     console.log("\nSync completed:");
 
     if (!this.options.dataOnly) {
-      console.log(`Metaobject Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
+      console.log(`${this.options.resourceType === 'metaobjects' ? 'Metaobject' : 'Product Metafield'} Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
     }
 
-    if (!this.options.definitionsOnly) {
+    if (!this.options.definitionsOnly && this.options.resourceType === 'metaobjects') {
       console.log(`Metaobject Data: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.failed} failed`);
     }
   }
+
+  // --- Metafield Definition Sync Methods ---
+
+  async fetchProductMetafieldDefinitions(client, key = null) {
+    let namespace = null;
+    let definitionKey = null;
+
+    if (key) {
+      // Key is expected in "namespace.key" format
+      const parts = key.split('.');
+      if (parts.length >= 2) {
+        namespace = parts[0];
+        definitionKey = parts.slice(1).join('.'); // Handle keys with dots
+      } else {
+        console.warn(`Invalid key format for metafield definition: ${key}. Expected 'namespace.key'. Fetching all product metafields.`);
+      }
+    }
+
+    const query = `#graphql
+      query FetchProductMetafieldDefinitions($ownerType: MetafieldOwnerType!, $namespace: String, $key: String) {
+        metafieldDefinitions(first: 100, ownerType: $ownerType, namespace: $namespace, key: $key) {
+          nodes {
+            id
+            namespace
+            key
+            name
+            description
+            type {
+              name # Use name instead of deprecated valueType
+            }
+            validations {
+              name
+              value
+            }
+            access {
+              admin
+              storefront
+            }
+            # Add other fields as needed, e.g., capabilities, pinnedPosition
+          }
+        }
+      }
+    `;
+
+    const variables = { ownerType: 'PRODUCT' };
+    if (namespace) variables.namespace = namespace;
+    if (definitionKey) variables.key = definitionKey;
+
+    try {
+        const response = await client.graphql(query, variables);
+        return response.metafieldDefinitions.nodes;
+    } catch (error) {
+        console.error(`Error fetching product metafield definitions: ${error.message}`);
+        if (this.debug) {
+            console.error({ query, variables, error });
+        }
+        return []; // Return empty array on error
+    }
+  }
+
+  async createProductMetafieldDefinition(client, definition) {
+    const input = {
+      ownerType: 'PRODUCT',
+      namespace: definition.namespace,
+      key: definition.key,
+      name: definition.name,
+      description: definition.description || "",
+      type: definition.type.name, // Ensure we use the type name string
+      validations: definition.validations || [],
+      access: definition.access || { admin: "MERCHANT_READ_WRITE", storefront: "PUBLIC_READ" },
+      // Add other fields like pin, capabilities if needed from source definition
+    };
+
+    const mutation = `#graphql
+      mutation createMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+        metafieldDefinitionCreate(definition: $definition) {
+          createdDefinition {
+            id
+            namespace
+            key
+          }
+          userErrors {
+            field
+            message
+            code
+          }
+        }
+      }
+    `;
+
+    if (this.options.notADrill) {
+      try {
+          const result = await client.graphql(mutation, { definition: input });
+
+          if (result.metafieldDefinitionCreate.userErrors.length > 0) {
+            const errors = result.metafieldDefinitionCreate.userErrors;
+            console.error(`Failed to create product metafield definition ${input.namespace}.${input.key}: ${JSON.stringify(errors)}`);
+            if (this.debug) {
+              console.error({ errors, definition: input });
+            }
+            return null;
+          }
+
+          return result.metafieldDefinitionCreate.createdDefinition;
+      } catch (error) {
+          console.error(`Error creating product metafield definition ${input.namespace}.${input.key}: ${error.message}`);
+           if (this.debug) {
+              console.error({ error, mutation, input });
+            }
+          return null;
+      }
+    } else {
+      console.log(`[DRY RUN] Would create product metafield definition ${input.namespace}.${input.key}`);
+      if (this.debug) {
+        console.log({ definition: input });
+      }
+      return { id: "dry-run-id", namespace: input.namespace, key: input.key };
+    }
+  }
+
+   async updateProductMetafieldDefinition(client, definition, existingDefinition) {
+        // Note: MetafieldDefinitionUpdateInput requires the ID.
+        // It allows updating name, description, validations, access, capabilities, pin status.
+        // Namespace, key, type, and ownerType are generally not updatable.
+
+        const input = {
+            // Fields that can be updated:
+            name: definition.name,
+            description: definition.description || "",
+            validations: definition.validations || [],
+            access: definition.access || { admin: "MERCHANT_READ_WRITE", storefront: "PUBLIC_READ" },
+            // Add other updatable fields like pin, capabilities if needed
+        };
+
+        const mutation = `#graphql
+          mutation updateMetafieldDefinition($id: ID!, $definition: MetafieldDefinitionUpdateInput!) {
+            metafieldDefinitionUpdate(id: $id, definition: $definition) {
+              updatedDefinition {
+                id
+                namespace
+                key
+              }
+              userErrors {
+                field
+                message
+                code
+              }
+            }
+          }
+        `;
+
+        if (this.options.notADrill) {
+            try {
+                const result = await client.graphql(mutation, {
+                    id: existingDefinition.id,
+                    definition: input
+                });
+
+                if (result.metafieldDefinitionUpdate.userErrors.length > 0) {
+                    const errors = result.metafieldDefinitionUpdate.userErrors;
+                    console.error(`Failed to update product metafield definition ${definition.namespace}.${definition.key}: ${JSON.stringify(errors)}`);
+                     if (this.debug) {
+                        console.error({ errors, id: existingDefinition.id, definition: input });
+                    }
+                    return null;
+                }
+
+                return result.metafieldDefinitionUpdate.updatedDefinition;
+            } catch (error) {
+                 console.error(`Error updating product metafield definition ${definition.namespace}.${definition.key}: ${error.message}`);
+                 if (this.debug) {
+                    console.error({ error, mutation, id: existingDefinition.id, input });
+                 }
+                 return null;
+            }
+        } else {
+            console.log(`[DRY RUN] Would update product metafield definition ${definition.namespace}.${definition.key}`);
+            if (this.debug) {
+                console.log({ id: existingDefinition.id, definition: input });
+            }
+            return { id: existingDefinition.id, namespace: definition.namespace, key: definition.key };
+        }
+    }
+
+  async syncMetafieldDefinitions() {
+    const sourceDefinitions = await this.fetchProductMetafieldDefinitions(
+      this.sourceShopifyClient,
+      this.options.key // Pass the specific key if provided
+    );
+
+    if (sourceDefinitions.length === 0) {
+      if (this.options.key) {
+        console.log(`No product metafield definitions found in source shop for key: ${this.options.key}`);
+      } else {
+        console.log(`No product metafield definitions found in source shop.`);
+      }
+      return { results: { created: 0, updated: 0, skipped: 0, failed: 0 }, definitionKeys: [] };
+    }
+
+    console.log(`Found ${sourceDefinitions.length} product metafield definition(s) in source shop${this.options.key ? ` for key: ${this.options.key}` : ''}`);
+
+    // Fetch all target definitions for comparison (cannot filter update/create by namespace+key efficiently in one go)
+    const targetDefinitions = await this.fetchProductMetafieldDefinitions(
+      this.targetShopifyClient
+    );
+
+    console.log(`Found ${targetDefinitions.length} product metafield definition(s) in target shop`);
+
+    // Create a map of target definitions by "namespace.key" for quick lookup
+    const targetDefinitionMap = {};
+    targetDefinitions.forEach(def => {
+      targetDefinitionMap[`${def.namespace}.${def.key}`] = def;
+    });
+
+    const results = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+    };
+
+    const definitionKeys = [];
+
+    // Process each source definition
+    for (const definition of sourceDefinitions) {
+      const definitionFullKey = `${definition.namespace}.${definition.key}`;
+      definitionKeys.push(definitionFullKey);
+
+      if (targetDefinitionMap[definitionFullKey]) {
+        // Definition exists in target, update it
+        console.log(`Updating product metafield definition: ${definitionFullKey}`);
+        const updated = await this.updateProductMetafieldDefinition(
+          this.targetShopifyClient,
+          definition,
+          targetDefinitionMap[definitionFullKey]
+        );
+
+        if (updated) {
+          results.updated++;
+        } else {
+          results.failed++;
+        }
+      } else {
+        // Definition doesn't exist in target, create it
+        console.log(`Creating product metafield definition: ${definitionFullKey}`);
+        const created = await this.createProductMetafieldDefinition(
+          this.targetShopifyClient,
+          definition
+        );
+
+        if (created) {
+          results.created++;
+        } else {
+          results.failed++;
+        }
+      }
+    }
+
+    return {
+      results,
+      definitionKeys
+    };
+  }
+
+  // --- End Metafield Definition Sync Methods ---
 }
 
 async function main() {

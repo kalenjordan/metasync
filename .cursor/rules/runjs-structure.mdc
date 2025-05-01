@@ -1,0 +1,28 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# run.js Script Overview
+
+This script, located at [run.js](mdc:run.js), is a command-line interface (CLI) tool designed to synchronize Shopify metaobject definitions and their associated data between two Shopify stores.
+
+## Key Features:
+
+*   **CLI Interface:** Uses the `commander` library to parse command-line arguments for specifying source and target shops, the metaobject type to sync, and other options like dry-run mode or debug logging.
+*   **Shop Configuration:** Reads shop credentials (domain, access token) from a `.shops.json` file located in the same directory. The `getShopConfig` function handles this.
+*   **Shopify API Interaction:** Utilizes the `shopify-api-node` library to interact with the Shopify Admin GraphQL API for fetching and manipulating metaobject definitions and data.
+*   **Core Logic:** The main logic is encapsulated within the `MetaobjectSyncCli` class.
+    *   It initializes Shopify clients for both source and target shops.
+    *   It provides methods for fetching definitions (`fetchMetaobjectDefinitions`), fetching data (`fetchMetaobjects`), creating/updating definitions (`createMetaobjectDefinition`, `updateMetaobjectDefinition`), and creating/updating data (`createMetaobject`, `updateMetaobject`).
+    *   The `run` method orchestrates the synchronization process based on the provided CLI options.
+*   **Safety:** Includes checks to prevent accidental synchronization to shops named "production" or "prod".
+*   **Dry Run:** Supports a `--not-a-drill` flag; otherwise, it performs a dry run, showing what actions would be taken without making actual changes.
+
+## Main Execution Flow:
+
+1.  The `main` function parses CLI options using `MetaobjectSyncCli.setupCommandLineOptions()`.
+2.  It validates the required options (e.g., source shop).
+3.  It instantiates `MetaobjectSyncCli` with the provided options.
+4.  It calls the `syncer.run()` method to start the synchronization process.
+5.  Errors are caught and logged to the console.
