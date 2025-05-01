@@ -136,6 +136,50 @@ class BaseMetafieldSyncStrategy {
     }
   }
 
+  async getMetaobjectDefinitionTypeById(client, definitionId) {
+    const query = `#graphql
+      query GetMetaobjectDefinitionType($id: ID!) {
+        metaobjectDefinition(id: $id) {
+          type
+        }
+      }
+    `;
+    try {
+      const response = await client.graphql(query, { id: definitionId }, "GetMetaobjectDefinitionType");
+      if (response.metaobjectDefinition) {
+        return response.metaobjectDefinition.type;
+      } else {
+        consola.warn(`Metaobject definition with ID ${definitionId} not found.`);
+        return null;
+      }
+    } catch (error) {
+      consola.error(`Error fetching metaobject definition type for ID ${definitionId}: ${error.message}`);
+      return null;
+    }
+  }
+
+  async getMetaobjectDefinitionIdByType(client, definitionType) {
+    const query = `#graphql
+      query GetMetaobjectDefinitionId($type: String!) {
+        metaobjectDefinitionByType(type: $type) {
+          id
+        }
+      }
+    `;
+    try {
+      const response = await client.graphql(query, { type: definitionType }, "GetMetaobjectDefinitionId");
+      if (response.metaobjectDefinitionByType) {
+        return response.metaobjectDefinitionByType.id;
+      } else {
+        consola.warn(`Metaobject definition with type ${definitionType} not found in target store.`);
+        return null;
+      }
+    } catch (error) {
+      consola.error(`Error fetching metaobject definition ID for type ${definitionType}: ${error.message}`);
+      return null;
+    }
+  }
+
   // --- Sync Orchestration Methods ---
 
   async syncDefinitionsOnly() {
@@ -173,15 +217,63 @@ class BaseMetafieldSyncStrategy {
       const definitionFullKey = `${definition.namespace}.${definition.key}`;
       definitionKeys.push(definitionFullKey);
 
+      // --- Resolve Metaobject References in Validations --- START ---
+      let definitionToSync = { ...definition }; // Work on a copy
+      let resolutionError = false;
+      if ((definition.type.name === 'metaobject_reference' || definition.type.name === 'list.metaobject_reference') && definition.validations?.length > 0) {
+        consola.debug(`Resolving metaobject references for ${definitionFullKey}`);
+        const resolvedValidations = [];
+        for (const validation of definition.validations) {
+          // Assuming the validation 'value' holds the GID for relevant rules
+          // We might need a more robust check based on validation 'name'
+          if (validation.value?.startsWith('gid://shopify/MetaobjectDefinition/')) {
+            const sourceMoDefId = validation.value;
+            const sourceMoDefType = await this.getMetaobjectDefinitionTypeById(this.sourceClient, sourceMoDefId);
+
+            if (!sourceMoDefType) {
+              consola.error(`Failed to find type for source Metaobject Definition ID ${sourceMoDefId} referenced by ${definitionFullKey}. Skipping definition.`);
+              resolutionError = true;
+              break; // Stop processing validations for this definition
+            }
+
+            const targetMoDefId = await this.getMetaobjectDefinitionIdByType(this.targetClient, sourceMoDefType);
+
+            if (!targetMoDefId) {
+              consola.error(`Failed to find target Metaobject Definition for type ${sourceMoDefType} (referenced by ${definitionFullKey}). Ensure it exists in the target store. Skipping definition.`);
+              resolutionError = true;
+              break; // Stop processing validations for this definition
+            }
+
+            consola.debug(`  Mapping validation ref: ${sourceMoDefId} (type: ${sourceMoDefType}) -> ${targetMoDefId}`);
+            resolvedValidations.push({ ...validation, value: targetMoDefId });
+          } else {
+            resolvedValidations.push(validation); // Keep non-reference validations as is
+          }
+        }
+
+        if (!resolutionError) {
+          definitionToSync.validations = resolvedValidations;
+        }
+      }
+      // --- Resolve Metaobject References in Validations --- END ---
+
+      if (resolutionError) {
+        results.failed++; // Mark as failed if resolution failed
+        processedCount++;
+        continue; // Skip to the next definition
+      }
+
       const targetDefinition = targetDefinitionMap[definitionFullKey];
 
       if (targetDefinition) {
         consola.info(`Updating ${this.resourceName} definition: ${definitionFullKey}`);
-        const updated = await this.updateMetafieldDefinition(this.targetClient, definition, targetDefinition);
+        // Pass the potentially modified definitionToSync
+        const updated = await this.updateMetafieldDefinition(this.targetClient, definitionToSync, targetDefinition);
         updated ? results.updated++ : results.failed++;
       } else {
         consola.info(`Creating ${this.resourceName} definition: ${definitionFullKey}`);
-        const created = await this.createMetafieldDefinition(this.targetClient, definition);
+        // Pass the potentially modified definitionToSync
+        const created = await this.createMetafieldDefinition(this.targetClient, definitionToSync);
         created ? results.created++ : results.failed++;
       }
       processedCount++;
