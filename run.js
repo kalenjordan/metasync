@@ -993,12 +993,18 @@ class MetaobjectSyncCli {
                          : (definition.access?.admin || 'PUBLIC_READ_WRITE'), // Default to PUBLIC_READ_WRITE if source is null/other
                 storefront: definition.access?.storefront || 'PUBLIC_READ' // Default to PUBLIC_READ
             },
+            // Add required fields for identification based on schema
+            ownerType: 'PRODUCT',
+            namespace: definition.namespace,
+            key: definition.key,
+            // Remove ID from input, as it's not part of MetafieldDefinitionUpdateInput
+            // id: existingDefinition.id
             // Add other updatable fields like pin, capabilities if needed
         };
 
         const mutation = `#graphql
-          mutation updateMetafieldDefinition($id: ID!, $definition: MetafieldDefinitionUpdateInput!) {
-            metafieldDefinitionUpdate(id: $id, definition: $definition) {
+          mutation updateMetafieldDefinition($definition: MetafieldDefinitionUpdateInput!) {
+            metafieldDefinitionUpdate(definition: $definition) {
               updatedDefinition {
                 id
                 namespace
@@ -1016,7 +1022,6 @@ class MetaobjectSyncCli {
         if (this.options.notADrill) {
             try {
                 const result = await client.graphql(mutation, {
-                    id: existingDefinition.id,
                     definition: input
                 });
 
