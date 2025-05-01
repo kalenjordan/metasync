@@ -1,13 +1,14 @@
+const consola = require("consola");
 const BaseMetafieldSyncStrategy = require("./BaseMetafieldSyncStrategy");
 
-class ProductMetafieldSyncStrategy extends BaseMetafieldSyncStrategy {
+class CompanyMetafieldSyncStrategy extends BaseMetafieldSyncStrategy {
   constructor(sourceClient, targetClient, options) {
     // Call the base constructor with the specific ownerType
-    super(sourceClient, targetClient, options, "PRODUCT");
+    super(sourceClient, targetClient, options, "COMPANY");
   }
 
   // All common methods (fetch, create, update, sync, list) are inherited from BaseMetafieldSyncStrategy
-  // Add any PRODUCT-specific overrides or methods here if needed in the future.
+  // Add any COMPANY-specific overrides or methods here if needed in the future.
 }
 
-module.exports = ProductMetafieldSyncStrategy;
+module.exports = CompanyMetafieldSyncStrategy;

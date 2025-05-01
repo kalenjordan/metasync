@@ -9,6 +9,7 @@ const consola = require('consola'); // Import consola
 // Require strategies as needed (or dynamically)
 const MetaobjectSyncStrategy = require('./strategies/MetaobjectSyncStrategy');
 const ProductMetafieldSyncStrategy = require('./strategies/ProductMetafieldSyncStrategy');
+const CompanyMetafieldSyncStrategy = require('./strategies/CompanyMetafieldSyncStrategy');
 
 /**
  * Get shop configuration from .shops.json file by shop name
@@ -107,9 +108,9 @@ class MetaSyncCli {
       .description("Sync metaobject or product metafield definitions and data between Shopify stores")
       .option("--source <name>", "Source shop name (must exist in .shops.json)")
       .option("--target <name>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
-      .option("--resource-type <type>", "Type of resource to sync (metaobjects or product_metafields)", "metaobjects")
+      .option("--resource <type>", "Type of resource to sync (metaobjects, product_metafields, company_metafields)")
       .option("--key <key>", "Specific definition key/type to sync (e.g., 'my_app.my_def' for metaobjects, 'namespace.key' for metafields - optional for metafields if --namespace is used)")
-      .option("--namespace <namespace>", "Namespace to sync (required for product_metafields)")
+      .option("--namespace <namespace>", "Namespace to sync (required for product_metafields and company_metafields)")
       .option("--definitions-only", "Sync only the definitions, not the data (Metaobject data sync only)")
       .option("--data-only", "Sync only the data, not the definitions (Metaobject data sync only)")
       .option("--not-a-drill", "Make actual changes (default is dry run)", false)
@@ -124,18 +125,28 @@ class MetaSyncCli {
     let definitionResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
-    // Validate resource type
-    const validResourceTypes = ['metaobjects', 'product_metafields'];
-    if (!validResourceTypes.includes(this.options.resourceType)) {
-      consola.error(`Error: Invalid resource type "${this.options.resourceType}". Valid types are: ${validResourceTypes.join(', ')}`);
+    // Define valid resource types early
+    const validResourceTypes = ['metaobjects', 'product_metafields', 'company_metafields'];
+
+    // Check if resource type was provided
+    if (!this.options.resource) {
+      consola.info("Please specify the resource type to sync using the --resource option.");
+      consola.info(`Available resource types: ${validResourceTypes.join(', ')}`);
+      return; // Exit gracefully
+    }
+
+    // Validate provided resource type
+    if (!validResourceTypes.includes(this.options.resource)) {
+      consola.error(`Error: Invalid resource type "${this.options.resource}". Valid types are: ${validResourceTypes.join(', ')}`);
       process.exit(1);
     }
 
     // Validate options based on resource type
-    if (this.options.resourceType === 'product_metafields') {
-        // Namespace is required for product metafields
+    if (this.options.resource === 'product_metafields' || this.options.resource === 'company_metafields') {
+        const resourceName = this.options.resource.replace('_', ' ');
+        // Namespace is required for metafields
         if (!this.options.namespace) {
-            consola.error("Error: --namespace is required when --resource-type is product_metafields.");
+            consola.error(`Error: --namespace is required when --resource is ${this.options.resource}.`);
             process.exit(1);
         }
 
@@ -145,21 +156,21 @@ class MetaSyncCli {
              process.exit(1);
         }
 
-        // Currently, only definition sync is supported for product metafields
+        // Currently, only definition sync is supported for metafields
         if (this.options.dataOnly) {
-            consola.error("Error: --data-only is not supported for product_metafields.");
+            consola.error(`Error: --data-only is not supported for ${this.options.resource}.`);
             process.exit(1);
         }
         if (!this.options.definitionsOnly && !this.options.dataOnly) {
              // If neither --definitions-only nor --data-only is set, the default is both.
              // We need to explicitly set definitionsOnly for metafields.
-             consola.warn("Warning: Only definition sync is supported for product_metafields. Proceeding with definitions only.");
+             consola.warn(`Warning: Only definition sync is supported for ${this.options.resource}. Proceeding with definitions only.`);
              this.options.definitionsOnly = true;
         }
     }
 
     // Display info
-    consola.info(`Syncing Resource Type: ${this.options.resourceType}`);
+    consola.info(`Syncing Resource Type: ${this.options.resource}`);
     consola.info(`Dry Run: ${!this.options.notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     consola.info(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
     consola.info(`Limit: ${this.options.limit}`);
@@ -168,49 +179,61 @@ class MetaSyncCli {
     let shouldListAndExit = false;
     let listPrompt = "";
 
-    if (this.options.resourceType === 'metaobjects' && !this.options.key) {
+    if (this.options.resource === 'metaobjects' && !this.options.key) {
         shouldListAndExit = true;
         listPrompt = "\nPlease run the command again with --key <type> to specify which metaobject type to sync.";
         consola.info(`No specific metaobject type specified (--key). Fetching available types...`);
-    } else if (this.options.resourceType === 'product_metafields' && !this.options.namespace) {
+    } else if ((this.options.resource === 'product_metafields' || this.options.resource === 'company_metafields') && !this.options.namespace) {
         // This case is now handled by the validation above, but we keep the structure
-        // If validation were removed, this would list all product metafields.
+        // If validation were removed, this would list all relevant metafields.
         shouldListAndExit = true; // Although validation exits first
-        listPrompt = "\nPlease run the command again with --namespace <namespace> to specify which product metafield namespace to sync.";
-        consola.info(`No namespace specified (--namespace). Fetching all available product metafield definitions...`);
+        listPrompt = `\nPlease run the command again with --namespace <namespace> to specify which ${this.options.resource.replace('_', ' ')} namespace to sync.`;
+        consola.info(`No namespace specified (--namespace). Fetching all available ${this.options.resource.replace('_', ' ')} definitions...`);
     }
 
     // If no specific key/namespace was provided (as required), show available definitions and exit
     if (shouldListAndExit) {
-        // console.log(`No specific key specified for ${this.options.resourceType}. Fetching available definitions...`);
+        // console.log(`No specific key specified for ${this.options.resource}. Fetching available definitions...`);
         let definitions = [];
-        if (this.options.resourceType === 'metaobjects') {
-            definitions = await this.fetchMetaobjectDefinitions(this.sourceClient);
-        } else if (this.options.resourceType === 'product_metafields') {
-            // Fetch all product metafield definitions from the source shop
-            definitions = await this.fetchProductMetafieldDefinitions(this.sourceClient);
+        let StrategyClass;
+        switch (this.options.resource) {
+            case 'metaobjects':
+                // Direct fetch method might exist on MetaSyncCli or need instantiation
+                // Assuming fetchMetaobjectDefinitions exists as before
+                definitions = await this.fetchMetaobjectDefinitions(this.sourceClient);
+                break;
+            case 'product_metafields':
+                StrategyClass = ProductMetafieldSyncStrategy;
+                break;
+            case 'company_metafields':
+                StrategyClass = CompanyMetafieldSyncStrategy;
+                break;
+            default:
+                consola.error(`Cannot list definitions for unsupported resource type: ${this.options.resource}`);
+                return;
+        }
+        if (StrategyClass) {
+            const listStrategy = new StrategyClass(this.sourceClient, null, this.options); // Target not needed for listing
+            // Assuming listAvailableDefinitions exists and fetches/logs
+            await listStrategy.listAvailableDefinitions();
+            return; // Exit after listing
         }
 
-        if (definitions.length === 0) {
-            consola.warn(`No ${this.options.resourceType} definitions found in source shop.`);
-            return;
+        // Fallback for metaobjects or if direct fetching was intended
+        if (this.options.resource === 'metaobjects') {
+             if (definitions.length === 0) {
+                 consola.warn(`No metaobject definitions found in source shop.`);
+                 return;
+             }
+             consola.info(`\nAvailable metaobject definition types:`);
+             definitions.forEach(def => {
+                 consola.log(`- ${def.type} (${def.name || "No name"})`);
+             });
+             consola.info(listPrompt);
+             return;
         }
-
-        consola.info(`\nAvailable ${this.options.resourceType} definition keys/types:`);
-        definitions.forEach(def => {
-            // Metaobjects use 'type', metafields use 'key' and 'namespace'
-            let identifier = "unknown";
-            let name = def.name || "No name";
-            if (this.options.resourceType === 'metaobjects') {
-                identifier = def.type;
-            } else if (this.options.resourceType === 'product_metafields' && def.namespace && def.key) {
-                identifier = `${def.namespace}.${def.key}`;
-            }
-            consola.log(`- ${identifier} (${name})`);
-        });
-
-        consola.info(listPrompt);
-        return;
+        // Note: The listing logic for metafields is now handled within the `listAvailableDefinitions` method of the respective strategy
+        // The code above will call that method and exit.
     }
 
     // ---------------------------------------------------
@@ -221,15 +244,18 @@ class MetaSyncCli {
     let syncResults;
 
     // Instantiate the appropriate strategy
-    switch (this.options.resourceType) {
+    switch (this.options.resource) {
         case 'metaobjects':
             strategy = new MetaobjectSyncStrategy(this.sourceClient, this.targetClient, this.options);
             break;
         case 'product_metafields':
             strategy = new ProductMetafieldSyncStrategy(this.sourceClient, this.targetClient, this.options);
             break;
+        case 'company_metafields':
+            strategy = new CompanyMetafieldSyncStrategy(this.sourceClient, this.targetClient, this.options);
+            break;
         default:
-            consola.error(`Unsupported resource type: ${this.options.resourceType}`);
+            consola.error(`Unsupported resource type: ${this.options.resource}`);
             process.exit(1);
     }
 
@@ -246,11 +272,55 @@ class MetaSyncCli {
     consola.success("Sync completed:");
 
     if (!this.options.dataOnly) {
-      consola.info(`${this.options.resourceType === 'metaobjects' ? 'Metaobject' : 'Product Metafield'} Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
+      // Determine the friendly name for the resource type
+      let resourceNameFriendly = this.options.resource;
+      if (resourceNameFriendly === 'metaobjects') {
+        resourceNameFriendly = 'Metaobject Definitions';
+      } else if (resourceNameFriendly === 'product_metafields') {
+        resourceNameFriendly = 'Product Metafield Definitions';
+      } else if (resourceNameFriendly === 'company_metafields') {
+        resourceNameFriendly = 'Company Metafield Definitions';
+      }
+      consola.info(`${resourceNameFriendly}: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
     }
 
-    if (!this.options.definitionsOnly && this.options.resourceType === 'metaobjects') {
+    if (!this.options.definitionsOnly && this.options.resource === 'metaobjects') {
       consola.info(`Metaobject Data: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.failed} failed`);
+    }
+  }
+
+  async fetchMetaobjectDefinitions(client, type = null) {
+    // Existing implementation... - needed for listing when no key is provided
+    const query = `#graphql
+        query FetchMetaobjectDefinitions {
+            metaobjectDefinitions(first: 100) {
+                nodes {
+                    id
+                    name
+                    type
+                    description
+                    fieldDefinitions {
+                        key
+                        name
+                        description
+                        required
+                        type { name }
+                        validations { name value }
+                    }
+                    access { admin storefront }
+                    capabilities {
+                       publishable { enabled }
+                    }
+                }
+            }
+        }
+      `;
+    try {
+        const response = await client.graphql(query, undefined, 'FetchMetaobjectDefinitions');
+        return response.metaobjectDefinitions.nodes;
+    } catch (error) {
+        consola.error(`Error fetching metaobject definitions: ${error.message}`);
+        return [];
     }
   }
 }
