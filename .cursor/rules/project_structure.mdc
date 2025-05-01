@@ -1,0 +1,38 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Project Structure
+
+This project syncs Shopify Metaobject and Metafield definitions between stores.
+
+## Core Files
+
+- **`run.js`**: [run.js](mdc:run.js) is the main entry point for the command-line tool. It handles:
+    - Parsing command-line arguments using `commander`.
+    - Reading store credentials from `.shops.json`.
+    - Setting up Shopify API clients using `shopify-api-node`.
+    - Wrapping the clients with `ShopifyClientWrapper` for logging.
+    - Selecting and executing the appropriate sync strategy based on the `--resource-type` option.
+    - Displaying the final summary.
+
+- **`shopifyClientWrapper.js`**: [shopifyClientWrapper.js](mdc:shopifyClientWrapper.js) provides a wrapper around the `shopify-api-node` client to centralize GraphQL call logging using `consola`. It formats debug logs based on the `--debug` flag.
+
+- **`.shops.json`**: [`.shops.json`](mdc:.shops.json) (not committed, example in `run.js` comments) stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`).
+
+## Strategy Pattern
+
+The core sync logic is implemented using the Strategy pattern, located in the `strategies/` directory.
+
+- **`strategies/`**: Contains strategy classes for different resource types.
+    - **`MetaobjectSyncStrategy.js`**: [strategies/MetaobjectSyncStrategy.js](mdc:strategies/MetaobjectSyncStrategy.js) handles all logic related to syncing Metaobject definitions and data (fetching, creating, updating, reconciling).
+    - **`ProductMetafieldSyncStrategy.js`**: [strategies/ProductMetafieldSyncStrategy.js](mdc:strategies/ProductMetafieldSyncStrategy.js) handles syncing Product Metafield definitions (fetching, creating, updating, reconciling).
+    - *Future strategies for other resource types (e.g., Customer Metafields) would be added here.*
+
+Each strategy class typically:
+- Takes the wrapped source/target clients and options in its constructor.
+- Implements a `sync()` method called by `run.js`.
+- Contains methods for fetching, creating, and updating the specific resource type (e.g., `fetchMetaobjectDefinitions`, `createProductMetafieldDefinition`).
+- May contain helper methods specific to that resource type.
+- Includes logic for listing available definitions if required options are missing.
