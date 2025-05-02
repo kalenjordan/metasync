@@ -12,9 +12,32 @@
  *
  * Weight information is stored in inventoryItem.measurement.weight according to latest Shopify Admin API.
  * Variant options are accessed via selectedOptions instead of deprecated option1/option2/option3 fields.
+ *
+ * TODO: Refactoring Plan
+ * This class has grown too large and should be refactored into smaller, more focused classes:
+ *
+ * 1. Extract specialized handlers:
+ *    - ProductImageHandler - image uploading, synchronization, variant image association
+ *    - ProductMetafieldHandler - metafield batching and synchronization
+ *    - ProductVariantHandler - variant creation, updating, image association
+ *    - ProductPublicationHandler - channel and publication management
+ *
+ * 2. Create utilities:
+ *    - ShopifyIDUtils - ID parsing, conversion, normalization
+ *    - LoggerUtils - consistent log formatting and hierarchy
+ *
+ * 3. Convert to composition pattern:
+ *    - Have ProductSyncStrategy use these specialized handlers
+ *    - Share client instances and options between handlers
+ *    - Maintain consistent logging patterns across handlers
  */
 const consola = require('consola');
 const { SHOPIFY_API_VERSION } = require('../constants');
+
+// Import new utility classes
+const MetafieldHandler = require('../utils/MetafieldHandler');
+const ProductImageHandler = require('../utils/ProductImageHandler');
+const ShopifyIDUtils = require('../utils/ShopifyIDUtils');
 
 class ProductSyncStrategy {
   constructor(sourceClient, targetClient, options) {
@@ -25,6 +48,10 @@ class ProductSyncStrategy {
 
     // Commander.js transforms --force-recreate to options.forceRecreate
     this.forceRecreate = !!options.forceRecreate;
+
+    // Initialize utility handlers
+    this.metafieldHandler = new MetafieldHandler(targetClient, options);
+    this.imageHandler = new ProductImageHandler(targetClient, options);
   }
 
   // --- Product Methods ---
@@ -1295,11 +1322,7 @@ class ProductSyncStrategy {
 
             // Now update metafields for each variant
             for (const metafieldUpdate of metafieldUpdates) {
-              await this.syncVariantMetafields(
-                client,
-                { id: metafieldUpdate.targetVariantId },
-                metafieldUpdate.metafields
-              );
+              await this.syncVariantMetafields(client, { id: metafieldUpdate.targetVariantId }, metafieldUpdate.metafields);
             }
           }
         } catch (error) {
@@ -1412,560 +1435,23 @@ class ProductSyncStrategy {
   }
 
   async syncProductImages(client, productId, sourceImages) {
-    if (!sourceImages || sourceImages.length === 0) return true;
-
-    consola.info(`    • Processing ${sourceImages.length} images for product`);
-
-    // Step 1: Get existing images to avoid duplicates
-    const existingImagesQuery = `#graphql
-      query getProductMedia($productId: ID!) {
-        product(id: $productId) {
-          media(first: 50) {
-            edges {
-              node {
-                id
-                mediaContentType
-                ... on MediaImage {
-                  image {
-                    originalSrc
-                  }
-                }
-                alt
-              }
-            }
-          }
-        }
-      }
-    `;
-
-    let existingImages = [];
-    try {
-      const response = await client.graphql(existingImagesQuery, { productId }, 'GetProductMedia');
-      existingImages = response.product.media.edges.map(edge => edge.node);
-      consola.info(`      - Found ${existingImages.length} existing images on product`);
-    } catch (error) {
-      consola.error(`      ✖ Error fetching existing product images: ${error.message}`);
-      return false;
-    }
-
-    // Create a map of existing images by source URL for easy comparison
-    const existingImageMap = {};
-    existingImages.forEach(img => {
-      if (img.mediaContentType === 'IMAGE' && img.image && img.image.originalSrc) {
-        // Use just the filename for comparison to handle URL differences
-        const filename = img.image.originalSrc.split('/').pop().split('?')[0];
-        existingImageMap[filename] = img;
-      }
-    });
-
-    // Filter out images that already exist
-    const newImagesToUpload = sourceImages.filter(img => {
-      const sourceSrc = img.src;
-      const sourceFilename = sourceSrc.split('/').pop().split('?')[0];
-      return !existingImageMap[sourceFilename];
-    });
-
-    if (newImagesToUpload.length === 0) {
-      consola.info(`      - All images already exist on product, no need to upload`);
-      return true;
-    }
-
-    // Create media inputs from the new images
-    const mediaInputs = newImagesToUpload.map(image => ({
-      originalSource: image.src,
-      alt: image.altText || '',
-      mediaContentType: 'IMAGE'
-    }));
-
-    const createMediaMutation = `#graphql
-      mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
-        productCreateMedia(productId: $productId, media: $media) {
-          media {
-            ... on MediaImage {
-              id
-              image {
-                id
-                url
-              }
-            }
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
-
-    if (this.options.notADrill) {
-      try {
-        consola.info(`      - Uploading ${mediaInputs.length} new images for product`);
-        const result = await client.graphql(createMediaMutation, {
-          productId,
-          media: mediaInputs
-        }, 'ProductCreateMedia');
-
-        if (result.productCreateMedia.userErrors.length > 0) {
-          consola.error(`      ✖ Failed to upload product images:`, result.productCreateMedia.userErrors);
-          return false;
-        } else {
-          consola.success(`      ✓ Successfully uploaded ${result.productCreateMedia.media.length} images`);
-
-          // Get the IDs of the newly created media
-          const newMediaIds = result.productCreateMedia.media.map(media => media.id);
-
-          return true;
-        }
-      } catch (error) {
-        consola.error(`      ✖ Error uploading product images: ${error.message}`);
-        return false;
-      }
-    } else {
-      consola.info(`      - [DRY RUN] Would upload ${mediaInputs.length} new images for product`);
-      for (const input of mediaInputs) {
-        consola.info(`        - [DRY RUN] Image: ${input.originalSource} (${input.alt || 'No alt text'})`);
-      }
-      return true;
-    }
+    // Now using the imageHandler utility
+    return await this.imageHandler.syncProductImages(productId, sourceImages, "");
   }
 
   async syncProductMetafields(client, productId, metafields) {
-    if (!metafields || metafields.length === 0) return true;
-
-    consola.info(`• Syncing ${metafields.length} metafields for product ID: ${productId}`);
-
-    // Shopify has a limit of 25 metafields per API call
-    const BATCH_SIZE = 25;
-    const metafieldBatches = [];
-
-    // Split metafields into batches of 25
-    for (let i = 0; i < metafields.length; i += BATCH_SIZE) {
-      metafieldBatches.push(metafields.slice(i, i + BATCH_SIZE));
-    }
-
-    consola.info(`  - Processing ${metafieldBatches.length} batches of metafields (max ${BATCH_SIZE} per batch)`);
-
-    let successCount = 0;
-    let failedCount = 0;
-
-    // Process each batch
-    for (const [batchIndex, metafieldBatch] of metafieldBatches.entries()) {
-      // Prepare metafields inputs for this batch
-      const metafieldsInput = metafieldBatch.map(metafield => ({
-        ownerId: productId,
-        namespace: metafield.namespace,
-        key: metafield.key,
-        value: metafield.value,
-        type: metafield.type
-      }));
-
-      const mutation = `#graphql
-        mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
-          metafieldsSet(metafields: $metafields) {
-            metafields {
-              id
-              namespace
-              key
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }
-      `;
-
-      if (this.options.notADrill) {
-        try {
-          consola.info(`    - Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`);
-          const result = await client.graphql(mutation, { metafields: metafieldsInput }, 'MetafieldsSet');
-
-          if (result.metafieldsSet.userErrors.length > 0) {
-            consola.error(`    ✖ Failed to set product metafields in batch ${batchIndex + 1}:`, result.metafieldsSet.userErrors);
-            failedCount += metafieldBatch.length;
-          } else {
-            const metafieldCount = result.metafieldsSet.metafields.length;
-            consola.success(`    ✓ Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`);
-            successCount += metafieldCount;
-
-            // Log individual metafields if debug is enabled
-            if (this.debug) {
-              result.metafieldsSet.metafields.forEach(metafield => {
-                consola.debug(`      - Set product metafield ${metafield.namespace}.${metafield.key}`);
-              });
-            }
-          }
-        } catch (error) {
-          consola.error(`    ✖ Error setting product metafields in batch ${batchIndex + 1}: ${error.message}`);
-          failedCount += metafieldBatch.length;
-        }
-      } else {
-        consola.info(`    - [DRY RUN] Would set ${metafieldBatch.length} metafields for product ID: ${productId} in batch ${batchIndex + 1}`);
-
-        // Log individual metafields if debug is enabled
-        if (this.debug) {
-          metafieldBatch.forEach(metafield => {
-            consola.debug(`      - [DRY RUN] Would set product metafield ${metafield.namespace}.${metafield.key}`);
-          });
-        }
-      }
-    }
-
-    // Return success status
-    if (this.options.notADrill) {
-      consola.info(`  - Product metafields sync complete: ${successCount} successful, ${failedCount} failed`);
-      return failedCount === 0;
-    } else {
-      return true;
-    }
+    // Now using the metafieldHandler utility
+    return await this.metafieldHandler.syncMetafields(productId, metafields, "");
   }
 
   async syncVariantMetafields(client, variant, metafields) {
-    if (!metafields || metafields.length === 0) return true;
-
-    consola.info(`  • Syncing ${metafields.length} metafields for variant ID: ${variant.id}`);
-
-    // Shopify has a limit of 25 metafields per API call
-    const BATCH_SIZE = 25;
-    const metafieldBatches = [];
-
-    // Split metafields into batches of 25
-    for (let i = 0; i < metafields.length; i += BATCH_SIZE) {
-      metafieldBatches.push(metafields.slice(i, i + BATCH_SIZE));
-    }
-
-    consola.info(`    - Processing ${metafieldBatches.length} batches of metafields (max ${BATCH_SIZE} per batch)`);
-
-    let successCount = 0;
-    let failedCount = 0;
-
-    // Process each batch
-    for (const [batchIndex, metafieldBatch] of metafieldBatches.entries()) {
-      // Prepare metafields inputs for this batch
-      const metafieldsInput = metafieldBatch.map(metafield => ({
-        ownerId: variant.id,
-        namespace: metafield.namespace,
-        key: metafield.key,
-        value: metafield.value,
-        type: metafield.type
-      }));
-
-      const mutation = `#graphql
-        mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
-          metafieldsSet(metafields: $metafields) {
-            metafields {
-              id
-              namespace
-              key
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }
-      `;
-
-      if (this.options.notADrill) {
-        try {
-          consola.info(`      - Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`);
-          const result = await client.graphql(mutation, { metafields: metafieldsInput }, 'MetafieldsSet');
-
-          if (result.metafieldsSet.userErrors.length > 0) {
-            consola.error(`      ✖ Failed to set variant metafields in batch ${batchIndex + 1}:`, result.metafieldsSet.userErrors);
-            failedCount += metafieldBatch.length;
-          } else {
-            const metafieldCount = result.metafieldsSet.metafields.length;
-            consola.success(`      ✓ Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`);
-            successCount += metafieldCount;
-
-            // Log individual metafields if debug is enabled
-            if (this.debug) {
-              result.metafieldsSet.metafields.forEach(metafield => {
-                consola.debug(`        - Set variant metafield ${metafield.namespace}.${metafield.key}`);
-              });
-            }
-          }
-        } catch (error) {
-          consola.error(`      ✖ Error setting variant metafields in batch ${batchIndex + 1}: ${error.message}`);
-          failedCount += metafieldBatch.length;
-        }
-      } else {
-        consola.info(`      - [DRY RUN] Would set ${metafieldBatch.length} metafields for variant ID: ${variant.id} in batch ${batchIndex + 1}`);
-
-        // Log individual metafields if debug is enabled
-        if (this.debug) {
-          metafieldBatch.forEach(metafield => {
-            consola.debug(`        - [DRY RUN] Would set variant metafield ${metafield.namespace}.${metafield.key}`);
-          });
-        }
-      }
-    }
-
-    // Return success status
-    if (this.options.notADrill) {
-      consola.info(`    - Variant metafields sync complete: ${successCount} successful, ${failedCount} failed`);
-      return failedCount === 0;
-    } else {
-      return true;
-    }
+    // Now using the metafieldHandler utility
+    return await this.metafieldHandler.syncMetafields(variant.id, metafields, "  ");
   }
 
   async updateVariantImage(client, variantId, imageId, productId) {
-    // Validate IDs
-    if (!variantId || !imageId) {
-      consola.error(`      ✖ Invalid parameters: variantId or imageId is missing`);
-      return false;
-    }
-
-    // Make sure we're working with valid ID format
-    if (!variantId.startsWith('gid://') || !imageId.startsWith('gid://')) {
-      consola.error(`      ✖ Invalid ID format for variant or image`);
-      return false;
-    }
-
-    // Extract productId from variantId if not provided
-    if (!productId) {
-      try {
-        const getVariantQuery = `#graphql
-          query getVariantProduct($variantId: ID!) {
-            productVariant(id: $variantId) {
-              product {
-                id
-              }
-            }
-          }
-        `;
-
-        const response = await client.graphql(getVariantQuery, { variantId }, 'getVariantProduct');
-        productId = response.productVariant.product.id;
-      } catch (error) {
-        consola.error(`      ✖ Could not determine product ID for variant`);
-        return false;
-      }
-    }
-
-    // Validate we have a product ID
-    if (!productId || !productId.startsWith('gid://')) {
-      consola.error(`      ✖ Invalid product ID`);
-      return false;
-    }
-
-    // Convert ProductImage ID to MediaImage ID if needed
-    if (imageId.includes('ProductImage/')) {
-      try {
-        const getProductMediaQuery = `#graphql
-          query getProductMedia($productId: ID!) {
-            product(id: $productId) {
-              media(first: 50) {
-                edges {
-                  node {
-                    id
-                    ... on MediaImage {
-                      image {
-                        id
-                        originalSrc
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        `;
-
-        const response = await client.graphql(getProductMediaQuery, { productId }, 'getProductMedia');
-        const mediaItems = response.product.media.edges.map(edge => edge.node);
-
-        // Look for a media item whose image.id matches our ProductImage ID
-        let foundMediaId = null;
-        for (const media of mediaItems) {
-          if (media.image && media.image.id === imageId) {
-            foundMediaId = media.id;
-            break;
-          }
-        }
-
-        if (foundMediaId) {
-          imageId = foundMediaId;
-        } else {
-          // If we can't find a direct match, get the product's images and try to match by URL
-          const getProductImagesQuery = `#graphql
-            query getProductImages($productId: ID!) {
-              product(id: $productId) {
-                images(first: 50) {
-                  edges {
-                    node {
-                      id
-                      src
-                    }
-                  }
-                }
-              }
-            }
-          `;
-
-          const imagesResponse = await client.graphql(getProductImagesQuery, { productId }, 'getProductImages');
-          const images = imagesResponse.product.images.edges.map(edge => edge.node);
-
-          // Find the image with the matching ID
-          const matchingImage = images.find(img => img.id === imageId);
-
-          if (matchingImage) {
-            // Now look for a media item with a matching image URL
-            for (const media of mediaItems) {
-              if (media.image &&
-                  media.image.originalSrc &&
-                  matchingImage.src &&
-                  this.normalizeUrl(media.image.originalSrc) === this.normalizeUrl(matchingImage.src)) {
-                foundMediaId = media.id;
-                break;
-              }
-            }
-
-            if (foundMediaId) {
-              imageId = foundMediaId;
-            } else {
-              consola.error(`      ✖ Could not find a MediaImage corresponding to ProductImage`);
-              return false;
-            }
-          } else {
-            consola.error(`      ✖ Could not find image on product`);
-            return false;
-          }
-        }
-      } catch (error) {
-        consola.error(`      ✖ Error converting ProductImage to MediaImage`);
-        return false;
-      }
-    }
-
-    // Confirm we now have a MediaImage ID
-    if (!imageId.includes('MediaImage/')) {
-      consola.error(`      ✖ Unable to use image: ID is not a MediaImage ID`);
-      return false;
-    }
-
-    // Check if the variant already has this media attached
-    try {
-      const checkVariantMediaQuery = `#graphql
-        query checkVariantMedia($variantId: ID!) {
-          productVariant(id: $variantId) {
-            media(first: 10) {
-              nodes {
-                id
-              }
-            }
-          }
-        }
-      `;
-
-      const response = await client.graphql(checkVariantMediaQuery, { variantId }, 'checkVariantMedia');
-
-      if (response.productVariant?.media?.nodes) {
-        const existingMediaIds = response.productVariant.media.nodes.map(node => node.id);
-
-        // If the variant already has this media attached, we can skip the operation
-        if (existingMediaIds.includes(imageId)) {
-          consola.info(`      - Variant already has the image attached, skipping`);
-          return true;
-        }
-
-        // If the variant has different media attached, we need to detach it first
-        if (existingMediaIds.length > 0) {
-          const detachMediaMutation = `#graphql
-            mutation productVariantDetachMedia($variantId: ID!, $mediaIds: [ID!]!) {
-              productVariantDetachMedia(
-                variantId: $variantId,
-                mediaIds: $mediaIds
-              ) {
-                productVariant {
-                  id
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }
-          `;
-
-          // Detach existing media
-          try {
-            const detachResult = await client.graphql(detachMediaMutation, {
-              variantId,
-              mediaIds: existingMediaIds
-            }, 'productVariantDetachMedia');
-
-            if (detachResult.productVariantDetachMedia.userErrors.length > 0) {
-              consola.warn(`      ⚠ Failed to detach existing media, but will continue with attach operation`);
-            }
-          } catch (error) {
-            consola.warn(`      ⚠ Error detaching media: ${error.message}, but will continue with attach operation`);
-          }
-        }
-      }
-    } catch (error) {
-      consola.warn(`      ⚠ Could not check existing variant media: ${error.message}, will continue anyway`);
-    }
-
-    // The mutation to append media to variant
-    const variantAppendMediaMutation = `#graphql
-      mutation productVariantAppendMedia($productId: ID!, $variantMedia: [ProductVariantAppendMediaInput!]!) {
-        productVariantAppendMedia(
-          productId: $productId,
-          variantMedia: $variantMedia
-        ) {
-          productVariants {
-            id
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
-
-    if (this.options.notADrill) {
-      try {
-        consola.info(`      - Updating variant image`);
-
-        // Append the new media
-        const result = await client.graphql(variantAppendMediaMutation, {
-          productId: productId,
-          variantMedia: [
-            {
-              variantId: variantId,
-              mediaIds: [imageId]
-            }
-          ]
-        }, 'productVariantAppendMedia');
-
-        if (result.productVariantAppendMedia.userErrors.length > 0) {
-          consola.error(`      ✖ Failed to update variant image:`, result.productVariantAppendMedia.userErrors);
-          return false;
-        } else {
-          consola.success(`      ✓ Successfully updated variant image`);
-          return true;
-        }
-      } catch (error) {
-        consola.error(`      ✖ Error updating variant image: ${error.message}`);
-        return false;
-      }
-    } else {
-      consola.info(`      - [DRY RUN] Would update variant image`);
-      return true;
-    }
-  }
-
-  // Helper to normalize URLs for comparison
-  normalizeUrl(url) {
-    if (!url) return '';
-    // Remove protocol, query params, and normalize to lowercase
-    return url.replace(/^https?:\/\//, '')
-              .split('?')[0]
-              .toLowerCase();
+    // Now using the imageHandler utility
+    return await this.imageHandler.updateVariantImage(variantId, imageId, productId, "      ");
   }
 
   async syncProductPublications(client, productId, publications) {
