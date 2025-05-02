@@ -232,3 +232,33 @@ node run.js --source my-dev-shop --target my-test-shop --resource page --not-a-d
 ✔ Sync completed:
 ℹ Pages: 2 created, 0 updated, 0 skipped, 0 failed
 ```
+
+## Testing Utilities
+
+### Generating Fake Products
+
+The tool includes a command for generating fake products with realistic data for testing purposes:
+
+```bash
+# Generate 5 fake products (without creating them in Shopify)
+node run.js generate-fake-products --limit 5
+
+# Generate and show fake products for a specific shop in dry-run mode
+node run.js generate-fake-products --shop your-shop-name --limit 5
+
+# Actually create the products in your shop
+node run.js generate-fake-products --shop your-shop-name --limit 5 --not-a-drill
+
+# Generate products of a specific type
+node run.js generate-fake-products --shop your-shop-name --limit 3 --product-type "Electronics" --not-a-drill
+```
+
+The fake product generator creates realistic product data with:
+- Realistic titles and descriptions
+- Random variants with different options (Size, Color, Material, etc.)
+- Product metafields
+- Placeholder images
+
+This is useful for quickly populating a development store with test data or generating sample product data for testing.
+
+## Metaobject Definition Sync

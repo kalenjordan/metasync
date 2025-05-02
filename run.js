@@ -16,6 +16,8 @@ const VariantMetafieldSyncStrategy = require('./strategies/VariantMetafieldSyncS
 const CustomerMetafieldSyncStrategy = require('./strategies/CustomerMetafieldSyncStrategy');
 const PageSyncStrategy = require('./strategies/PageSyncStrategy');
 const ProductSyncStrategy = require('./strategies/ProductSyncStrategy');
+// Import the new fake product generator
+const FakeProductGenerator = require('./utils/FakeProductGenerator');
 
 /**
  * Get shop configuration from .shops.json file by shop name
@@ -109,8 +111,125 @@ class MetaSyncCli {
       .option("--debug", "Enable debug logging", false)
       .option("--handle <handle>", "Specific product handle to sync (optional)")
       .option("--force-recreate", "Delete and recreate products instead of updating (for product_sync only)", false)
-      .option("--limit <number>", "Limit the number of items to process per run", (value) => parseInt(value, 10), 3)
-      .parse(process.argv);
+      .option("--limit <number>", "Limit the number of items to process per run", (value) => parseInt(value, 10), 3);
+
+    // Add generate-fake-products command
+    program
+      .command('generate-fake-products')
+      .description('Generate fake products for testing')
+      .option('--limit <number>', 'Number of fake products to generate', 3)
+      .option('--shop <shop>', 'Shop name to create products in (must exist in .shops.json)')
+      .option('--product-type <type>', 'Specific product type to generate (optional)')
+      .option('--not-a-drill', 'Make actual changes (default is dry run)')
+      .option('--debug', 'Enable debug logging')
+      .action(async (cmdOptions) => {
+        try {
+          // Check for --not-a-drill directly
+          const notADrill = process.argv.includes('--not-a-drill');
+
+          // Set log level based on debug flag
+          if (cmdOptions.debug || process.argv.includes('--debug')) {
+            consola.level = 3;
+          }
+
+          let shopConfig = null;
+
+          // If shop is provided, validate it
+          if (cmdOptions.shop) {
+            shopConfig = getShopConfig(cmdOptions.shop);
+            if (!shopConfig) {
+              consola.error(`Error: Shop "${cmdOptions.shop}" not found in .shops.json`);
+              process.exit(1);
+            }
+          }
+
+          consola.info(`Dry Run: ${!notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
+
+          let clientWrapper = null;
+
+          // Only create client if shop is specified
+          if (shopConfig) {
+            // Create Shopify client
+            const shopifyClient = new Shopify({
+              shopName: shopConfig.domain.replace('.myshopify.com', ''),
+              accessToken: shopConfig.accessToken,
+              apiVersion: SHOPIFY_API_VERSION,
+              autoLimit: cmdOptions.debug ? false : true
+            });
+
+            // Wrap client for centralized logging/handling
+            clientWrapper = new ShopifyClientWrapper(shopifyClient, cmdOptions.debug);
+          }
+
+          // Create fake product generator
+          const fakeGenerator = new FakeProductGenerator(clientWrapper, {
+            debug: cmdOptions.debug,
+            notADrill: notADrill
+          });
+
+          // Generate fake products
+          const options = {};
+          if (cmdOptions.productType) {
+            options.productType = cmdOptions.productType;
+          }
+
+          // Get the limit value from command line arguments
+          let limit = 3; // Default value
+          const limitArgIndex = process.argv.findIndex(arg => arg === '--limit');
+          if (limitArgIndex !== -1 && limitArgIndex < process.argv.length - 1) {
+            const limitValue = Number(process.argv[limitArgIndex + 1]);
+            if (!isNaN(limitValue)) {
+              limit = limitValue;
+            }
+          }
+
+          // Only show debug info if debug flag is enabled
+          if (cmdOptions.debug) {
+            console.log("Limit value:", limit);
+          }
+
+          // Update log message to reflect actual limit
+          if (cmdOptions.shop) {
+            consola.info(`Generating ${limit} fake products for shop: ${cmdOptions.shop}`);
+          } else {
+            consola.info(`Generating ${limit} fake products (no shop specified)`);
+          }
+
+          const fakeProducts = fakeGenerator.generateProducts(limit, options);
+
+          // Display generated products
+          consola.info(`Generated ${fakeProducts.length} fake products:`);
+          fakeProducts.forEach((product, index) => {
+            consola.info(`${index + 1}. "${product.title}" (${product.variants.length} variants)`);
+          });
+
+          // Create products in Shopify (only if shop is specified)
+          if (clientWrapper && notADrill) {
+            consola.info("Creating products in Shopify...");
+            const results = await fakeGenerator.createProducts(fakeProducts);
+            consola.success(`Successfully created ${results.created} products (failed: ${results.failed})`);
+
+            // Output created product info
+            if (results.products.length > 0) {
+              consola.info("Created products:");
+              results.products.forEach(product => {
+                consola.info(`- ${product.title} (ID: ${product.id})`);
+              });
+            }
+          } else if (clientWrapper) {
+            consola.info("[DRY RUN] Would create the above products in Shopify");
+            consola.info("Use --not-a-drill to actually create the products");
+          } else {
+            consola.info("No shop specified. Products were generated but not created in Shopify.");
+            consola.info("Use --shop <name> to specify a shop for product creation.");
+          }
+        } catch (error) {
+          consola.error("Error generating fake products:", error);
+          process.exit(1);
+        }
+      });
+
+    program.parse(process.argv);
 
     return program.opts();
   }
@@ -347,25 +466,33 @@ async function main() {
     consola.level = 3; // Revert to assignment
   }
 
-  // Validate we have minimal required configuration
-  if (!options.source) {
-    consola.error("Error: Source shop name is required");
-    process.exit(1);
-  }
+  // Skip validation for subcommands like generate-fake-products
+  // Check if we're running the main command or a subcommand by checking arguments
+  const isSubcommand = process.argv.length > 2 && process.argv[2] === 'generate-fake-products';
 
-  if (!getShopConfig(options.source)) {
-    consola.error("Error: Source shop not found in .shops.json");
-    process.exit(1);
-  }
+  if (!isSubcommand) {
+    // Only validate source shop for main command
+    // Validate we have minimal required configuration
+    if (!options.source) {
+      consola.error("Error: Source shop name is required");
+      process.exit(1);
+    }
 
-  // Additional safety check for target name containing 'prod'
-  if (options.target && (options.target.toLowerCase().includes('prod') || options.target.toLowerCase().includes('production'))) {
-    consola.error(`Error: Cannot use "${options.target}" as target - shops with "production" or "prod" in the name are protected for safety.`);
-    process.exit(1);
-  }
+    if (!getShopConfig(options.source)) {
+      consola.error("Error: Source shop not found in .shops.json");
+      process.exit(1);
+    }
 
-  const syncer = new MetaSyncCli(options);
-  await syncer.run();
+    // Additional safety check for target name containing 'prod'
+    if (options.target && (options.target.toLowerCase().includes('prod') || options.target.toLowerCase().includes('production'))) {
+      consola.error(`Error: Cannot use "${options.target}" as target - shops with "production" or "prod" in the name are protected for safety.`);
+      process.exit(1);
+    }
+
+    const syncer = new MetaSyncCli(options);
+    await syncer.run();
+  }
+  // The subcommand processing is handled by Commander automatically
 }
 
 main().catch(error => {
