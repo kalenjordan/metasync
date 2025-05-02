@@ -26,107 +26,138 @@ class ProductSyncStrategy {
 
   // --- Product Methods ---
 
-  async fetchProducts(client, limit = 50) {
-    const query = `#graphql
-      query GetProducts($first: Int!) {
-        products(first: $first) {
-          edges {
-            node {
-              id
-              title
-              handle
-              description
-              descriptionHtml
-              vendor
-              productType
-              status
-              tags
-              options {
-                name
-                values
-              }
-              images(first: 10) {
-                edges {
-                  node {
-                    id
-                    src
-                    altText
-                    width
-                    height
+  async fetchProducts(client, limit = 50, options = {}) {
+    // Construct the GraphQL query for products
+    // If handle is provided, we'll fetch just that specific product
+    let query;
+    let variables;
+
+    if (options.handle) {
+      // If fetching by handle, use the getProductByHandle method
+      const product = await this.getProductByHandle(client, options.handle);
+      return product ? [product] : [];
+    } else {
+      // Otherwise fetch multiple products
+      query = `#graphql
+        query GetProducts($first: Int!, $query: String) {
+          products(first: $first, query: $query) {
+            edges {
+              node {
+                id
+                title
+                handle
+                description
+                descriptionHtml
+                vendor
+                productType
+                status
+                tags
+                options {
+                  name
+                  values
+                }
+                publications(first: 20) {
+                  edges {
+                    node {
+                      channel {
+                        id
+                        name
+                        handle
+                      }
+                      publishDate
+                      isPublished
+                    }
                   }
                 }
-              }
-              variants(first: 100) {
-                edges {
-                  node {
-                    id
-                    title
-                    sku
-                    price
-                    compareAtPrice
-                    inventoryQuantity
-                    inventoryPolicy
-                    inventoryItem {
-                      id
-                      tracked
-                      requiresShipping
-                      measurement {
-                        weight {
-                          value
-                          unit
-                        }
-                      }
-                    }
-                    taxable
-                    barcode
-                    selectedOptions {
-                      name
-                      value
-                    }
-                    image {
+                images(first: 10) {
+                  edges {
+                    node {
                       id
                       src
                       altText
                       width
                       height
                     }
-                    metafields(first: 50) {
-                      edges {
-                        node {
-                          id
-                          namespace
-                          key
-                          value
-                          type
+                  }
+                }
+                variants(first: 100) {
+                  edges {
+                    node {
+                      id
+                      title
+                      sku
+                      price
+                      compareAtPrice
+                      inventoryQuantity
+                      inventoryPolicy
+                      inventoryItem {
+                        id
+                        tracked
+                        requiresShipping
+                        measurement {
+                          weight {
+                            value
+                            unit
+                          }
+                        }
+                      }
+                      taxable
+                      barcode
+                      selectedOptions {
+                        name
+                        value
+                      }
+                      image {
+                        id
+                        src
+                        altText
+                        width
+                        height
+                      }
+                      metafields(first: 50) {
+                        edges {
+                          node {
+                            id
+                            namespace
+                            key
+                            value
+                            type
+                          }
                         }
                       }
                     }
                   }
                 }
-              }
-              metafields(first: 100) {
-                edges {
-                  node {
-                    id
-                    namespace
-                    key
-                    value
-                    type
+                metafields(first: 100) {
+                  edges {
+                    node {
+                      id
+                      namespace
+                      key
+                      value
+                      type
+                    }
                   }
                 }
               }
             }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
           }
         }
-      }
-    `;
+      `;
+
+      // Filter out archived products using the query parameter
+      variables = {
+        first: limit,
+        query: "status:ACTIVE" // Only fetch active products
+      };
+    }
 
     try {
-      const response = await client.graphql(query, { first: limit }, 'GetProducts');
+      const response = await client.graphql(query, variables, 'GetProducts');
       return response.products.edges.map(edge => {
         const product = edge.node;
 
@@ -152,6 +183,13 @@ class ProductSyncStrategy {
         // Process metafields
         product.metafields = product.metafields.edges.map(metaEdge => metaEdge.node);
 
+        // Process publications
+        if (product.publications && product.publications.edges) {
+          product.publications = product.publications.edges.map(pubEdge => pubEdge.node);
+        } else {
+          product.publications = [];
+        }
+
         return product;
       });
     } catch (error) {
@@ -176,6 +214,19 @@ class ProductSyncStrategy {
           options {
             name
             values
+          }
+          publications(first: 20) {
+            edges {
+              node {
+                channel {
+                  id
+                  name
+                  handle
+                }
+                publishDate
+                isPublished
+              }
+            }
           }
           images(first: 10) {
             edges {
@@ -282,6 +333,13 @@ class ProductSyncStrategy {
       // Process metafields
       product.metafields = product.metafields.edges.map(metaEdge => metaEdge.node);
 
+      // Process publications
+      if (product.publications && product.publications.edges) {
+        product.publications = product.publications.edges.map(pubEdge => pubEdge.node);
+      } else {
+        product.publications = [];
+      }
+
       return product;
     } catch (error) {
       consola.error(`Error fetching product by handle: ${error.message}`);
@@ -351,6 +409,11 @@ class ProductSyncStrategy {
           await this.syncProductMetafields(client, newProduct.id, product.metafields);
         }
 
+        // Step 5: Sync publication status if any
+        if (newProduct.id && product.publications && product.publications.length > 0) {
+          await this.syncProductPublications(client, newProduct.id, product.publications);
+        }
+
         return newProduct;
       } catch (error) {
         consola.error(`    ✖ Error creating product "${product.title}": ${error.message}`);
@@ -360,6 +423,14 @@ class ProductSyncStrategy {
       consola.info(`  • [DRY RUN] Would create product "${product.title}"`);
       consola.info(`    - [DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`);
       consola.info(`    - [DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
+
+      if (product.publications && product.publications.length > 0) {
+        const publishedChannels = product.publications
+          .filter(pub => pub.isPublished)
+          .map(pub => pub.channel.handle);
+        consola.info(`    - [DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`);
+      }
+
       return { id: "dry-run-id", title: product.title, handle: product.handle };
     }
   }
@@ -745,6 +816,11 @@ class ProductSyncStrategy {
           if (product.metafields && product.metafields.length > 0) {
             await this.syncProductMetafields(client, updatedProduct.id, product.metafields);
           }
+
+          // Sync publication status if any
+          if (product.publications && product.publications.length > 0) {
+            await this.syncProductPublications(client, updatedProduct.id, product.publications);
+          }
         }
 
         return updatedProduct;
@@ -756,6 +832,14 @@ class ProductSyncStrategy {
       consola.info(`  • [DRY RUN] Would update product "${product.title}"`);
       consola.info(`    - [DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`);
       consola.info(`    - [DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
+
+      if (product.publications && product.publications.length > 0) {
+        const publishedChannels = product.publications
+          .filter(pub => pub.isPublished)
+          .map(pub => pub.channel.handle);
+        consola.info(`    - [DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`);
+      }
+
       return { id: existingProduct.id, title: product.title, handle: product.handle };
     }
   }
@@ -1765,13 +1849,205 @@ class ProductSyncStrategy {
               .toLowerCase();
   }
 
+  async syncProductPublications(client, productId, publications) {
+    if (!publications || publications.length === 0) {
+      consola.info(`    - No publication channels to sync`);
+      return true;
+    }
+
+    consola.info(`    • Syncing product publication to ${publications.length} channels`);
+
+    // First, get available channels and publications in the target store
+    const getPublicationsQuery = `#graphql
+      query GetPublicationsAndChannels {
+        publications(first: 25) {
+          edges {
+            node {
+              id
+              name
+              app {
+                id
+              }
+            }
+          }
+        }
+        channels(first: 25) {
+          edges {
+            node {
+              id
+              name
+              handle
+            }
+          }
+        }
+      }
+    `;
+
+    let targetChannels = [];
+    let targetPublications = [];
+    try {
+      const response = await client.graphql(getPublicationsQuery, {}, 'GetPublicationsAndChannels');
+      targetChannels = response.channels.edges.map(edge => edge.node);
+      targetPublications = response.publications.edges.map(edge => edge.node);
+
+      if (this.debug) {
+        consola.debug(`      - Found ${targetChannels.length} available channels in target store`);
+        consola.debug(`      - Found ${targetPublications.length} publications in target store`);
+      }
+    } catch (error) {
+      consola.error(`      ✖ Error fetching target store publications: ${error.message}`);
+      return false;
+    }
+
+    // Get current publication status for this product
+    const getProductPublicationsQuery = `#graphql
+      query GetProductPublications($productId: ID!) {
+        product(id: $productId) {
+          publications(first: 25) {
+            edges {
+              node {
+                channel {
+                  id
+                  handle
+                }
+                isPublished
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    let currentPublications = [];
+    try {
+      const response = await client.graphql(getProductPublicationsQuery, { productId }, 'GetProductPublications');
+      if (response.product && response.product.publications) {
+        currentPublications = response.product.publications.edges.map(edge => edge.node);
+      }
+
+      if (this.debug) {
+        consola.debug(`      - Product is currently published to ${currentPublications.length} channels`);
+      }
+    } catch (error) {
+      consola.warn(`      ⚠ Unable to fetch current publications: ${error.message}`);
+      // Continue anyway since we can still try to publish
+    }
+
+    // Match source publications to target channels by handle
+    const publicationsToCreate = [];
+    const skippedChannels = [];
+
+    // For each source publication
+    for (const sourcePublication of publications) {
+      // Only process publications that are actually published
+      if (!sourcePublication.isPublished) continue;
+
+      const sourceChannelHandle = sourcePublication.channel.handle;
+
+      // Find matching target channel
+      const targetChannel = targetChannels.find(channel => channel.handle === sourceChannelHandle);
+      if (targetChannel) {
+        // Find the publication associated with this channel
+        // For now, use the first publication as a default if we don't have more info
+        // In most cases, there will only be a single publication (the default one)
+        const targetPublication = targetPublications.length > 0 ? targetPublications[0] : null;
+
+        if (targetPublication) {
+          // Check if product is already published to this channel
+          const alreadyPublished = currentPublications.some(pub =>
+            pub.channel.handle === sourceChannelHandle && pub.isPublished
+          );
+
+          if (!alreadyPublished) {
+            publicationsToCreate.push({
+              publicationId: targetPublication.id,
+              channelHandle: sourceChannelHandle
+            });
+          } else if (this.debug) {
+            consola.debug(`      - Product already published to ${sourceChannelHandle}`);
+          }
+        } else {
+          consola.warn(`      ⚠ Found channel ${sourceChannelHandle} but no associated publication in target store`);
+          skippedChannels.push(sourceChannelHandle);
+        }
+      } else {
+        skippedChannels.push(sourceChannelHandle);
+      }
+    }
+
+    // Log skipped channels
+    if (skippedChannels.length > 0) {
+      consola.warn(`      ⚠ Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`);
+    }
+
+    // If no publications to create, we're done
+    if (publicationsToCreate.length === 0) {
+      consola.info(`      - No new publication channels to add`);
+      return true;
+    }
+
+    // Publish to target channels
+    const publishMutation = `#graphql
+      mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+        publishablePublish(id: $id, input: $input) {
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    if (this.options.notADrill) {
+      try {
+        consola.info(`      - Publishing product to ${publicationsToCreate.length} channels`);
+
+        const input = publicationsToCreate.map(pub => ({
+          publicationId: pub.publicationId,
+          // Use current date for publish date
+          publishDate: new Date().toISOString()
+        }));
+
+        const result = await client.graphql(publishMutation, {
+          id: productId,
+          input
+        }, 'publishablePublish');
+
+        if (result.publishablePublish.userErrors.length > 0) {
+          consola.error(`      ✖ Failed to publish product:`, result.publishablePublish.userErrors);
+          return false;
+        } else {
+          consola.success(`      ✓ Successfully published product to ${publicationsToCreate.length} channels`);
+          return true;
+        }
+      } catch (error) {
+        consola.error(`      ✖ Error publishing product: ${error.message}`);
+        return false;
+      }
+    } else {
+      consola.info(`      - [DRY RUN] Would publish product to ${publicationsToCreate.length} channels`);
+      for (const pub of publicationsToCreate) {
+        consola.info(`        - [DRY RUN] Channel: ${pub.channelHandle}`);
+      }
+      return true;
+    }
+  }
+
   // --- Sync Orchestration Methods ---
 
   async sync() {
     consola.start(`Syncing products...`);
 
-    // Fetch products from source shop
-    const sourceProducts = await this.fetchProducts(this.sourceClient, this.options.limit);
+    // Fetch products from source shop with options
+    const options = {};
+
+    // If a specific handle was provided, use it for filtering
+    if (this.options.handle) {
+      consola.info(`Syncing only product with handle: ${this.options.handle}`);
+      options.handle = this.options.handle;
+    }
+
+    const sourceProducts = await this.fetchProducts(this.sourceClient, this.options.limit, options);
     consola.info(`Found ${sourceProducts.length} product(s) in source shop`);
 
     const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
