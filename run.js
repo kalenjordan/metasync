@@ -107,6 +107,8 @@ class MetaSyncCli {
       .option("--data-only", "Sync only the data, not the definitions (Metaobject data sync only)")
       .option("--not-a-drill", "Make actual changes (default is dry run)", false)
       .option("--debug", "Enable debug logging", false)
+      .option("--handle <handle>", "Specific product handle to sync (optional)")
+      .option("--force-recreate", "Delete and recreate products instead of updating (for product_sync only)", false)
       .option("--limit <number>", "Limit the number of items to process per run", (value) => parseInt(value, 10), 3)
       .parse(process.argv);
 
@@ -171,6 +173,11 @@ class MetaSyncCli {
     consola.info(`Dry Run: ${!this.options.notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     consola.info(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
     consola.info(`Limit: ${this.options.limit}`);
+
+    // Log force-recreate if it's product_sync
+    if (this.options.resource === 'product_sync') {
+      consola.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
+    }
 
     // Determine if we need to list definitions and exit
     let shouldListAndExit = false;
@@ -253,6 +260,11 @@ class MetaSyncCli {
     const StrategyClass = strategyMap[this.options.resource];
 
     if (StrategyClass) {
+        // Debugging output for options
+        if (this.options.debug) {
+            consola.debug(`Options before creating strategy:`, this.options);
+        }
+
         strategy = new StrategyClass(this.sourceClient, this.targetClient, this.options);
     } else {
         // Should not happen due to earlier validation

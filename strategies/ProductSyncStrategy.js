@@ -20,8 +20,17 @@ class ProductSyncStrategy {
   constructor(sourceClient, targetClient, options) {
     this.sourceClient = sourceClient;
     this.targetClient = targetClient;
-    this.options = options;
+    this.options = options || {};
     this.debug = options.debug;
+
+    // Commander.js transforms --force-recreate to options.forceRecreate
+    this.forceRecreate = !!options.forceRecreate;
+
+    // Output debug info for troubleshooting
+    if (this.debug) {
+      console.log('DEBUG: ProductSyncStrategy options:', options);
+      console.log('DEBUG: forceRecreate set to:', this.forceRecreate);
+    }
   }
 
   // --- Product Methods ---
@@ -462,6 +471,50 @@ class ProductSyncStrategy {
       duplicates.forEach(dup => consola.warn(`    - ${dup}`));
     }
 
+    // First, let's check if any variants already exist on the product
+    // This helps prevent the "variant already exists" error
+    const existingVariantsQuery = `#graphql
+      query getProductVariants($productId: ID!) {
+        product(id: $productId) {
+          variants(first: 100) {
+            edges {
+              node {
+                id
+                selectedOptions {
+                  name
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    let existingVariants = [];
+    try {
+      const response = await client.graphql(existingVariantsQuery, { productId }, 'getProductVariants');
+      existingVariants = response.product.variants.edges.map(edge => edge.node);
+
+      if (existingVariants.length > 0) {
+        consola.info(`  - Found ${existingVariants.length} existing variants on product`);
+      }
+    } catch (error) {
+      consola.warn(`  ⚠ Could not check existing variants: ${error.message}`);
+      // Continue anyway - worst case we'll get errors for duplicates
+    }
+
+    // Create a map of existing variants by their option combination
+    const existingVariantMap = {};
+    existingVariants.forEach(variant => {
+      const optionKey = variant.selectedOptions
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(opt => `${opt.name}:${opt.value}`)
+        .join('|');
+
+      existingVariantMap[optionKey] = variant.id;
+    });
+
     // First, we need to create all product images to be able to reference them
     // Collect all unique variant images that need to be uploaded
     const variantImagesToUpload = [];
@@ -522,8 +575,52 @@ class ProductSyncStrategy {
       imageIdMap[filename] = img.id;
     });
 
+    // Filter out variants that already exist
+    const filteredVariants = variants.filter(variant => {
+      const optionKey = variant.selectedOptions
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(opt => `${opt.name}:${opt.value}`)
+        .join('|');
+
+      if (existingVariantMap[optionKey]) {
+        consola.info(`    - Skipping variant creation for "${optionKey}" as it already exists`);
+        return false;
+      }
+      return true;
+    });
+
+    if (filteredVariants.length === 0) {
+      consola.info(`  - All variants already exist, skipping variant creation`);
+
+      // Still process metafields and images for existing variants
+      for (const variant of variants) {
+        const optionKey = variant.selectedOptions
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(opt => `${opt.name}:${opt.value}`)
+          .join('|');
+
+        const existingVariantId = existingVariantMap[optionKey];
+        if (existingVariantId) {
+          // Handle variant metafields
+          if (variant.metafields && variant.metafields.length > 0) {
+            await this.syncVariantMetafields(client, { id: existingVariantId }, variant.metafields);
+          }
+
+          // Set the variant's image if one exists
+          if (variant.image && variant.image.src) {
+            const sourceFilename = variant.image.src.split('/').pop().split('?')[0];
+            if (imageIdMap[sourceFilename]) {
+              await this.updateVariantImage(client, existingVariantId, imageIdMap[sourceFilename], productId);
+            }
+          }
+        }
+      }
+
+      return true;
+    }
+
     // Transform variants to the format expected by productVariantsBulkCreate
-    const variantsInput = variants.map(variant => {
+    const variantsInput = filteredVariants.map(variant => {
       const variantInput = {
         price: variant.price,
         compareAtPrice: variant.compareAtPrice,
@@ -615,6 +712,17 @@ class ProductSyncStrategy {
             productId,
             variants: variantsInput
           }, 'ProductVariantsBulkCreate');
+
+          // Check for variant already exists errors
+          if (result.productVariantsBulkCreate.userErrors.length > 0) {
+            const existingVariantErrors = result.productVariantsBulkCreate.userErrors.filter(
+              err => err.code === 'VARIANT_ALREADY_EXISTS'
+            );
+
+            if (existingVariantErrors.length > 0) {
+              consola.warn(`  ⚠ Some variants already exist and will be skipped: ${existingVariantErrors.length} error(s)`);
+            }
+          }
         } catch (bulkError) {
           // If bulk creation fails completely, log and try individual creation
           consola.warn(`  ⚠ Bulk variant creation failed: ${bulkError.message}`);
@@ -642,17 +750,27 @@ class ProductSyncStrategy {
               }
 
               if (singleResult.productVariantsBulkCreate.userErrors.length > 0) {
-                individualResults.productVariantsBulkCreate.userErrors.push({
-                  ...singleResult.productVariantsBulkCreate.userErrors[0],
-                  field: [`variants`, `${index}`],
-                });
+                // Skip over "variant already exists" errors
+                if (singleResult.productVariantsBulkCreate.userErrors[0].code === 'VARIANT_ALREADY_EXISTS') {
+                  consola.warn(`    ⚠ Variant #${index + 1} already exists, skipping`);
+                } else {
+                  individualResults.productVariantsBulkCreate.userErrors.push({
+                    ...singleResult.productVariantsBulkCreate.userErrors[0],
+                    field: [`variants`, `${index}`],
+                  });
+                }
               }
             } catch (individualError) {
-              consola.error(`    ✖ Failed to create variant #${index + 1}: ${individualError.message}`);
-              individualResults.productVariantsBulkCreate.userErrors.push({
-                field: [`variants`, `${index}`],
-                message: individualError.message,
-              });
+              // Check if this is a "variant already exists" error
+              if (individualError.message && individualError.message.includes('already exists')) {
+                consola.warn(`    ⚠ Variant #${index + 1} already exists, skipping`);
+              } else {
+                consola.error(`    ✖ Failed to create variant #${index + 1}: ${individualError.message}`);
+                individualResults.productVariantsBulkCreate.userErrors.push({
+                  field: [`variants`, `${index}`],
+                  message: individualError.message,
+                });
+              }
             }
           }
 
@@ -660,16 +778,23 @@ class ProductSyncStrategy {
         }
 
         if (result.productVariantsBulkCreate.userErrors.length > 0) {
-          consola.error(`  ✖ Failed to create variants:`, result.productVariantsBulkCreate.userErrors);
+          // Filter out "variant already exists" errors which we handle specially
+          const nonExistingVariantErrors = result.productVariantsBulkCreate.userErrors.filter(
+            err => err.code !== 'VARIANT_ALREADY_EXISTS'
+          );
 
-          // Log created variants even if there were some errors
-          if (result.productVariantsBulkCreate.productVariants.length > 0) {
-            consola.info(`  ✓ Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants despite errors`);
-          }
+          if (nonExistingVariantErrors.length > 0) {
+            consola.error(`  ✖ Failed to create variants:`, nonExistingVariantErrors);
 
-          // Return false if no variants were created
-          if (result.productVariantsBulkCreate.productVariants.length === 0) {
-            return false;
+            // Log created variants even if there were some errors
+            if (result.productVariantsBulkCreate.productVariants.length > 0) {
+              consola.info(`  ✓ Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants despite errors`);
+            }
+
+            // Return false if no variants were created
+            if (result.productVariantsBulkCreate.productVariants.length === 0) {
+              return false;
+            }
           }
         }
 
@@ -717,7 +842,7 @@ class ProductSyncStrategy {
           .join(', ');
         consola.info(`    - [DRY RUN] Variant #${index + 1}: ${optionSummary}`);
 
-        const sourceVariant = variants[index];
+        const sourceVariant = filteredVariants[index];
         if (sourceVariant && sourceVariant.image) {
           consola.info(`      - [DRY RUN] Would assign image: ${sourceVariant.image.src}`);
         }
@@ -2038,6 +2163,11 @@ class ProductSyncStrategy {
   async sync() {
     consola.start(`Syncing products...`);
 
+    // Debug: Log all options to help diagnose issues
+    if (this.debug) {
+      consola.debug(`Options received by ProductSyncStrategy:`, this.options);
+    }
+
     // Fetch products from source shop with options
     const options = {};
 
@@ -2050,7 +2180,7 @@ class ProductSyncStrategy {
     const sourceProducts = await this.fetchProducts(this.sourceClient, this.options.limit, options);
     consola.info(`Found ${sourceProducts.length} product(s) in source shop`);
 
-    const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
+    const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
     let processedCount = 0;
 
     // Process each source product
@@ -2066,7 +2196,37 @@ class ProductSyncStrategy {
       // Check if product exists in target shop by handle
       const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
-      if (targetProduct) {
+      // If force recreate is enabled and the product exists, delete it first
+      // Access force-recreate with bracket notation since it has a hyphen
+      if (this.forceRecreate && targetProduct) {
+        consola.info(`\u001b[1m\u001b[33m◆ Force recreating product: ${product.title} (${product.handle})\u001b[0m`);
+        const deleted = await this.deleteProduct(this.targetClient, targetProduct.id);
+        if (deleted) {
+          consola.success(`  ✓ Successfully deleted existing product`);
+          results.deleted++;
+          // Now create the product instead of updating
+          consola.info(`\u001b[1m\u001b[32m◆ Creating product: ${product.title} (${product.handle})\u001b[0m`);
+          const created = await this.createProduct(this.targetClient, product);
+          if (created) {
+            consola.success(`  ✓ Product created successfully`);
+            results.created++;
+          } else {
+            consola.error(`  ✖ Failed to create product`);
+            results.failed++;
+          }
+        } else {
+          consola.error(`  ✖ Failed to delete existing product`);
+          consola.info(`  - Attempting to update instead`);
+          const updated = await this.updateProduct(this.targetClient, product, targetProduct);
+          if (updated) {
+            consola.success(`  ✓ Product updated successfully`);
+            results.updated++;
+          } else {
+            consola.error(`  ✖ Failed to update product`);
+            results.failed++;
+          }
+        }
+      } else if (targetProduct) {
         // Update existing product - with bold/color highlighting
         consola.info(`\u001b[1m\u001b[36m◆ Updating product: ${product.title} (${product.handle})\u001b[0m`);
         const updated = await this.updateProduct(this.targetClient, product, targetProduct);
@@ -2099,8 +2259,51 @@ class ProductSyncStrategy {
 
     // Add a newline before summary
     consola.log('');
-    consola.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.failed} failed`);
+    consola.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`);
     return { definitionResults: results, dataResults: null };
+  }
+
+  async deleteProduct(client, productId) {
+    if (!productId) {
+      consola.error(`Cannot delete product: No product ID provided`);
+      return false;
+    }
+
+    const deleteProductMutation = `#graphql
+      mutation productDelete($input: ProductDeleteInput!) {
+        productDelete(input: $input) {
+          deletedProductId
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    if (this.options.notADrill) {
+      try {
+        consola.info(`  • Deleting product with ID: ${productId}`);
+        const result = await client.graphql(deleteProductMutation, {
+          input: {
+            id: productId
+          }
+        }, 'ProductDelete');
+
+        if (result.productDelete.userErrors.length > 0) {
+          consola.error(`    ✖ Failed to delete product:`, result.productDelete.userErrors);
+          return false;
+        }
+
+        return true;
+      } catch (error) {
+        consola.error(`    ✖ Error deleting product: ${error.message}`);
+        return false;
+      }
+    } else {
+      consola.info(`  • [DRY RUN] Would delete product with ID: ${productId}`);
+      return true;
+    }
   }
 }
 
