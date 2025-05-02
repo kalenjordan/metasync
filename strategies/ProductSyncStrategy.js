@@ -1508,30 +1508,19 @@ class ProductSyncStrategy {
   async updateVariantImage(client, variantId, imageId, productId) {
     // Validate IDs
     if (!variantId || !imageId) {
-      consola.error(`      ✖ Invalid parameters: variantId=${variantId}, imageId=${imageId}`);
+      consola.error(`      ✖ Invalid parameters: variantId or imageId is missing`);
       return false;
     }
 
-    // Make sure we're working with valid ID format - must be a gid:// format
+    // Make sure we're working with valid ID format
     if (!variantId.startsWith('gid://') || !imageId.startsWith('gid://')) {
-      consola.error(`      ✖ Invalid ID format: variantId=${variantId}, imageId=${imageId}`);
+      consola.error(`      ✖ Invalid ID format for variant or image`);
       return false;
     }
-
-    // Add debugging to see exact IDs
-    consola.info(`      - Debug: variantId=${variantId}`);
-    consola.info(`      - Debug: imageId=${imageId}`);
 
     // Extract productId from variantId if not provided
     if (!productId) {
-      // Try to extract product ID from the variant ID path
-      // Format: gid://shopify/ProductVariant/123456789 -> gid://shopify/Product/123456
       try {
-        const variantIdParts = variantId.split('/');
-        const variantIdNumber = variantIdParts[variantIdParts.length - 1];
-        // We don't have a reliable way to get the product ID from the variant ID,
-        // so we'll need to query it if not provided
-
         const getVariantQuery = `#graphql
           query getVariantProduct($variantId: ID!) {
             productVariant(id: $variantId) {
@@ -1544,26 +1533,20 @@ class ProductSyncStrategy {
 
         const response = await client.graphql(getVariantQuery, { variantId }, 'getVariantProduct');
         productId = response.productVariant.product.id;
-        consola.info(`      - Found product ID: ${productId} for variant: ${variantId}`);
       } catch (error) {
-        consola.error(`      ✖ Could not determine product ID for variant: ${error.message}`);
+        consola.error(`      ✖ Could not determine product ID for variant`);
         return false;
       }
     }
 
     // Validate we have a product ID
     if (!productId || !productId.startsWith('gid://')) {
-      consola.error(`      ✖ Invalid product ID: ${productId}`);
+      consola.error(`      ✖ Invalid product ID`);
       return false;
     }
 
-    consola.info(`      - Debug: productId=${productId}`);
-
-    // Check if the imageId is a ProductImage ID and not a MediaImage ID
+    // Convert ProductImage ID to MediaImage ID if needed
     if (imageId.includes('ProductImage/')) {
-      consola.info(`      - Converting ProductImage ID to MediaImage ID`);
-
-      // We need to get the corresponding MediaImage ID by querying the product's media
       try {
         const getProductMediaQuery = `#graphql
           query getProductMedia($productId: ID!) {
@@ -1598,7 +1581,6 @@ class ProductSyncStrategy {
         }
 
         if (foundMediaId) {
-          consola.info(`      - Found corresponding MediaImage ID: ${foundMediaId}`);
           imageId = foundMediaId;
         } else {
           // If we can't find a direct match, get the product's images and try to match by URL
@@ -1636,27 +1618,89 @@ class ProductSyncStrategy {
             }
 
             if (foundMediaId) {
-              consola.info(`      - Found MediaImage ID by URL match: ${foundMediaId}`);
               imageId = foundMediaId;
             } else {
-              consola.error(`      ✖ Could not find a MediaImage corresponding to ProductImage ${imageId}`);
+              consola.error(`      ✖ Could not find a MediaImage corresponding to ProductImage`);
               return false;
             }
           } else {
-            consola.error(`      ✖ Could not find image with ID ${imageId} on product`);
+            consola.error(`      ✖ Could not find image on product`);
             return false;
           }
         }
       } catch (error) {
-        consola.error(`      ✖ Error converting ProductImage to MediaImage: ${error.message}`);
+        consola.error(`      ✖ Error converting ProductImage to MediaImage`);
         return false;
       }
     }
 
     // Confirm we now have a MediaImage ID
     if (!imageId.includes('MediaImage/')) {
-      consola.error(`      ✖ Unable to use image: ID ${imageId} is not a MediaImage ID`);
+      consola.error(`      ✖ Unable to use image: ID is not a MediaImage ID`);
       return false;
+    }
+
+    // Check if the variant already has this media attached
+    try {
+      const checkVariantMediaQuery = `#graphql
+        query checkVariantMedia($variantId: ID!) {
+          productVariant(id: $variantId) {
+            media(first: 10) {
+              nodes {
+                id
+              }
+            }
+          }
+        }
+      `;
+
+      const response = await client.graphql(checkVariantMediaQuery, { variantId }, 'checkVariantMedia');
+
+      if (response.productVariant?.media?.nodes) {
+        const existingMediaIds = response.productVariant.media.nodes.map(node => node.id);
+
+        // If the variant already has this media attached, we can skip the operation
+        if (existingMediaIds.includes(imageId)) {
+          consola.info(`      - Variant already has the image attached, skipping`);
+          return true;
+        }
+
+        // If the variant has different media attached, we need to detach it first
+        if (existingMediaIds.length > 0) {
+          const detachMediaMutation = `#graphql
+            mutation productVariantDetachMedia($variantId: ID!, $mediaIds: [ID!]!) {
+              productVariantDetachMedia(
+                variantId: $variantId,
+                mediaIds: $mediaIds
+              ) {
+                productVariant {
+                  id
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `;
+
+          // Detach existing media
+          try {
+            const detachResult = await client.graphql(detachMediaMutation, {
+              variantId,
+              mediaIds: existingMediaIds
+            }, 'productVariantDetachMedia');
+
+            if (detachResult.productVariantDetachMedia.userErrors.length > 0) {
+              consola.warn(`      ⚠ Failed to detach existing media, but will continue with attach operation`);
+            }
+          } catch (error) {
+            consola.warn(`      ⚠ Error detaching media: ${error.message}, but will continue with attach operation`);
+          }
+        }
+      }
+    } catch (error) {
+      consola.warn(`      ⚠ Could not check existing variant media: ${error.message}, will continue anyway`);
     }
 
     // The mutation to append media to variant
@@ -1679,7 +1723,7 @@ class ProductSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        consola.info(`      - Updating variant image for variant ID: ${variantId} with MediaImage ID: ${imageId}`);
+        consola.info(`      - Updating variant image`);
 
         // Append the new media
         const result = await client.graphql(variantAppendMediaMutation, {
@@ -1687,7 +1731,7 @@ class ProductSyncStrategy {
           variantMedia: [
             {
               variantId: variantId,
-              mediaIds: [imageId] // Note: this is mediaIds (plural) not mediaId
+              mediaIds: [imageId]
             }
           ]
         }, 'productVariantAppendMedia');
@@ -1701,16 +1745,10 @@ class ProductSyncStrategy {
         }
       } catch (error) {
         consola.error(`      ✖ Error updating variant image: ${error.message}`);
-        if (this.debug) {
-          consola.debug(`      - Error details: ${JSON.stringify(error, null, 2)}`);
-        }
         return false;
       }
     } else {
       consola.info(`      - [DRY RUN] Would update variant image`);
-      if (this.debug) {
-        consola.debug(`      - Would attach media ${imageId} to variant ${variantId}`);
-      }
       return true;
     }
   }
