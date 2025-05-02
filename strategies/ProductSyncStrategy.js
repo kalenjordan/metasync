@@ -304,6 +304,30 @@ class ProductSyncStrategy {
   async createProductVariants(client, productId, variants) {
     consola.info(`Creating ${variants.length} variants for product ID: ${productId}`);
 
+    // First check if we have valid option combinations - set to track unique combinations
+    const optionCombinations = new Set();
+    const duplicates = [];
+
+    variants.forEach(variant => {
+      // Create a key from the variant's option values to detect duplicates
+      const optionKey = variant.selectedOptions
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(opt => `${opt.name}:${opt.value}`)
+        .join('|');
+
+      if (optionCombinations.has(optionKey)) {
+        duplicates.push(optionKey);
+      } else {
+        optionCombinations.add(optionKey);
+      }
+    });
+
+    // Log if duplicates are found
+    if (duplicates.length > 0) {
+      consola.warn(`Found ${duplicates.length} duplicate option combinations:`);
+      duplicates.forEach(dup => consola.warn(`  - ${dup}`));
+    }
+
     // Transform variants to the format expected by productVariantsBulkCreate
     const variantsInput = variants.map(variant => {
       const variantInput = {
@@ -317,6 +341,11 @@ class ProductSyncStrategy {
           optionName: option.name
         }))
       };
+
+      // Log detailed info for debugging if in debug mode
+      if (this.debug) {
+        consola.debug(`Creating variant with options: ${JSON.stringify(variant.selectedOptions)}`);
+      }
 
       // Add inventory item data if available
       if (variant.inventoryItem) {
@@ -351,6 +380,11 @@ class ProductSyncStrategy {
       return variantInput;
     });
 
+    // If we're in debug mode, log the full variant input payload
+    if (this.debug) {
+      consola.debug(`Variant creation payload: ${JSON.stringify(variantsInput, null, 2)}`);
+    }
+
     const createVariantsMutation = `#graphql
       mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
         productVariantsBulkCreate(productId: $productId, variants: $variants) {
@@ -360,10 +394,15 @@ class ProductSyncStrategy {
             inventoryItem {
               sku
             }
+            selectedOptions {
+              name
+              value
+            }
           }
           userErrors {
             field
             message
+            code
           }
         }
       }
@@ -371,14 +410,67 @@ class ProductSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(createVariantsMutation, {
-          productId,
-          variants: variantsInput
-        }, 'ProductVariantsBulkCreate');
+        // Try creating variants one by one if we get a bulk error
+        let result;
+        try {
+          // First try creating all variants at once
+          result = await client.graphql(createVariantsMutation, {
+            productId,
+            variants: variantsInput
+          }, 'ProductVariantsBulkCreate');
+        } catch (bulkError) {
+          // If bulk creation fails completely, log and try individual creation
+          consola.warn(`Bulk variant creation failed: ${bulkError.message}`);
+          consola.info(`Attempting to create variants individually...`);
+
+          // Fall back to individual variant creation
+          const individualResults = {
+            productVariantsBulkCreate: {
+              productVariants: [],
+              userErrors: []
+            }
+          };
+
+          for (const [index, variantInput] of variantsInput.entries()) {
+            try {
+              const singleResult = await client.graphql(createVariantsMutation, {
+                productId,
+                variants: [variantInput]
+              }, 'ProductVariantsBulkCreate');
+
+              if (singleResult.productVariantsBulkCreate.productVariants.length > 0) {
+                individualResults.productVariantsBulkCreate.productVariants.push(
+                  singleResult.productVariantsBulkCreate.productVariants[0]
+                );
+              }
+
+              if (singleResult.productVariantsBulkCreate.userErrors.length > 0) {
+                individualResults.productVariantsBulkCreate.userErrors.push({
+                  ...singleResult.productVariantsBulkCreate.userErrors[0],
+                  field: [`variants`, `${index}`],
+                });
+              }
+            } catch (individualError) {
+              consola.error(`Failed to create variant #${index + 1}: ${individualError.message}`);
+              individualResults.productVariantsBulkCreate.userErrors.push({
+                field: [`variants`, `${index}`],
+                message: individualError.message,
+              });
+            }
+          }
+
+          result = individualResults;
+        }
 
         if (result.productVariantsBulkCreate.userErrors.length > 0) {
           consola.error(`Failed to create variants:`, result.productVariantsBulkCreate.userErrors);
-          return false;
+
+          // Log created variants even if there were some errors
+          if (result.productVariantsBulkCreate.productVariants.length > 0) {
+            consola.info(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants despite errors`);
+          }
+
+          return result.productVariantsBulkCreate.productVariants.length > 0;
         }
 
         consola.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants`);
@@ -389,6 +481,12 @@ class ProductSyncStrategy {
       }
     } else {
       consola.info(`[DRY RUN] Would create ${variantsInput.length} variants for product`);
+      for (const [index, variantInput] of variantsInput.entries()) {
+        const optionSummary = variantInput.optionValues
+          .map(opt => `${opt.optionName}:${opt.name}`)
+          .join(', ');
+        consola.info(`[DRY RUN] Variant #${index + 1}: ${optionSummary}`);
+      }
       return true;
     }
   }
@@ -439,11 +537,14 @@ class ProductSyncStrategy {
 
         const updatedProduct = result.productUpdate.product;
 
-        // Handle variants separately
-        consola.warn(`Variants for "${product.title}" need to be updated separately using productVariantsBulkUpdate mutation`);
-        consola.info(`Consider using Shopify's variant-specific API endpoints to update variants properly`);
+        // Step 1: Update variants separately using productVariantsBulkUpdate
+        if (updatedProduct.id && product.variants && product.variants.length > 0) {
+          await this.updateProductVariants(client, updatedProduct.id, product.variants);
+        } else {
+          consola.info(`No variants to update for "${product.title}"`);
+        }
 
-        // Sync images and metafields
+        // Step 2: Sync images and metafields
         if (updatedProduct.id) {
           // Update images if any
           if (product.images && product.images.length > 0) {
@@ -463,9 +564,285 @@ class ProductSyncStrategy {
       }
     } else {
       consola.info(`[DRY RUN] Would update product "${product.title}"`);
+      consola.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`);
       consola.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
       return { id: existingProduct.id, title: product.title, handle: product.handle };
     }
+  }
+
+  async updateProductVariants(client, productId, sourceVariants) {
+    consola.info(`Preparing to update variants for product ID: ${productId}`);
+
+    // First, fetch current variants from the target product to get their IDs
+    const targetVariantsQuery = `#graphql
+      query GetProductVariants($productId: ID!) {
+        product(id: $productId) {
+          variants(first: 100) {
+            edges {
+              node {
+                id
+                selectedOptions {
+                  name
+                  value
+                }
+                sku
+                price
+                compareAtPrice
+                inventoryQuantity
+                inventoryPolicy
+                inventoryItem {
+                  id
+                  sku
+                  requiresShipping
+                  measurement {
+                    weight {
+                      value
+                      unit
+                    }
+                  }
+                }
+                taxable
+                barcode
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    let targetVariants = [];
+    try {
+      const response = await client.graphql(
+        targetVariantsQuery,
+        { productId },
+        'GetProductVariants'
+      );
+
+      // Extract the variants from the response
+      targetVariants = response.product.variants.edges.map(edge => edge.node);
+      consola.info(`Found ${targetVariants.length} existing variants in target product`);
+
+    } catch (error) {
+      consola.error(`Error fetching target product variants: ${error.message}`);
+      return false;
+    }
+
+    // Create a lookup map for target variants by their option combination
+    const targetVariantMap = {};
+    targetVariants.forEach(variant => {
+      // Create a key from the variant's option values
+      const optionKey = variant.selectedOptions
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(opt => `${opt.name}:${opt.value}`)
+        .join('|');
+
+      targetVariantMap[optionKey] = variant;
+    });
+
+    // Match source variants to target variants and prepare the update inputs
+    const variantsToUpdate = [];
+    const variantsToCreate = [];
+
+    for (const sourceVariant of sourceVariants) {
+      // Create the same key format for source variant
+      const optionKey = sourceVariant.selectedOptions
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(opt => `${opt.name}:${opt.value}`)
+        .join('|');
+
+      const targetVariant = targetVariantMap[optionKey];
+
+      if (targetVariant) {
+        // Found a matching variant in the target product - UPDATE
+        const variantInput = {
+          id: targetVariant.id, // Use the target shop's variant ID
+          price: sourceVariant.price,
+          compareAtPrice: sourceVariant.compareAtPrice,
+          barcode: sourceVariant.barcode,
+          taxable: sourceVariant.taxable,
+          inventoryPolicy: sourceVariant.inventoryPolicy
+        };
+
+        // Add inventory item data if available
+        if (sourceVariant.inventoryItem) {
+          variantInput.inventoryItem = {};
+
+          // Add sku to inventoryItem
+          if (sourceVariant.sku) {
+            variantInput.inventoryItem.sku = sourceVariant.sku;
+          }
+
+          // Add requiresShipping if available
+          if (sourceVariant.inventoryItem.requiresShipping !== undefined) {
+            variantInput.inventoryItem.requiresShipping = sourceVariant.inventoryItem.requiresShipping;
+          }
+
+          // Add weight if available
+          if (sourceVariant.inventoryItem.measurement && sourceVariant.inventoryItem.measurement.weight) {
+            variantInput.inventoryItem.measurement = {
+              weight: {
+                value: sourceVariant.inventoryItem.measurement.weight.value,
+                unit: sourceVariant.inventoryItem.measurement.weight.unit
+              }
+            };
+          }
+        } else if (sourceVariant.sku) {
+          // If inventoryItem not present but SKU is, create the inventoryItem
+          variantInput.inventoryItem = {
+            sku: sourceVariant.sku
+          };
+        }
+
+        variantsToUpdate.push(variantInput);
+      } else {
+        // Variant doesn't exist in target - CREATE instead of just warning
+        consola.info(`Preparing to create new variant with options: ${optionKey}`);
+
+        // Format for productVariantsBulkCreate
+        const createInput = {
+          price: sourceVariant.price,
+          compareAtPrice: sourceVariant.compareAtPrice,
+          barcode: sourceVariant.barcode,
+          taxable: sourceVariant.taxable,
+          inventoryPolicy: sourceVariant.inventoryPolicy,
+          optionValues: sourceVariant.selectedOptions.map(option => ({
+            name: option.value,
+            optionName: option.name
+          }))
+        };
+
+        // Add inventory item data if available
+        if (sourceVariant.inventoryItem) {
+          createInput.inventoryItem = {};
+
+          // Add sku to inventoryItem
+          if (sourceVariant.sku) {
+            createInput.inventoryItem.sku = sourceVariant.sku;
+          }
+
+          // Add requiresShipping if available
+          if (sourceVariant.inventoryItem.requiresShipping !== undefined) {
+            createInput.inventoryItem.requiresShipping = sourceVariant.inventoryItem.requiresShipping;
+          }
+
+          // Add weight if available
+          if (sourceVariant.inventoryItem.measurement && sourceVariant.inventoryItem.measurement.weight) {
+            createInput.inventoryItem.measurement = {
+              weight: {
+                value: sourceVariant.inventoryItem.measurement.weight.value,
+                unit: sourceVariant.inventoryItem.measurement.weight.unit
+              }
+            };
+          }
+        } else if (sourceVariant.sku) {
+          // If inventoryItem not present but SKU is, create the inventoryItem
+          createInput.inventoryItem = {
+            sku: sourceVariant.sku
+          };
+        }
+
+        variantsToCreate.push(createInput);
+      }
+    }
+
+    // Results tracking
+    let updateSuccess = true;
+    let createSuccess = true;
+
+    // STEP 1: Update existing variants
+    if (variantsToUpdate.length > 0) {
+      consola.info(`Updating ${variantsToUpdate.length} existing variants for product ID: ${productId}`);
+
+      const updateVariantsMutation = `#graphql
+        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+            productVariants {
+              id
+              title
+              inventoryItem {
+                sku
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      if (this.options.notADrill) {
+        try {
+          const result = await client.graphql(updateVariantsMutation, {
+            productId,
+            variants: variantsToUpdate
+          }, 'ProductVariantsBulkUpdate');
+
+          if (result.productVariantsBulkUpdate.userErrors.length > 0) {
+            consola.error(`Failed to update variants:`, result.productVariantsBulkUpdate.userErrors);
+            updateSuccess = false;
+          } else {
+            consola.success(`Successfully updated ${result.productVariantsBulkUpdate.productVariants.length} variants`);
+          }
+        } catch (error) {
+          consola.error(`Error updating variants: ${error.message}`);
+          updateSuccess = false;
+        }
+      } else {
+        consola.info(`[DRY RUN] Would update ${variantsToUpdate.length} variants for product ID: ${productId}`);
+      }
+    } else {
+      consola.info(`No existing variants to update`);
+    }
+
+    // STEP 2: Create new variants that don't exist in target
+    if (variantsToCreate.length > 0) {
+      consola.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`);
+
+      const createVariantsMutation = `#graphql
+        mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkCreate(productId: $productId, variants: $variants) {
+            productVariants {
+              id
+              title
+              inventoryItem {
+                sku
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      if (this.options.notADrill) {
+        try {
+          const result = await client.graphql(createVariantsMutation, {
+            productId,
+            variants: variantsToCreate
+          }, 'ProductVariantsBulkCreate');
+
+          if (result.productVariantsBulkCreate.userErrors.length > 0) {
+            consola.error(`Failed to create new variants:`, result.productVariantsBulkCreate.userErrors);
+            createSuccess = false;
+          } else {
+            consola.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} new variants`);
+          }
+        } catch (error) {
+          consola.error(`Error creating new variants: ${error.message}`);
+          createSuccess = false;
+        }
+      } else {
+        consola.info(`[DRY RUN] Would create ${variantsToCreate.length} new variants for product ID: ${productId}`);
+      }
+    } else {
+      consola.info(`No new variants to create`);
+    }
+
+    // Return overall success status
+    return updateSuccess && createSuccess;
   }
 
   async syncProductImages(client, productId, images) {
