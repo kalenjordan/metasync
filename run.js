@@ -69,14 +69,14 @@ class MetaSyncCli {
     const sourceClientInstance = new Shopify({
       shopName: sourceShopConfig.domain.replace('.myshopify.com', ''),
       accessToken: sourceShopConfig.accessToken,
-      apiVersion: '2024-10',
+      apiVersion: '2025-04',
       autoLimit: this.options.debug ? false : true
     });
 
     const targetClientInstance = new Shopify({
       shopName: targetShopConfig.domain.replace('.myshopify.com', ''),
       accessToken: targetShopConfig.accessToken,
-      apiVersion: '2024-10',
+      apiVersion: '2025-04',
       autoLimit: this.options.debug ? false : true
     });
 
