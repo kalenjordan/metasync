@@ -14,6 +14,7 @@
  * Variant options are accessed via selectedOptions instead of deprecated option1/option2/option3 fields.
  */
 const consola = require('consola');
+const { SHOPIFY_API_VERSION } = require('../constants');
 
 class ProductSyncStrategy {
   constructor(sourceClient, targetClient, options) {
@@ -529,47 +530,70 @@ class ProductSyncStrategy {
   }
 
   async syncProductMetafields(client, productId, metafields) {
+    if (!metafields || metafields.length === 0) return;
+
     consola.info(`Syncing ${metafields.length} metafields for product ID: ${productId}`);
 
-    for (const metafield of metafields) {
-      const metafieldInput = {
-        ownerId: productId,
-        namespace: metafield.namespace,
-        key: metafield.key,
-        value: metafield.value,
-        type: metafield.type
-      };
+    // Prepare all metafields inputs in a single array
+    const metafieldsInput = metafields.map(metafield => ({
+      ownerId: productId,
+      namespace: metafield.namespace,
+      key: metafield.key,
+      value: metafield.value,
+      type: metafield.type
+    }));
 
-      const mutation = `#graphql
-        mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
-          metafieldsSet(metafields: $metafields) {
-            metafields {
-              id
-              namespace
-              key
-            }
-            userErrors {
-              field
-              message
-            }
+    const mutation = `#graphql
+      mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+            namespace
+            key
+          }
+          userErrors {
+            field
+            message
           }
         }
-      `;
-
-      if (this.options.notADrill) {
-        try {
-          const result = await client.graphql(mutation, { metafields: [metafieldInput] }, 'MetafieldsSet');
-          if (result.metafieldsSet.userErrors.length > 0) {
-            consola.error(`Failed to set metafield ${metafield.namespace}.${metafield.key}:`, result.metafieldsSet.userErrors);
-          } else {
-            consola.info(`Set metafield ${metafield.namespace}.${metafield.key}`);
-          }
-        } catch (error) {
-          consola.error(`Error setting metafield ${metafield.namespace}.${metafield.key}: ${error.message}`);
-        }
-      } else {
-        consola.info(`[DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
       }
+    `;
+
+    if (this.options.notADrill) {
+      try {
+        const result = await client.graphql(mutation, { metafields: metafieldsInput }, 'MetafieldsSet');
+
+        if (result.metafieldsSet.userErrors.length > 0) {
+          consola.error(`Failed to set metafields:`, result.metafieldsSet.userErrors);
+          return false;
+        } else {
+          const metafieldCount = result.metafieldsSet.metafields.length;
+          consola.success(`Successfully set ${metafieldCount} metafields for product ID: ${productId}`);
+
+          // Log individual metafields if debug is enabled
+          if (this.debug) {
+            result.metafieldsSet.metafields.forEach(metafield => {
+              consola.debug(`Set metafield ${metafield.namespace}.${metafield.key}`);
+            });
+          }
+
+          return true;
+        }
+      } catch (error) {
+        consola.error(`Error setting metafields: ${error.message}`);
+        return false;
+      }
+    } else {
+      consola.info(`[DRY RUN] Would set ${metafieldsInput.length} metafields for product ID: ${productId}`);
+
+      // Log individual metafields if debug is enabled
+      if (this.debug) {
+        metafields.forEach(metafield => {
+          consola.debug(`[DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
+        });
+      }
+
+      return true;
     }
   }
 

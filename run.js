@@ -6,6 +6,7 @@ const { program } = require("commander");
 const Shopify = require('shopify-api-node');
 const ShopifyClientWrapper = require('./shopifyClientWrapper'); // Import the wrapper
 const consola = require('consola'); // Import consola
+const { SHOPIFY_API_VERSION } = require('./constants'); // Import centralized constants
 // Require strategies as needed (or dynamically)
 const MetaobjectSyncStrategy = require('./strategies/MetaobjectSyncStrategy');
 const ProductMetafieldSyncStrategy = require('./strategies/ProductMetafieldSyncStrategy');
@@ -70,14 +71,14 @@ class MetaSyncCli {
     const sourceClientInstance = new Shopify({
       shopName: sourceShopConfig.domain.replace('.myshopify.com', ''),
       accessToken: sourceShopConfig.accessToken,
-      apiVersion: '2025-04',
+      apiVersion: SHOPIFY_API_VERSION,
       autoLimit: this.options.debug ? false : true
     });
 
     const targetClientInstance = new Shopify({
       shopName: targetShopConfig.domain.replace('.myshopify.com', ''),
       accessToken: targetShopConfig.accessToken,
-      apiVersion: '2025-04',
+      apiVersion: SHOPIFY_API_VERSION,
       autoLimit: this.options.debug ? false : true
     });
 
