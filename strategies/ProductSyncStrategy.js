@@ -25,12 +25,6 @@ class ProductSyncStrategy {
 
     // Commander.js transforms --force-recreate to options.forceRecreate
     this.forceRecreate = !!options.forceRecreate;
-
-    // Output debug info for troubleshooting
-    if (this.debug) {
-      console.log('DEBUG: ProductSyncStrategy options:', options);
-      console.log('DEBUG: forceRecreate set to:', this.forceRecreate);
-    }
   }
 
   // --- Product Methods ---
