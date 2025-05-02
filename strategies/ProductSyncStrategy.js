@@ -326,14 +326,15 @@ class ProductSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        consola.info(`Creating product "${product.title}"`);
+        consola.info(`  • Creating base product "${product.title}"`);
         const result = await client.graphql(createProductMutation, { input: productInput }, 'CreateProduct');
         if (result.productCreate.userErrors.length > 0) {
-          consola.error(`Failed to create product "${product.title}":`, result.productCreate.userErrors);
+          consola.error(`    ✖ Failed to create product "${product.title}":`, result.productCreate.userErrors);
           return null;
         }
 
         const newProduct = result.productCreate.product;
+        consola.success(`    ✓ Base product created successfully`);
 
         // Step 2: Now create variants using productVariantsBulkCreate
         if (newProduct.id && product.variants && product.variants.length > 0) {
@@ -352,13 +353,13 @@ class ProductSyncStrategy {
 
         return newProduct;
       } catch (error) {
-        consola.error(`Error creating product "${product.title}": ${error.message}`);
+        consola.error(`    ✖ Error creating product "${product.title}": ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would create product "${product.title}"`);
-      consola.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`);
-      consola.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
+      consola.info(`  • [DRY RUN] Would create product "${product.title}"`);
+      consola.info(`    - [DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`);
+      consola.info(`    - [DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
       return { id: "dry-run-id", title: product.title, handle: product.handle };
     }
   }
@@ -711,6 +712,7 @@ class ProductSyncStrategy {
     if (this.options.notADrill) {
       try {
         // Use consistent variable naming in the GraphQL call
+        consola.info(`  • Updating base product data`);
         const result = await client.graphql(
           productUpdateMutation,
           { productUpdateInput },
@@ -718,17 +720,18 @@ class ProductSyncStrategy {
         );
 
         if (result.productUpdate.userErrors.length > 0) {
-          consola.error(`Failed to update product "${product.title}":`, result.productUpdate.userErrors);
+          consola.error(`    ✖ Failed to update product "${product.title}":`, result.productUpdate.userErrors);
           return null;
         }
 
         const updatedProduct = result.productUpdate.product;
+        consola.success(`    ✓ Base product data updated successfully`);
 
         // Step 1: Update variants separately using productVariantsBulkUpdate
         if (updatedProduct.id && product.variants && product.variants.length > 0) {
           await this.updateProductVariants(client, updatedProduct.id, product.variants);
         } else {
-          consola.info(`No variants to update for "${product.title}"`);
+          consola.info(`    - No variants to update for "${product.title}"`);
         }
 
         // Step 2: Sync images and metafields
@@ -746,13 +749,13 @@ class ProductSyncStrategy {
 
         return updatedProduct;
       } catch (error) {
-        consola.error(`Error updating product "${product.title}": ${error.message}`);
+        consola.error(`    ✖ Error updating product "${product.title}": ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would update product "${product.title}"`);
-      consola.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`);
-      consola.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
+      consola.info(`  • [DRY RUN] Would update product "${product.title}"`);
+      consola.info(`    - [DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`);
+      consola.info(`    - [DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
       return { id: existingProduct.id, title: product.title, handle: product.handle };
     }
   }
@@ -1208,7 +1211,7 @@ class ProductSyncStrategy {
   async syncProductImages(client, productId, sourceImages) {
     if (!sourceImages || sourceImages.length === 0) return true;
 
-    consola.info(`Processing ${sourceImages.length} images for product ID: ${productId}`);
+    consola.info(`    • Processing ${sourceImages.length} images for product`);
 
     // Step 1: Get existing images to avoid duplicates
     const existingImagesQuery = `#graphql
@@ -1236,9 +1239,9 @@ class ProductSyncStrategy {
     try {
       const response = await client.graphql(existingImagesQuery, { productId }, 'GetProductMedia');
       existingImages = response.product.media.edges.map(edge => edge.node);
-      consola.info(`Found ${existingImages.length} existing images on product`);
+      consola.info(`      - Found ${existingImages.length} existing images on product`);
     } catch (error) {
-      consola.error(`Error fetching existing product images: ${error.message}`);
+      consola.error(`      ✖ Error fetching existing product images: ${error.message}`);
       return false;
     }
 
@@ -1260,7 +1263,7 @@ class ProductSyncStrategy {
     });
 
     if (newImagesToUpload.length === 0) {
-      consola.info(`All images already exist on product, no need to upload`);
+      consola.info(`      - All images already exist on product, no need to upload`);
       return true;
     }
 
@@ -1293,17 +1296,17 @@ class ProductSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        consola.info(`Uploading ${mediaInputs.length} new images for product`);
+        consola.info(`      - Uploading ${mediaInputs.length} new images for product`);
         const result = await client.graphql(createMediaMutation, {
           productId,
           media: mediaInputs
         }, 'ProductCreateMedia');
 
         if (result.productCreateMedia.userErrors.length > 0) {
-          consola.error(`Failed to upload product images:`, result.productCreateMedia.userErrors);
+          consola.error(`      ✖ Failed to upload product images:`, result.productCreateMedia.userErrors);
           return false;
         } else {
-          consola.success(`Successfully uploaded ${result.productCreateMedia.media.length} images`);
+          consola.success(`      ✓ Successfully uploaded ${result.productCreateMedia.media.length} images`);
 
           // Get the IDs of the newly created media
           const newMediaIds = result.productCreateMedia.media.map(media => media.id);
@@ -1311,13 +1314,13 @@ class ProductSyncStrategy {
           return true;
         }
       } catch (error) {
-        consola.error(`Error uploading product images: ${error.message}`);
+        consola.error(`      ✖ Error uploading product images: ${error.message}`);
         return false;
       }
     } else {
-      consola.info(`[DRY RUN] Would upload ${mediaInputs.length} new images for product`);
+      consola.info(`      - [DRY RUN] Would upload ${mediaInputs.length} new images for product`);
       for (const input of mediaInputs) {
-        consola.info(`[DRY RUN] Image: ${input.originalSource} (${input.alt || 'No alt text'})`);
+        consola.info(`        - [DRY RUN] Image: ${input.originalSource} (${input.alt || 'No alt text'})`);
       }
       return true;
     }
@@ -1781,25 +1784,46 @@ class ProductSyncStrategy {
         break;
       }
 
+      // Add newline before each product for better readability
+      consola.log('');
+
       // Check if product exists in target shop by handle
       const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
       if (targetProduct) {
-        // Update existing product
-        consola.info(`Updating product: ${product.title} (${product.handle})`);
+        // Update existing product - with bold/color highlighting
+        consola.info(`\u001b[1m\u001b[36m◆ Updating product: ${product.title} (${product.handle})\u001b[0m`);
         const updated = await this.updateProduct(this.targetClient, product, targetProduct);
-        updated ? results.updated++ : results.failed++;
+
+        // Log result with proper indentation
+        if (updated) {
+          consola.success(`  ✓ Product updated successfully`);
+          results.updated++;
+        } else {
+          consola.error(`  ✖ Failed to update product`);
+          results.failed++;
+        }
       } else {
-        // Create new product
-        consola.info(`Creating product: ${product.title} (${product.handle})`);
+        // Create new product - with bold/color highlighting
+        consola.info(`\u001b[1m\u001b[32m◆ Creating product: ${product.title} (${product.handle})\u001b[0m`);
         const created = await this.createProduct(this.targetClient, product);
-        created ? results.created++ : results.failed++;
+
+        // Log result with proper indentation
+        if (created) {
+          consola.success(`  ✓ Product created successfully`);
+          results.created++;
+        } else {
+          consola.error(`  ✖ Failed to create product`);
+          results.failed++;
+        }
       }
 
       processedCount++;
     }
 
-    consola.success(`Finished syncing products.`);
+    // Add a newline before summary
+    consola.log('');
+    consola.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.failed} failed`);
     return { definitionResults: results, dataResults: null };
   }
 }
