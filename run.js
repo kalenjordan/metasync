@@ -14,6 +14,7 @@ const OrderMetafieldSyncStrategy = require('./strategies/OrderMetafieldSyncStrat
 const VariantMetafieldSyncStrategy = require('./strategies/VariantMetafieldSyncStrategy');
 const CustomerMetafieldSyncStrategy = require('./strategies/CustomerMetafieldSyncStrategy');
 const PageSyncStrategy = require('./strategies/PageSyncStrategy');
+const ProductSyncStrategy = require('./strategies/ProductSyncStrategy');
 
 /**
  * Get shop configuration from .shops.json file by shop name
@@ -98,7 +99,7 @@ class MetaSyncCli {
       .description("Sync metaobject definitions or metafield definitions for various resources between Shopify stores")
       .option("--source <n>", "Source shop name (must exist in .shops.json)")
       .option("--target <n>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
-      .option("--resource <type>", "Type of resource to sync (metaobjects, product, company, order, variant, customer, page)")
+      .option("--resource <type>", "Type of resource to sync (metaobjects, product, company, order, variant, customer, page, product_sync)")
       .option("--key <key>", "Specific definition key/type to sync (e.g., 'my_app.my_def' for metaobjects, 'namespace.key' for metafields - optional for metafields if --namespace is used)")
       .option("--namespace <namespace>", "Namespace to sync (required for metafield resources like product, company, order, variant, customer)")
       .option("--definitions-only", "Sync only the definitions, not the data (Metaobject data sync only)")
@@ -116,7 +117,7 @@ class MetaSyncCli {
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
     // Define valid resource types early
-    const validResourceTypes = ['metaobjects', 'product', 'company', 'order', 'variant', 'customer', 'page'];
+    const validResourceTypes = ['metaobjects', 'product', 'company', 'order', 'variant', 'customer', 'page', 'product_sync'];
     const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer']; // Types requiring namespace
 
     // Check if resource type was provided
@@ -159,6 +160,11 @@ class MetaSyncCli {
         }
     }
 
+    // For product_sync, we don't require namespace or key
+    if (this.options.resource === 'product_sync' && this.options.definitionsOnly) {
+        consola.warn(`Warning: --definitions-only is not applicable for resource type ${this.options.resource}. Ignoring.`);
+    }
+
     // Display info
     consola.info(`Syncing Resource Type: ${this.options.resource}`);
     consola.info(`Dry Run: ${!this.options.notADrill ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
@@ -193,7 +199,8 @@ class MetaSyncCli {
             order: OrderMetafieldSyncStrategy,
             variant: VariantMetafieldSyncStrategy,
             customer: CustomerMetafieldSyncStrategy,
-            page: PageSyncStrategy
+            page: PageSyncStrategy,
+            product_sync: ProductSyncStrategy
         };
 
         StrategyClass = strategyMap[this.options.resource];
@@ -238,7 +245,8 @@ class MetaSyncCli {
         order: OrderMetafieldSyncStrategy,
         variant: VariantMetafieldSyncStrategy,
         customer: CustomerMetafieldSyncStrategy,
-        page: PageSyncStrategy
+        page: PageSyncStrategy,
+        product_sync: ProductSyncStrategy
     };
 
     const StrategyClass = strategyMap[this.options.resource];
