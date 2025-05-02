@@ -393,10 +393,9 @@ class ProductSyncStrategy {
   }
 
   async updateProduct(client, product, existingProduct) {
-    const id = existingProduct.id;
-
-    // Prepare input for product update
-    const input = {
+    // Prepare input with the correct ProductUpdateInput structure
+    const productUpdateInput = {
+      id: existingProduct.id,
       title: product.title,
       descriptionHtml: product.descriptionHtml,
       vendor: product.vendor,
@@ -406,9 +405,10 @@ class ProductSyncStrategy {
       // Don't include options or variants in update as they need special handling
     };
 
-    const mutation = `#graphql
-      mutation updateProduct($id: ID!, $input: ProductInput!) {
-        productUpdate(id: $id, input: $input) {
+    // Use the correct parameter name 'product' not 'input' as per Shopify API docs
+    const productUpdateMutation = `#graphql
+      mutation ProductUpdate($productUpdateInput: ProductUpdateInput!) {
+        productUpdate(product: $productUpdateInput) {
           product {
             id
             title
@@ -424,7 +424,13 @@ class ProductSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(mutation, { id, input }, 'UpdateProduct');
+        // Use consistent variable naming in the GraphQL call
+        const result = await client.graphql(
+          productUpdateMutation,
+          { productUpdateInput },
+          'ProductUpdate'
+        );
+
         if (result.productUpdate.userErrors.length > 0) {
           consola.error(`Failed to update product "${product.title}":`, result.productUpdate.userErrors);
           return null;
@@ -457,7 +463,7 @@ class ProductSyncStrategy {
     } else {
       consola.info(`[DRY RUN] Would update product "${product.title}"`);
       consola.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
-      return { id, title: product.title, handle: product.handle };
+      return { id: existingProduct.id, title: product.title, handle: product.handle };
     }
   }
 
