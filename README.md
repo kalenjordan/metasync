@@ -96,7 +96,6 @@ node run.js --source my-dev-shop --target my-test-shop --resource metaobjects --
 ## Example Use Cases
 
 - Copy metaobject definitions and data from development to test environment
-- Copy metafield definitions (e.g., for products, customers) from a staging store to production
 - Back up metaobject data by copying to a development store
 
 ## Real-World Examples
