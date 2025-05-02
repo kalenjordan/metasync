@@ -13,6 +13,7 @@ const CompanyMetafieldSyncStrategy = require('./strategies/CompanyMetafieldSyncS
 const OrderMetafieldSyncStrategy = require('./strategies/OrderMetafieldSyncStrategy');
 const VariantMetafieldSyncStrategy = require('./strategies/VariantMetafieldSyncStrategy');
 const CustomerMetafieldSyncStrategy = require('./strategies/CustomerMetafieldSyncStrategy');
+const PageSyncStrategy = require('./strategies/PageSyncStrategy');
 
 /**
  * Get shop configuration from .shops.json file by shop name
@@ -95,9 +96,9 @@ class MetaSyncCli {
   static setupCommandLineOptions() {
     program
       .description("Sync metaobject definitions or metafield definitions for various resources between Shopify stores")
-      .option("--source <name>", "Source shop name (must exist in .shops.json)")
-      .option("--target <name>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
-      .option("--resource <type>", "Type of resource to sync (metaobjects, product, company, order, variant, customer)")
+      .option("--source <n>", "Source shop name (must exist in .shops.json)")
+      .option("--target <n>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
+      .option("--resource <type>", "Type of resource to sync (metaobjects, product, company, order, variant, customer, page)")
       .option("--key <key>", "Specific definition key/type to sync (e.g., 'my_app.my_def' for metaobjects, 'namespace.key' for metafields - optional for metafields if --namespace is used)")
       .option("--namespace <namespace>", "Namespace to sync (required for metafield resources like product, company, order, variant, customer)")
       .option("--definitions-only", "Sync only the definitions, not the data (Metaobject data sync only)")
@@ -115,7 +116,7 @@ class MetaSyncCli {
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
     // Define valid resource types early
-    const validResourceTypes = ['metaobjects', 'product', 'company', 'order', 'variant', 'customer'];
+    const validResourceTypes = ['metaobjects', 'product', 'company', 'order', 'variant', 'customer', 'page'];
     const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer']; // Types requiring namespace
 
     // Check if resource type was provided
@@ -191,7 +192,8 @@ class MetaSyncCli {
             company: CompanyMetafieldSyncStrategy,
             order: OrderMetafieldSyncStrategy,
             variant: VariantMetafieldSyncStrategy,
-            customer: CustomerMetafieldSyncStrategy
+            customer: CustomerMetafieldSyncStrategy,
+            page: PageSyncStrategy
         };
 
         StrategyClass = strategyMap[this.options.resource];
@@ -235,7 +237,8 @@ class MetaSyncCli {
         company: CompanyMetafieldSyncStrategy,
         order: OrderMetafieldSyncStrategy,
         variant: VariantMetafieldSyncStrategy,
-        customer: CustomerMetafieldSyncStrategy
+        customer: CustomerMetafieldSyncStrategy,
+        page: PageSyncStrategy
     };
 
     const StrategyClass = strategyMap[this.options.resource];
@@ -268,6 +271,8 @@ class MetaSyncCli {
       } else if (metafieldResourceTypes.includes(resourceNameFriendly)) {
         // Capitalize first letter for metafield types
         resourceNameFriendly = resourceNameFriendly.charAt(0).toUpperCase() + resourceNameFriendly.slice(1) + ' Metafield Definitions';
+      } else if (resourceNameFriendly === 'page') {
+        resourceNameFriendly = 'Pages';
       }
       consola.info(`${resourceNameFriendly}: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
     }

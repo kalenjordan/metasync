@@ -78,7 +78,7 @@ node run.js --source my-dev-shop --target my-test-shop --resource metaobjects --
 
 - `--source <name>`: Source shop name (must exist in .shops.json) [required]
 - `--target <name>`: Target shop name (must exist in .shops.json). Defaults to source shop if not specified
-- `--resource <type>`: Type of resource to sync (`metaobjects`, `product`, `company`, `order`, `variant`, `customer`) [required]
+- `--resource <type>`: Type of resource to sync (`metaobjects`, `product`, `company`, `order`, `variant`, `customer`, `page`) [required]
 - `--key <key>`: Specific definition key/type to sync (e.g., 'my_app.my_def' for metaobjects, 'namespace.key' for metafields). Optional for metafields if syncing a whole namespace.
 - `--namespace <namespace>`: Namespace to sync (required for metafield resources: `product`, `company`, `order`, `variant`, `customer`). If omitted, available namespaces for the resource will be listed.
 - `--definitions-only`: Sync only the definitions, not the data (currently only metaobject data sync is supported)
@@ -97,6 +97,7 @@ node run.js --source my-dev-shop --target my-test-shop --resource metaobjects --
 
 - Copy metaobject definitions and data from development to test environment
 - Back up metaobject data by copying to a development store
+- Copy pages between stores to maintain consistent content
 
 ## Real-World Examples
 
@@ -198,4 +199,36 @@ Please run the command again with --namespace <namespace> to specify which produ
 ✔ Finished syncing product metafield definitions.
 ✔ Sync completed:
 ℹ Product Metafield Definitions: 2 created, 0 updated, 0 failed
+```
+
+### Syncing Pages Between Stores
+
+```sh
+# List available pages from source store
+node run.js --source my-dev-shop --resource page
+
+# Perform a dry run of syncing pages
+node run.js --source my-dev-shop --target my-test-shop --resource page
+
+# Actually sync pages from source to target
+node run.js --source my-dev-shop --target my-test-shop --resource page --not-a-drill
+```
+
+### Dry Run - Syncing Pages
+
+```sh
+➜  metasync git:(main) ✗ node run.js --source my-dev-shop --target my-test-shop --resource page
+ℹ Syncing Resource Type: page
+ℹ Dry Run: Yes (no changes will be made)
+ℹ Debug: Disabled
+ℹ Limit: 3
+ℹ Found 2 page(s) in source shop
+ℹ Found 0 page(s) in target shop
+ℹ Creating page: About Us
+ℹ [DRY RUN] Would create page "About Us"
+ℹ Creating page: Contact
+ℹ [DRY RUN] Would create page "Contact"
+✔ Finished syncing pages.
+✔ Sync completed:
+ℹ Pages: 2 created, 0 updated, 0 skipped, 0 failed
 ```
