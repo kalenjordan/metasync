@@ -160,6 +160,8 @@ class ProductPublicationHandler {
     // Match source publications to target channels by handle
     const publicationsToCreate = [];
     const skippedChannels = [];
+    // Set to track publication IDs we've already added to avoid duplicates
+    const addedPublicationIds = new Set();
 
     // For each source publication
     for (const sourcePublication of publicationsToProcess) {
@@ -182,13 +184,20 @@ class ProductPublicationHandler {
             pub.channel.handle === sourceChannelHandle && pub.isPublished
           );
 
-          if (!alreadyPublished) {
+          // Check if we've already added this publication ID
+          if (!alreadyPublished && !addedPublicationIds.has(targetPublication.id)) {
             publicationsToCreate.push({
               publicationId: targetPublication.id,
               channelHandle: sourceChannelHandle
             });
+            // Mark this publication ID as added to avoid duplicates
+            addedPublicationIds.add(targetPublication.id);
           } else if (this.debug) {
-            consola.debug(`${logPrefix}  - Product already published to ${sourceChannelHandle}`);
+            if (alreadyPublished) {
+              consola.debug(`${logPrefix}  - Product already published to ${sourceChannelHandle}`);
+            } else {
+              consola.debug(`${logPrefix}  - Skipping duplicate publication ID for channel ${sourceChannelHandle}`);
+            }
           }
         } else {
           consola.warn(`${logPrefix}  ⚠ Found channel ${sourceChannelHandle} but no associated publication in target store`);
