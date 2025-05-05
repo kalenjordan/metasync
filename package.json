@@ -1,14 +1,18 @@
 {
-  "name": "metaobject-sync-cli",
+  "name": "metasync-cli",
   "version": "1.0.0",
-  "description": "Command-line tool to sync Shopify metaobject definitions and data between stores",
+  "description": "Command-line tool to sync Shopify resources between stores",
   "main": "run.js",
+  "bin": {
+    "metasync": "./run.js"
+  },
   "scripts": {
     "start": "node run.js"
   },
   "keywords": [
     "shopify",
     "metaobjects",
+    "metafields",
     "sync",
     "cli"
   ],

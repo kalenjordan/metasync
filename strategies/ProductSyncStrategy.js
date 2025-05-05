@@ -41,6 +41,7 @@ const ShopifyIDUtils = require('../utils/ShopifyIDUtils');
 const ProductPublicationHandler = require('../utils/ProductPublicationHandler');
 const ProductBaseHandler = require('../utils/ProductBaseHandler');
 const LoggingUtils = require('../utils/LoggingUtils');
+const ProductVariantHandler = require('../utils/ProductVariantHandler');
 
 class ProductSyncStrategy {
   constructor(sourceClient, targetClient, options) {
@@ -57,6 +58,12 @@ class ProductSyncStrategy {
     this.imageHandler = new ProductImageHandler(targetClient, options);
     this.publicationHandler = new ProductPublicationHandler(targetClient, options);
     this.productHandler = new ProductBaseHandler(targetClient, options);
+
+    // Pass dependencies to the variant handler
+    this.variantHandler = new ProductVariantHandler(targetClient, options, {
+      metafieldHandler: this.metafieldHandler,
+      imageHandler: this.imageHandler
+    });
 
     // Also create a source version of the product handler for fetching
     this.sourceProductHandler = new ProductBaseHandler(sourceClient, options);
@@ -515,11 +522,9 @@ class ProductSyncStrategy {
     }
   }
 
-  // Variant handling is still part of the main class until we create a dedicated handler
+  // Variant handling is now delegated to the VariantHandler class
   async updateProductVariants(client, productId, sourceVariants) {
-    // Current implementation will remain for now until we create a dedicated VariantHandler class
-    console.log("Updating variants - would be handled by VariantHandler class in future");
-    return true;
+    return await this.variantHandler.updateProductVariants(productId, sourceVariants);
   }
 
   // --- Sync Orchestration Methods ---
