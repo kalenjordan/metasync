@@ -125,19 +125,21 @@ class MetaSyncCli {
       .action((cmdOptions) => {
         // Merge command options with main options
         Object.assign(mergedOptions, cmdOptions);
-        mergedOptions.definitionsOnly = true;
+        // Set command type
+        mergedOptions.command = "define";
         mergedOptions.resource = cmdOptions.resource || "product"; // Default to product if not specified
       });
 
     const defineMetaobjectsCmd = defineCommand
-      .command("metaobjects")
+      .command("metaobject")
       .description("Sync metaobject definitions")
       .option("--type <type>", "Specific metaobject definition type to sync (e.g., 'my_app.my_def')")
       .action((cmdOptions) => {
         // Merge command options with main options
         Object.assign(mergedOptions, cmdOptions);
-        mergedOptions.resource = "metaobjects";
-        mergedOptions.definitionsOnly = true;
+        // Set command type
+        mergedOptions.command = "define";
+        mergedOptions.resource = "metaobject";
         // Map type to key for backwards compatibility
         if (cmdOptions.type) {
           mergedOptions.key = cmdOptions.type;
@@ -163,11 +165,10 @@ class MetaSyncCli {
         .action((cmdOptions) => {
           // Merge command options with main options
           Object.assign(mergedOptions, cmdOptions);
-          mergedOptions.resource = resource === "metaobject" ? "metaobjects" : resource;
+          mergedOptions.resource = resource;
 
-          // All sync commands are data-only
-          mergedOptions.definitionsOnly = false;
-          mergedOptions.dataOnly = true;
+          // Set command type
+          mergedOptions.command = "sync";
 
           // Map type to key for metaobjects (for backwards compatibility)
           if (resource === "metaobject" && cmdOptions.type) {
@@ -217,7 +218,7 @@ class MetaSyncCli {
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
     // Define valid resource types early
-    const validResourceTypes = ['metaobjects', 'product', 'company', 'order', 'variant', 'customer', 'page'];
+    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page'];
     const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer']; // Types requiring namespace
 
     // Check if resource type was provided
@@ -233,11 +234,13 @@ class MetaSyncCli {
       process.exit(1);
     }
 
-    // Validate options based on resource type and command mode
-    if (metafieldResourceTypes.includes(this.options.resource) && this.options.definitionsOnly) {
+    // Command-specific validations
+    if (this.options.command === "define") {
+      // Validations for define command
+      if (metafieldResourceTypes.includes(this.options.resource)) {
         // Namespace is required for metafield definitions
         if (!this.options.namespace) {
-            consola.error(`Error: --namespace is required when syncing ${this.options.resource} metafield definitions.`);
+            consola.error(`Error: --namespace is required when defining ${this.options.resource} metafield definitions.`);
             process.exit(1);
         }
 
@@ -246,23 +249,26 @@ class MetaSyncCli {
              consola.error(`Error: Provided --key "${this.options.key}" does not start with the provided --namespace "${this.options.namespace}".`);
              process.exit(1);
         }
-    }
+      }
+    } else if (this.options.command === "sync") {
+      // Validations for sync command
 
-    // For metaobjects, key is required when syncing data
-    if (this.options.resource === 'metaobjects' && this.options.dataOnly && !this.options.key) {
-        consola.error(`Error: --type is required when syncing metaobject data.`);
-        process.exit(1);
+      // For metaobject, type/key is required when syncing data
+      if (this.options.resource === 'metaobject' && !this.options.key) {
+          consola.error(`Error: --type is required when syncing metaobject data.`);
+          process.exit(1);
+      }
     }
 
     // Display info
     consola.info(`Syncing Resource Type: ${this.options.resource}`);
-    consola.info(`Sync Mode: ${this.options.definitionsOnly ? 'Definitions Only' : 'Data Only'}`);
+    consola.info(`Sync Mode: ${this.options.command === "define" ? 'Definitions Only' : 'Data Only'}`);
     consola.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     consola.info(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
     consola.info(`Limit: ${this.options.limit}`);
 
     // Log force-recreate if it's product data sync
-    if (this.options.resource === 'product' && this.options.dataOnly && this.options.forceRecreate) {
+    if (this.options.resource === 'product' && this.options.command === "sync" && this.options.forceRecreate) {
       consola.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
     }
 
@@ -270,11 +276,11 @@ class MetaSyncCli {
     let shouldListAndExit = false;
     let listPrompt = "";
 
-    if (this.options.resource === 'metaobjects' && !this.options.key) {
+    if (this.options.resource === 'metaobject' && !this.options.key) {
         shouldListAndExit = true;
         listPrompt = "\nPlease run the command again with --type <type> to specify which metaobject type to sync.";
         consola.info(`No specific metaobject type specified (--type). Fetching available types...`);
-    } else if (metafieldResourceTypes.includes(this.options.resource) && this.options.definitionsOnly && !this.options.namespace) {
+    } else if (metafieldResourceTypes.includes(this.options.resource) && this.options.command === "define" && !this.options.namespace) {
         shouldListAndExit = true;
         listPrompt = `\nPlease run the command again with --namespace <namespace> to specify which ${this.options.resource} metafield namespace to sync.`;
         consola.info(`No namespace specified (--namespace). Fetching all available ${this.options.resource} metafield definitions...`);
@@ -286,19 +292,18 @@ class MetaSyncCli {
         let StrategyClass;
         // Map the simplified resource name to the strategy class
         const strategyMap = {
-            metaobjects: null, // Handled separately below
+            metaobject: null, // Handled separately below
             product: ProductMetafieldSyncStrategy,
             company: CompanyMetafieldSyncStrategy,
             order: OrderMetafieldSyncStrategy,
             variant: VariantMetafieldSyncStrategy,
             customer: CustomerMetafieldSyncStrategy,
-            page: PageSyncStrategy,
-            product_sync: ProductSyncStrategy
+            page: PageSyncStrategy
         };
 
         StrategyClass = strategyMap[this.options.resource];
 
-        if (this.options.resource === 'metaobjects') {
+        if (this.options.resource === 'metaobject') {
             // Handle metaobjects separately as before
             definitions = await this.fetchMetaobjectDefinitions(this.sourceClient);
             if (definitions.length === 0) {
@@ -337,19 +342,19 @@ class MetaSyncCli {
         order: OrderMetafieldSyncStrategy,
         variant: VariantMetafieldSyncStrategy,
         customer: CustomerMetafieldSyncStrategy,
-        metaobjects: MetaobjectSyncStrategy
+        metaobject: MetaobjectSyncStrategy
     };
 
     const dataStrategies = {
         product: ProductSyncStrategy,
         page: PageSyncStrategy,
-        metaobjects: MetaobjectSyncStrategy,
+        metaobject: MetaobjectSyncStrategy,
         // Add other data strategies as they're implemented
     };
 
     // Select the appropriate strategy based on resource and command mode
     let StrategyClass;
-    if (this.options.definitionsOnly) {
+    if (this.options.command === "define") {
         StrategyClass = definitionStrategies[this.options.resource];
     } else {
         StrategyClass = dataStrategies[this.options.resource];
@@ -363,7 +368,7 @@ class MetaSyncCli {
 
         strategy = new StrategyClass(this.sourceClient, this.targetClient, this.options);
     } else {
-        if (this.options.dataOnly) {
+        if (this.options.command === "sync" && this.options.resource !== 'metaobject') {
             consola.error(`Data sync is not yet implemented for ${this.options.resource} resource type.`);
         } else {
             consola.error(`Definition sync is not supported for ${this.options.resource} resource type.`);
@@ -383,10 +388,10 @@ class MetaSyncCli {
     // Display summary
     consola.success("Sync completed:");
 
-    if (!this.options.dataOnly) {
+    if (this.options.command === "define") {
       // Determine the friendly name for the resource type for definitions
       let resourceNameFriendly = this.options.resource;
-      if (resourceNameFriendly === 'metaobjects') {
+      if (resourceNameFriendly === 'metaobject') {
         resourceNameFriendly = 'Metaobject Definitions';
       } else if (metafieldResourceTypes.includes(resourceNameFriendly)) {
         // Capitalize first letter for metafield types
@@ -397,7 +402,7 @@ class MetaSyncCli {
       consola.info(`${resourceNameFriendly}: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
     }
 
-    if (!this.options.definitionsOnly && this.options.resource === 'metaobjects') {
+    if (this.options.command === "sync" && this.options.resource === 'metaobject') {
       consola.info(`Metaobject Data: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.failed} failed`);
     }
   }

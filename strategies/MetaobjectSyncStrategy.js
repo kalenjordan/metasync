@@ -152,7 +152,6 @@ class MetaobjectSyncStrategy {
       description: definition.description || "",
       fieldDefinitions: definition.fieldDefinitions.map(field => this.processFieldDefinition(field)),
       capabilities: definition.capabilities || {},
-      // access: { admin: definition.access.admin || "PUBLIC_READ_WRITE", storefront: definition.access.storefront || "PUBLIC_READ" } // Hardcoded from previous state
     };
     const mutation = `#graphql
       mutation createMetaobjectDefinition($definition: MetaobjectDefinitionCreateInput!) {
@@ -198,7 +197,6 @@ class MetaobjectSyncStrategy {
       description: definition.description || "",
       fieldDefinitions,
       capabilities: definition.capabilities || {},
-      access: { admin: "PUBLIC_READ_WRITE", storefront: "PUBLIC_READ" } // Hardcoded from previous state
     };
 
     const mutation = `#graphql
