@@ -4,7 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const { program } = require("commander");
 const Shopify = require('shopify-api-node');
-const ShopifyClientWrapper = require('./shopifyClientWrapper'); // Import the wrapper
+const ShopifyClient = require('./utils/ShopifyClient'); // Updated import path and class name
 const consola = require('consola'); // Import consola
 const { SHOPIFY_API_VERSION } = require('./constants'); // Import centralized constants
 // Require strategies as needed (or dynamically)
@@ -86,8 +86,8 @@ class MetaSyncCli {
     });
 
     // Wrap clients for centralized logging/handling
-    this.sourceClient = new ShopifyClientWrapper(sourceClientInstance, this.options.debug);
-    this.targetClient = new ShopifyClientWrapper(targetClientInstance, this.options.debug);
+    this.sourceClient = new ShopifyClient(sourceClientInstance, this.options.debug);
+    this.targetClient = new ShopifyClient(targetClientInstance, this.options.debug);
   }
 
   static setupCommandLineOptions() {
