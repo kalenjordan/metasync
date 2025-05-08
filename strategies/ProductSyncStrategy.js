@@ -81,8 +81,13 @@ class ProductSyncStrategy {
     // For pagination, we'll use a batch size of 25
     const batchSize = this.options.batchSize || 25;
     let hasNextPage = true;
-    let cursor = null;
+    // Initialize cursor from options if provided
+    let cursor = this.options.startCursor || null;
     let fetchedCount = 0;
+
+    if (cursor) {
+      consola.info(`Starting pagination from cursor: ${cursor}`);
+    }
 
     // Construct the GraphQL query for products
     const query = `#graphql
@@ -207,7 +212,6 @@ class ProductSyncStrategy {
         try {
           // Calculate how many products to fetch in this batch
           const fetchCount = Math.min(batchSize, limit - fetchedCount);
-          console.log('fetchCount', fetchCount);
 
           // Filter out archived products using the query parameter
           const variables = {
@@ -258,11 +262,15 @@ class ProductSyncStrategy {
           cursor = response.products.pageInfo.endCursor;
           fetchedCount += batchProducts.length;
 
+          // Log the current cursor in gray for reference
+          consola.debug(`Current pagination cursor: ${cursor}`);
+
           return {
             products: batchProducts,
             done: !hasNextPage || fetchedCount > limit,
             fetchedCount,
-            totalCount: fetchedCount
+            totalCount: fetchedCount,
+            cursor: cursor
           };
         } catch (error) {
           consola.error(`Error fetching products: ${error.message}`);
@@ -468,19 +476,19 @@ class ProductSyncStrategy {
 
         return newProduct;
       } catch (error) {
-        LoggingUtils.error(`Error creating product "${product.title}": ${error.message}`, 2);
+        LoggingUtils.error(`Error creating product "${product.title}": ${error.message}`, 3);
         return null;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would create product "${product.title}"`, 1, 'main');
-      LoggingUtils.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`, 2);
-      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 2);
+      LoggingUtils.info(`[DRY RUN] Would create product "${product.title}"`, 3, 'main');
+      LoggingUtils.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`, 4);
+      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
 
       if (product.publications && product.publications.length > 0) {
         const publishedChannels = product.publications
           .filter(pub => pub.isPublished)
           .map(pub => pub.channel.handle);
-        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 2);
+        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
       }
 
       return { id: "dry-run-id", title: product.title, handle: product.handle };
@@ -509,7 +517,7 @@ class ProductSyncStrategy {
         if (updatedProduct.id && product.variants && product.variants.length > 0) {
           await this.updateProductVariants(client, updatedProduct.id, product.variants);
         } else {
-          LoggingUtils.info(`No variants to update for "${product.title}"`, 2);
+          LoggingUtils.info(`No variants to update for "${product.title}"`, 4);
         }
 
         // Step 2: Sync images and metafields
@@ -532,19 +540,19 @@ class ProductSyncStrategy {
 
         return updatedProduct;
       } catch (error) {
-        LoggingUtils.error(`Error updating product "${product.title}": ${error.message}`, 2);
+        LoggingUtils.error(`Error updating product "${product.title}": ${error.message}`, 3);
         return null;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would update product "${product.title}"`, 1, 'main');
-      LoggingUtils.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 2);
-      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 2);
+      LoggingUtils.info(`[DRY RUN] Would update product "${product.title}"`, 3, 'main');
+      LoggingUtils.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 4);
+      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
 
       if (product.publications && product.publications.length > 0) {
         const publishedChannels = product.publications
           .filter(pub => pub.isPublished)
           .map(pub => pub.channel.handle);
-        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 2);
+        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
       }
 
       return { id: existingProduct.id, title: product.title, handle: product.handle };
@@ -679,7 +687,7 @@ class ProductSyncStrategy {
       // Process each source product in this batch
       for (const product of sourceProducts) {
         if (processedCount >= this.options.limit) {
-          consola.info(`Reached processing limit (${this.options.limit}). Stopping product sync.`);
+          consola.info(`  Reached processing limit (${this.options.limit}). Stopping product sync.`);
           break;
         }
 
@@ -691,57 +699,57 @@ class ProductSyncStrategy {
 
         // If force recreate is enabled and the product exists, delete it first
         if (this.forceRecreate && targetProduct) {
-          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate');
+          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate', 2);
           const deleted = await this.productHandler.deleteProduct(targetProduct.id);
           if (deleted) {
-            LoggingUtils.success('Successfully deleted existing product', 1);
+            LoggingUtils.success('Successfully deleted existing product', 3);
             results.deleted++;
             // Now create the product instead of updating
-            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 2);
             const created = await this.createProduct(this.targetClient, product);
             if (created) {
-              LoggingUtils.success('Product created successfully', 1);
+              LoggingUtils.success('Product created successfully', 3);
               results.created++;
             } else {
-              LoggingUtils.error('Failed to create product', 1);
+              LoggingUtils.error('Failed to create product', 3);
               results.failed++;
             }
           } else {
-            LoggingUtils.error('Failed to delete existing product', 1);
-            LoggingUtils.info('Attempting to update instead', 1);
+            LoggingUtils.error('Failed to delete existing product', 3);
+            LoggingUtils.info('Attempting to update instead', 3);
             const updated = await this.updateProduct(this.targetClient, product, targetProduct);
             if (updated) {
-              LoggingUtils.success('Product updated successfully', 1);
+              LoggingUtils.success('Product updated successfully', 3);
               results.updated++;
             } else {
-              LoggingUtils.error('Failed to update product', 1);
+              LoggingUtils.error('Failed to update product', 3);
               results.failed++;
             }
           }
         } else if (targetProduct) {
           // Update existing product
-          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update');
+          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update', 2);
           const updated = await this.updateProduct(this.targetClient, product, targetProduct);
 
           // Log result with proper indentation
           if (updated) {
-            LoggingUtils.success('Product updated successfully', 1);
+            LoggingUtils.success('Product updated successfully', 3);
             results.updated++;
           } else {
-            LoggingUtils.error('Failed to update product', 1);
+            LoggingUtils.error('Failed to update product', 3);
             results.failed++;
           }
         } else {
           // Create new product
-          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 2);
           const created = await this.createProduct(this.targetClient, product);
 
           // Log result with proper indentation
           if (created) {
-            LoggingUtils.success('Product created successfully', 1);
+            LoggingUtils.success('Product created successfully', 3);
             results.created++;
           } else {
-            LoggingUtils.error('Failed to create product', 1);
+            LoggingUtils.error('Failed to create product', 3);
             results.failed++;
           }
         }
@@ -753,6 +761,7 @@ class ProductSyncStrategy {
 
       // Fetch the next batch
       batchResult = await productsIterator.fetchNextBatch();
+
     } while (batchResult.products.length > 0 && !batchResult.done);
 
     // Add a newline before summary

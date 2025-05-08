@@ -15,8 +15,9 @@ class LoggingUtils {
    * @param {string} title - Product title
    * @param {string} handle - Product handle
    * @param {string} type - Type of action (update, create, delete, etc.)
+   * @param {number} level - Indentation level (0, 1, 2, etc.)
    */
-  static logProductAction(message, title, handle, type = 'update') {
+  static logProductAction(message, title, handle, type = 'update', level = 0) {
     let color = '36'; // Default cyan for update
 
     if (type === 'create') {
@@ -27,7 +28,8 @@ class LoggingUtils {
       color = '31'; // Red
     }
 
-    consola.info(`\u001b[1m\u001b[${color}m◆ ${message}: ${title} (${handle})\u001b[0m`);
+    const indent = '  '.repeat(level);
+    consola.log(`${indent}\u001b[1m\u001b[${color}m◆ ${message}: ${title} (${handle})\u001b[0m`);
   }
 
   /**
@@ -37,7 +39,7 @@ class LoggingUtils {
    */
   static success(message, level = 0) {
     const indent = '  '.repeat(level);
-    consola.success(`${indent}✓ ${message}`);
+    consola.log(`${indent}\u001b[32m✓ ${message}\u001b[0m`);
   }
 
   /**
@@ -49,9 +51,9 @@ class LoggingUtils {
   static error(message, level = 0, data = null) {
     const indent = '  '.repeat(level);
     if (data) {
-      consola.error(`${indent}✖ ${message}`, data);
+      consola.log(`${indent}\u001b[31m✖ ${message}\u001b[0m`, data);
     } else {
-      consola.error(`${indent}✖ ${message}`);
+      consola.log(`${indent}\u001b[31m✖ ${message}\u001b[0m`);
     }
   }
 
@@ -62,7 +64,7 @@ class LoggingUtils {
    */
   static warn(message, level = 0) {
     const indent = '  '.repeat(level);
-    consola.warn(`${indent}⚠ ${message}`);
+    consola.log(`${indent}\u001b[33m⚠ ${message}\u001b[0m`);
   }
 
   /**
@@ -81,7 +83,7 @@ class LoggingUtils {
       symbol = '◦'; // Sub-operation
     }
 
-    consola.info(`${indent}${symbol} ${message}`);
+    consola.log(`${indent}${symbol} ${message}`);
   }
 
   /**
@@ -91,7 +93,7 @@ class LoggingUtils {
    */
   static dryRun(message, level = 0) {
     const indent = '  '.repeat(level);
-    consola.info(`${indent}[DRY RUN] ${message}`);
+    consola.log(`${indent}[DRY RUN] ${message}`);
   }
 }
 

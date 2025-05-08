@@ -7,7 +7,7 @@
     "metasync": "./run.js"
   },
   "scripts": {
-    "start": "node run.js"
+    "sync": "node run.js"
   },
   "keywords": [
     "shopify",

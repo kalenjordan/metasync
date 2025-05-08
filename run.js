@@ -215,10 +215,14 @@ Examples:
       if (resource === "product") {
         cmd.option("--handle <handle>", "Specific product handle to sync")
           .option("--force-recreate", "Delete and recreate products instead of updating", false)
+          .option("--batch-size <size>", "Number of products to process in each batch", 25)
+          .option("--start-cursor <cursor>", "Pagination cursor to start from (for resuming interrupted syncs)")
           .addHelpText('after', `
 Examples:
   metasync data product --handle my-product --source shopA --target shopB
   metasync data product --force-recreate --source shopA --target shopB
+  metasync data product --batch-size 10 --source shopA --target shopB
+  metasync data product --start-cursor "endCursor123" --source shopA --target shopB
           `);
       } else if (resource === "metaobject") {
         cmd.option("--type <type>", "Specific metaobject type to sync")
@@ -328,10 +332,7 @@ Examples:
     }
 
     // Display info
-    consola.info(`Resource Type: ${this.options.resource}`);
-    consola.info(`Command: ${this.options.command === "define" ? 'Define Definitions' : 'Sync Data'}`);
     consola.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
-    consola.info(`Debug: ${this.options.debug ? 'Enabled' : 'Disabled'}`);
     consola.info(`Limit: ${this.options.limit}`);
 
     // Log force-recreate if it's product data sync
