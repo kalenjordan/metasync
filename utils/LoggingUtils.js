@@ -30,7 +30,9 @@ class LoggingUtils {
     }
 
     const indent = '  '.repeat(level);
-    consola.log(`${indent}${color.bold(`◆ ${message}: ${title} (${handle})`)}`);
+    // Use a cleaner format that separates the title from the handle
+    consola.log(`${indent}${color.bold(`◆ ${message}`)}`);
+    consola.log(`${indent}  ${chalk.bold(title)} ${chalk.dim(`(${handle})`)}`);
   }
 
   /**

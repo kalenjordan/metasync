@@ -592,22 +592,27 @@ class ProductSyncStrategy {
 
       // Process the returned products directly (for single product by handle case)
       const sourceProducts = productsIterator;
-      for (const product of sourceProducts) {
+      for (let i = 0; i < sourceProducts.length; i++) {
+        const product = sourceProducts[i];
         // Add newline before each product for better readability
         console.log('');
+
+        // Calculate the progress numbers - this is a single product operation
+        const productNumInBatch = i + 1;
+        const totalProcessed = processedCount + 1;
 
         // Check if product exists in target shop by handle
         const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
         // If force recreate is enabled and the product exists, delete it first
         if (this.forceRecreate && targetProduct) {
-          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate', 0);
+          LoggingUtils.logProductAction(`Force recreating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'force-recreate');
           const deleted = await this.productHandler.deleteProduct(targetProduct.id);
           if (deleted) {
             LoggingUtils.success('Successfully deleted existing product', 1);
             results.deleted++;
             // Now create the product instead of updating
-            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 0);
+            LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create');
             const created = await this.createProduct(this.targetClient, product);
             if (created) {
               LoggingUtils.success('Product created successfully', 1);
@@ -630,7 +635,7 @@ class ProductSyncStrategy {
           }
         } else if (targetProduct) {
           // Update existing product
-          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update', 0);
+          LoggingUtils.logProductAction(`Updating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'update');
           const updated = await this.updateProduct(this.targetClient, product, targetProduct);
 
           // Log result with proper indentation
@@ -643,7 +648,7 @@ class ProductSyncStrategy {
           }
         } else {
           // Create new product
-          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 0);
+          LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create');
           const created = await this.createProduct(this.targetClient, product);
 
           // Log result with proper indentation
@@ -689,7 +694,8 @@ class ProductSyncStrategy {
       consola.info(`Processing batch ${batchNumber}: ${sourceProducts.length} products (${batchResult.fetchedCount} total so far)`);
 
       // Process each source product in this batch
-      for (const product of sourceProducts) {
+      for (let i = 0; i < sourceProducts.length; i++) {
+        const product = sourceProducts[i];
         if (processedCount >= this.options.limit) {
           consola.info(`  Reached processing limit (${this.options.limit}). Stopping product sync.`);
           break;
@@ -698,18 +704,22 @@ class ProductSyncStrategy {
         // Add newline before each product for better readability
         console.log('');
 
+        // Calculate the progress numbers
+        const productNumInBatch = i + 1;
+        const totalProcessed = processedCount + 1;
+
         // Check if product exists in target shop by handle
         const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
         // If force recreate is enabled and the product exists, delete it first
         if (this.forceRecreate && targetProduct) {
-          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate', 1);
+          LoggingUtils.logProductAction(`Force recreating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'force-recreate', 1);
           const deleted = await this.productHandler.deleteProduct(targetProduct.id);
           if (deleted) {
             LoggingUtils.success('Successfully deleted existing product', 2);
             results.deleted++;
             // Now create the product instead of updating
-            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 1);
+            LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create', 1);
             const created = await this.createProduct(this.targetClient, product);
             if (created) {
               LoggingUtils.success('Product created successfully', 2);
@@ -732,7 +742,7 @@ class ProductSyncStrategy {
           }
         } else if (targetProduct) {
           // Update existing product
-          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update', 1);
+          LoggingUtils.logProductAction(`Updating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'update', 1);
           const updated = await this.updateProduct(this.targetClient, product, targetProduct);
 
           // Log result with proper indentation
@@ -745,7 +755,7 @@ class ProductSyncStrategy {
           }
         } else {
           // Create new product
-          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 1);
+          LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create', 1);
           const created = await this.createProduct(this.targetClient, product);
 
           // Log result with proper indentation
