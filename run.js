@@ -98,6 +98,7 @@ class MetaSyncCli {
         .option("--target <n>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
         .option("--live", "Make actual changes (default is dry run)", false)
         .option("--debug", "Enable debug logging", false)
+        .option("--batch-size <number>", "Batch size for pagination", 25)
         .option("--limit <number>", "Limit the number of items to process per run", (value) => parseInt(value, 10), 3);
     };
 

@@ -72,175 +72,204 @@ class ProductSyncStrategy {
   // --- Product Methods ---
 
   async fetchProducts(client, limit = 50, options = {}) {
-    // Construct the GraphQL query for products
-    // If handle is provided, we'll fetch just that specific product
-    let query;
-    let variables;
-
+    // If fetching by handle, use the getProductByHandle method
     if (options.handle) {
-      // If fetching by handle, use the getProductByHandle method
       const product = await this.getProductByHandle(client, options.handle);
       return product ? [product] : [];
-    } else {
-      // Otherwise fetch multiple products
-      query = `#graphql
-        query GetProducts($first: Int!, $query: String) {
-          products(first: $first, query: $query) {
-            edges {
-              node {
-                id
-                title
-                handle
-                description
-                descriptionHtml
-                vendor
-                productType
-                status
-                tags
-                options {
-                  name
-                  values
-                }
-                publications(first: 20) {
-                  edges {
-                    node {
-                      channel {
-                        id
-                        name
-                        handle
-                      }
-                      publishDate
-                      isPublished
+    }
+
+    // For pagination, we'll use a batch size of 25
+    const batchSize = this.options.batchSize || 25;
+    let hasNextPage = true;
+    let cursor = null;
+    let fetchedCount = 0;
+
+    // Construct the GraphQL query for products
+    const query = `#graphql
+      query GetProducts($first: Int!, $query: String, $after: String) {
+        products(first: $first, query: $query, after: $after) {
+          edges {
+            node {
+              id
+              title
+              handle
+              description
+              descriptionHtml
+              vendor
+              productType
+              status
+              tags
+              options {
+                name
+                values
+              }
+              publications(first: 20) {
+                edges {
+                  node {
+                    channel {
+                      id
+                      name
+                      handle
                     }
+                    publishDate
+                    isPublished
                   }
                 }
-                images(first: 10) {
-                  edges {
-                    node {
+              }
+              images(first: 10) {
+                edges {
+                  node {
+                    id
+                    src
+                    altText
+                    width
+                    height
+                  }
+                }
+              }
+              variants(first: 100) {
+                edges {
+                  node {
+                    id
+                    title
+                    sku
+                    price
+                    compareAtPrice
+                    inventoryQuantity
+                    inventoryPolicy
+                    inventoryItem {
+                      id
+                      tracked
+                      requiresShipping
+                      measurement {
+                        weight {
+                          value
+                          unit
+                        }
+                      }
+                    }
+                    taxable
+                    barcode
+                    selectedOptions {
+                      name
+                      value
+                    }
+                    image {
                       id
                       src
                       altText
                       width
                       height
                     }
-                  }
-                }
-                variants(first: 100) {
-                  edges {
-                    node {
-                      id
-                      title
-                      sku
-                      price
-                      compareAtPrice
-                      inventoryQuantity
-                      inventoryPolicy
-                      inventoryItem {
-                        id
-                        tracked
-                        requiresShipping
-                        measurement {
-                          weight {
-                            value
-                            unit
-                          }
+                    metafields(first: 50) {
+                      edges {
+                        node {
+                          id
+                          namespace
+                          key
+                          value
+                          type
                         }
                       }
-                      taxable
-                      barcode
-                      selectedOptions {
-                        name
-                        value
-                      }
-                      image {
-                        id
-                        src
-                        altText
-                        width
-                        height
-                      }
-                      metafields(first: 50) {
-                        edges {
-                          node {
-                            id
-                            namespace
-                            key
-                            value
-                            type
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                metafields(first: 100) {
-                  edges {
-                    node {
-                      id
-                      namespace
-                      key
-                      value
-                      type
                     }
                   }
                 }
               }
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
+              metafields(first: 100) {
+                edges {
+                  node {
+                    id
+                    namespace
+                    key
+                    value
+                    type
+                  }
+                }
+              }
             }
           }
-        }
-      `;
-
-      // Filter out archived products using the query parameter
-      variables = {
-        first: limit,
-        query: "status:ACTIVE" // Only fetch active products
-      };
-    }
-
-    try {
-      const response = await client.graphql(query, variables, 'GetProducts');
-      return response.products.edges.map(edge => {
-        const product = edge.node;
-
-        // Process images
-        product.images = product.images.edges.map(imgEdge => imgEdge.node);
-
-        // Process variants and their metafields
-        product.variants = product.variants.edges.map(varEdge => {
-          const variant = varEdge.node;
-
-          // Process variant metafields
-          if (variant.metafields && variant.metafields.edges) {
-            variant.metafields = variant.metafields.edges.map(metaEdge => metaEdge.node);
-          } else {
-            variant.metafields = [];
+          pageInfo {
+            hasNextPage
+            endCursor
           }
+        }
+      }
+    `;
 
-          // variant.image is already properly structured as a direct object
-
-          return variant;
-        });
-
-        // Process metafields
-        product.metafields = product.metafields.edges.map(metaEdge => metaEdge.node);
-
-        // Process publications
-        if (product.publications && product.publications.edges) {
-          product.publications = product.publications.edges.map(pubEdge => pubEdge.node);
-        } else {
-          product.publications = [];
+    // Return an async generator function
+    return {
+      // Method to fetch the next batch
+      fetchNextBatch: async function() {
+        if (!hasNextPage || fetchedCount >= limit) {
+          return { products: [], done: true };
         }
 
-        return product;
-      });
-    } catch (error) {
-      consola.error(`Error fetching products: ${error.message}`);
-      return [];
-    }
+        try {
+          // Calculate how many products to fetch in this batch
+          const fetchCount = Math.min(batchSize, limit - fetchedCount);
+          console.log('fetchCount', fetchCount);
+
+          // Filter out archived products using the query parameter
+          const variables = {
+            first: fetchCount,
+            query: "status:ACTIVE", // Only fetch active products
+            after: cursor
+          };
+
+          const response = await client.graphql(query, variables, 'GetProducts');
+
+          // Process products
+          const batchProducts = response.products.edges.map(edge => {
+            const product = edge.node;
+
+            // Process images
+            product.images = product.images.edges.map(imgEdge => imgEdge.node);
+
+            // Process variants and their metafields
+            product.variants = product.variants.edges.map(varEdge => {
+              const variant = varEdge.node;
+
+              // Process variant metafields
+              if (variant.metafields && variant.metafields.edges) {
+                variant.metafields = variant.metafields.edges.map(metaEdge => metaEdge.node);
+              } else {
+                variant.metafields = [];
+              }
+
+              // variant.image is already properly structured as a direct object
+              return variant;
+            });
+
+            // Process metafields
+            product.metafields = product.metafields.edges.map(metaEdge => metaEdge.node);
+
+            // Process publications
+            if (product.publications && product.publications.edges) {
+              product.publications = product.publications.edges.map(pubEdge => pubEdge.node);
+            } else {
+              product.publications = [];
+            }
+
+            return product;
+          });
+
+          // Update pagination info for next iteration
+          hasNextPage = response.products.pageInfo.hasNextPage;
+          cursor = response.products.pageInfo.endCursor;
+          fetchedCount += batchProducts.length;
+
+          return {
+            products: batchProducts,
+            done: !hasNextPage || fetchedCount > limit,
+            fetchedCount,
+            totalCount: fetchedCount
+          };
+        } catch (error) {
+          consola.error(`Error fetching products: ${error.message}`);
+          return { products: [], done: true, error: error.message };
+        }
+      }
+    };
   }
 
   async getProductByHandle(client, handle) {
@@ -546,46 +575,56 @@ class ProductSyncStrategy {
       options.handle = this.options.handle;
     }
 
-    const sourceProducts = await this.fetchProducts(this.sourceClient, this.options.limit, options);
-    consola.info(`Found ${sourceProducts.length} product(s) in source shop`);
+    const productsIterator = await this.fetchProducts(this.sourceClient, this.options.limit, options);
 
-    const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
-    let processedCount = 0;
+    // If we're dealing with a single product by handle, the result is already an array
+    if (Array.isArray(productsIterator)) {
+      consola.info(`Found ${productsIterator.length} product(s) in source shop`);
 
-    // Process each source product
-    for (const product of sourceProducts) {
-      if (processedCount >= this.options.limit) {
-        consola.info(`Reached processing limit (${this.options.limit}). Stopping product sync.`);
-        break;
-      }
+      // Process the returned products directly (for single product by handle case)
+      const sourceProducts = productsIterator;
+      for (const product of sourceProducts) {
+        // Add newline before each product for better readability
+        consola.log('');
 
-      // Add newline before each product for better readability
-      consola.log('');
+        // Check if product exists in target shop by handle
+        const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
-      // Check if product exists in target shop by handle
-      const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
-
-      // If force recreate is enabled and the product exists, delete it first
-      if (this.forceRecreate && targetProduct) {
-        LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate');
-        const deleted = await this.productHandler.deleteProduct(targetProduct.id);
-        if (deleted) {
-          LoggingUtils.success('Successfully deleted existing product', 1);
-          results.deleted++;
-          // Now create the product instead of updating
-          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
-          const created = await this.createProduct(this.targetClient, product);
-          if (created) {
-            LoggingUtils.success('Product created successfully', 1);
-            results.created++;
+        // If force recreate is enabled and the product exists, delete it first
+        if (this.forceRecreate && targetProduct) {
+          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate');
+          const deleted = await this.productHandler.deleteProduct(targetProduct.id);
+          if (deleted) {
+            LoggingUtils.success('Successfully deleted existing product', 1);
+            results.deleted++;
+            // Now create the product instead of updating
+            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+            const created = await this.createProduct(this.targetClient, product);
+            if (created) {
+              LoggingUtils.success('Product created successfully', 1);
+              results.created++;
+            } else {
+              LoggingUtils.error('Failed to create product', 1);
+              results.failed++;
+            }
           } else {
-            LoggingUtils.error('Failed to create product', 1);
-            results.failed++;
+            LoggingUtils.error('Failed to delete existing product', 1);
+            LoggingUtils.info('Attempting to update instead', 1);
+            const updated = await this.updateProduct(this.targetClient, product, targetProduct);
+            if (updated) {
+              LoggingUtils.success('Product updated successfully', 1);
+              results.updated++;
+            } else {
+              LoggingUtils.error('Failed to update product', 1);
+              results.failed++;
+            }
           }
-        } else {
-          LoggingUtils.error('Failed to delete existing product', 1);
-          LoggingUtils.info('Attempting to update instead', 1);
+        } else if (targetProduct) {
+          // Update existing product
+          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update');
           const updated = await this.updateProduct(this.targetClient, product, targetProduct);
+
+          // Log result with proper indentation
           if (updated) {
             LoggingUtils.success('Product updated successfully', 1);
             results.updated++;
@@ -593,37 +632,128 @@ class ProductSyncStrategy {
             LoggingUtils.error('Failed to update product', 1);
             results.failed++;
           }
-        }
-      } else if (targetProduct) {
-        // Update existing product
-        LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update');
-        const updated = await this.updateProduct(this.targetClient, product, targetProduct);
-
-        // Log result with proper indentation
-        if (updated) {
-          LoggingUtils.success('Product updated successfully', 1);
-          results.updated++;
         } else {
-          LoggingUtils.error('Failed to update product', 1);
-          results.failed++;
-        }
-      } else {
-        // Create new product
-        LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
-        const created = await this.createProduct(this.targetClient, product);
+          // Create new product
+          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+          const created = await this.createProduct(this.targetClient, product);
 
-        // Log result with proper indentation
-        if (created) {
-          LoggingUtils.success('Product created successfully', 1);
-          results.created++;
-        } else {
-          LoggingUtils.error('Failed to create product', 1);
-          results.failed++;
+          // Log result with proper indentation
+          if (created) {
+            LoggingUtils.success('Product created successfully', 1);
+            results.created++;
+          } else {
+            LoggingUtils.error('Failed to create product', 1);
+            results.failed++;
+          }
         }
+
+        processedCount++;
       }
 
-      processedCount++;
+      // Add a newline before summary
+      consola.log('');
+      consola.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`);
+      return { definitionResults: results, dataResults: null };
     }
+
+    // For batch processing of multiple products
+    const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
+    let processedCount = 0;
+    let batchNumber = 1;
+
+    // Process products in batches
+    consola.info(`Started fetching products in batches of ${this.options.batchSize || 25}`);
+
+    // Fetch the first batch
+    let batchResult = await productsIterator.fetchNextBatch();
+
+    if (batchResult.products.length === 0) {
+      consola.info(`No products found in source shop`);
+      return { definitionResults: results, dataResults: null };
+    }
+
+    do {
+      const sourceProducts = batchResult.products;
+      consola.info(`Processing batch ${batchNumber}: ${sourceProducts.length} products (${batchResult.fetchedCount} total so far)`);
+
+      // Process each source product in this batch
+      for (const product of sourceProducts) {
+        if (processedCount >= this.options.limit) {
+          consola.info(`Reached processing limit (${this.options.limit}). Stopping product sync.`);
+          break;
+        }
+
+        // Add newline before each product for better readability
+        consola.log('');
+
+        // Check if product exists in target shop by handle
+        const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
+
+        // If force recreate is enabled and the product exists, delete it first
+        if (this.forceRecreate && targetProduct) {
+          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate');
+          const deleted = await this.productHandler.deleteProduct(targetProduct.id);
+          if (deleted) {
+            LoggingUtils.success('Successfully deleted existing product', 1);
+            results.deleted++;
+            // Now create the product instead of updating
+            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+            const created = await this.createProduct(this.targetClient, product);
+            if (created) {
+              LoggingUtils.success('Product created successfully', 1);
+              results.created++;
+            } else {
+              LoggingUtils.error('Failed to create product', 1);
+              results.failed++;
+            }
+          } else {
+            LoggingUtils.error('Failed to delete existing product', 1);
+            LoggingUtils.info('Attempting to update instead', 1);
+            const updated = await this.updateProduct(this.targetClient, product, targetProduct);
+            if (updated) {
+              LoggingUtils.success('Product updated successfully', 1);
+              results.updated++;
+            } else {
+              LoggingUtils.error('Failed to update product', 1);
+              results.failed++;
+            }
+          }
+        } else if (targetProduct) {
+          // Update existing product
+          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update');
+          const updated = await this.updateProduct(this.targetClient, product, targetProduct);
+
+          // Log result with proper indentation
+          if (updated) {
+            LoggingUtils.success('Product updated successfully', 1);
+            results.updated++;
+          } else {
+            LoggingUtils.error('Failed to update product', 1);
+            results.failed++;
+          }
+        } else {
+          // Create new product
+          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+          const created = await this.createProduct(this.targetClient, product);
+
+          // Log result with proper indentation
+          if (created) {
+            LoggingUtils.success('Product created successfully', 1);
+            results.created++;
+          } else {
+            LoggingUtils.error('Failed to create product', 1);
+            results.failed++;
+          }
+        }
+
+        processedCount++;
+      }
+
+      batchNumber++;
+
+      // Fetch the next batch
+      batchResult = await productsIterator.fetchNextBatch();
+    } while (batchResult.products.length > 0 && !batchResult.done);
 
     // Add a newline before summary
     consola.log('');

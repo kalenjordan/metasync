@@ -124,3 +124,7 @@ metasync data --help
 metasync data product --help
 metasync data metaobject --help
 ```
+
+## ISSUES
+
+Variant option images aren't being uploaded properly upon create, but upon update they are.
