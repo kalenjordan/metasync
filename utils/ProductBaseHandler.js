@@ -8,6 +8,7 @@
  * - Fetching products by ID or handle
  */
 const consola = require('consola');
+const LoggingUtils = require('./LoggingUtils');
 
 class ProductBaseHandler {
   constructor(client, options = {}) {
@@ -41,7 +42,7 @@ class ProductBaseHandler {
 
     if (this.options.notADrill) {
       try {
-        consola.info(`${logPrefix}• Creating base product "${productInput.title}"`);
+        LoggingUtils.info(`Creating base product "${productInput.title}"`, 2, 'main');
         const result = await this.client.graphql(mutation, { input: productInput }, 'CreateProduct');
 
         if (result.productCreate.userErrors.length > 0) {
@@ -50,14 +51,14 @@ class ProductBaseHandler {
         }
 
         const newProduct = result.productCreate.product;
-        consola.success(`${logPrefix}  ✓ Base product created successfully`);
+        LoggingUtils.success(`Base product created successfully`, 2);
         return newProduct;
       } catch (error) {
         consola.error(`${logPrefix}  ✖ Error creating product "${productInput.title}": ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`${logPrefix}• [DRY RUN] Would create product "${productInput.title}"`);
+      LoggingUtils.info(`[DRY RUN] Would create product "${productInput.title}"`, 2, 'main');
       return { id: "dry-run-id", title: productInput.title, handle: productInput.handle };
     }
   }
@@ -93,7 +94,7 @@ class ProductBaseHandler {
 
     if (this.options.notADrill) {
       try {
-        consola.info(`${logPrefix}• Updating base product data`);
+        LoggingUtils.info(`Updating base product data`, 2, 'main');
         const result = await this.client.graphql(
           mutation,
           { productUpdateInput: updateInput },
@@ -106,14 +107,14 @@ class ProductBaseHandler {
         }
 
         const updatedProduct = result.productUpdate.product;
-        consola.success(`${logPrefix}  ✓ Base product data updated successfully`);
+        LoggingUtils.success(`Base product data updated successfully`, 2);
         return updatedProduct;
       } catch (error) {
         consola.error(`${logPrefix}  ✖ Error updating product: ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`${logPrefix}• [DRY RUN] Would update product "${productInput.title}"`);
+      LoggingUtils.info(`[DRY RUN] Would update product "${productInput.title}"`, 2, 'main');
       return { id: productId, title: productInput.title, handle: productInput.handle };
     }
   }
@@ -144,7 +145,7 @@ class ProductBaseHandler {
 
     if (this.options.notADrill) {
       try {
-        consola.info(`${logPrefix}• Deleting product with ID: ${productId}`);
+        LoggingUtils.info(`Deleting product with ID: ${productId}`, 2, 'main');
         const result = await this.client.graphql(mutation, {
           input: {
             id: productId
@@ -156,14 +157,14 @@ class ProductBaseHandler {
           return false;
         }
 
-        consola.success(`${logPrefix}  ✓ Product deleted successfully`);
+        LoggingUtils.success(`Product deleted successfully`, 2);
         return true;
       } catch (error) {
         consola.error(`${logPrefix}  ✖ Error deleting product: ${error.message}`);
         return false;
       }
     } else {
-      consola.info(`${logPrefix}• [DRY RUN] Would delete product with ID: ${productId}`);
+      LoggingUtils.info(`[DRY RUN] Would delete product with ID: ${productId}`, 2, 'main');
       return true;
     }
   }

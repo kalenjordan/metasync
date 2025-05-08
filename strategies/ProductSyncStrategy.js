@@ -33,6 +33,7 @@
  */
 const consola = require('consola');
 const { SHOPIFY_API_VERSION } = require('../constants');
+const chalk = require('chalk');
 
 // Import utility classes
 const MetafieldHandler = require('../utils/MetafieldHandler');
@@ -86,7 +87,7 @@ class ProductSyncStrategy {
     let fetchedCount = 0;
 
     if (cursor) {
-      consola.info(`Starting pagination from cursor: ${cursor}`);
+      consola.info(`Starting pagination from cursor: ${chalk.blue(cursor)}`);
     }
 
     // Construct the GraphQL query for products
@@ -544,8 +545,8 @@ class ProductSyncStrategy {
         return null;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would update product "${product.title}"`, 3, 'main');
-      LoggingUtils.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 4);
+      LoggingUtils.info(`[DRY RUN] Would update product "${product.title}"`, 2, 'main');
+      LoggingUtils.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 3);
       LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
 
       if (product.publications && product.publications.length > 0) {
@@ -593,20 +594,20 @@ class ProductSyncStrategy {
       const sourceProducts = productsIterator;
       for (const product of sourceProducts) {
         // Add newline before each product for better readability
-        consola.log('');
+        console.log('');
 
         // Check if product exists in target shop by handle
         const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
         // If force recreate is enabled and the product exists, delete it first
         if (this.forceRecreate && targetProduct) {
-          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate');
+          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate', 0);
           const deleted = await this.productHandler.deleteProduct(targetProduct.id);
           if (deleted) {
             LoggingUtils.success('Successfully deleted existing product', 1);
             results.deleted++;
             // Now create the product instead of updating
-            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 0);
             const created = await this.createProduct(this.targetClient, product);
             if (created) {
               LoggingUtils.success('Product created successfully', 1);
@@ -629,7 +630,7 @@ class ProductSyncStrategy {
           }
         } else if (targetProduct) {
           // Update existing product
-          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update');
+          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update', 0);
           const updated = await this.updateProduct(this.targetClient, product, targetProduct);
 
           // Log result with proper indentation
@@ -642,7 +643,7 @@ class ProductSyncStrategy {
           }
         } else {
           // Create new product
-          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create');
+          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 0);
           const created = await this.createProduct(this.targetClient, product);
 
           // Log result with proper indentation
@@ -659,8 +660,8 @@ class ProductSyncStrategy {
       }
 
       // Add a newline before summary
-      consola.log('');
-      consola.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`);
+      console.log('');
+      LoggingUtils.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`, 0);
       return { definitionResults: results, dataResults: null };
     }
 
@@ -682,6 +683,9 @@ class ProductSyncStrategy {
 
     do {
       const sourceProducts = batchResult.products;
+      // Add a proper empty line without an info icon
+      console.log('');
+      // Remove the \n from the beginning of this string
       consola.info(`Processing batch ${batchNumber}: ${sourceProducts.length} products (${batchResult.fetchedCount} total so far)`);
 
       // Process each source product in this batch
@@ -692,64 +696,64 @@ class ProductSyncStrategy {
         }
 
         // Add newline before each product for better readability
-        consola.log('');
+        console.log('');
 
         // Check if product exists in target shop by handle
         const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
         // If force recreate is enabled and the product exists, delete it first
         if (this.forceRecreate && targetProduct) {
-          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate', 2);
+          LoggingUtils.logProductAction('Force recreating product', product.title, product.handle, 'force-recreate', 1);
           const deleted = await this.productHandler.deleteProduct(targetProduct.id);
           if (deleted) {
-            LoggingUtils.success('Successfully deleted existing product', 3);
+            LoggingUtils.success('Successfully deleted existing product', 2);
             results.deleted++;
             // Now create the product instead of updating
-            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 2);
+            LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 1);
             const created = await this.createProduct(this.targetClient, product);
             if (created) {
-              LoggingUtils.success('Product created successfully', 3);
+              LoggingUtils.success('Product created successfully', 2);
               results.created++;
             } else {
-              LoggingUtils.error('Failed to create product', 3);
+              LoggingUtils.error('Failed to create product', 2);
               results.failed++;
             }
           } else {
-            LoggingUtils.error('Failed to delete existing product', 3);
-            LoggingUtils.info('Attempting to update instead', 3);
+            LoggingUtils.error('Failed to delete existing product', 2);
+            LoggingUtils.info('Attempting to update instead', 2);
             const updated = await this.updateProduct(this.targetClient, product, targetProduct);
             if (updated) {
-              LoggingUtils.success('Product updated successfully', 3);
+              LoggingUtils.success('Product updated successfully', 2);
               results.updated++;
             } else {
-              LoggingUtils.error('Failed to update product', 3);
+              LoggingUtils.error('Failed to update product', 2);
               results.failed++;
             }
           }
         } else if (targetProduct) {
           // Update existing product
-          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update', 2);
+          LoggingUtils.logProductAction('Updating product', product.title, product.handle, 'update', 1);
           const updated = await this.updateProduct(this.targetClient, product, targetProduct);
 
           // Log result with proper indentation
           if (updated) {
-            LoggingUtils.success('Product updated successfully', 3);
+            LoggingUtils.success('Product updated successfully', 2);
             results.updated++;
           } else {
-            LoggingUtils.error('Failed to update product', 3);
+            LoggingUtils.error('Failed to update product', 2);
             results.failed++;
           }
         } else {
           // Create new product
-          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 2);
+          LoggingUtils.logProductAction('Creating product', product.title, product.handle, 'create', 1);
           const created = await this.createProduct(this.targetClient, product);
 
           // Log result with proper indentation
           if (created) {
-            LoggingUtils.success('Product created successfully', 3);
+            LoggingUtils.success('Product created successfully', 2);
             results.created++;
           } else {
-            LoggingUtils.error('Failed to create product', 3);
+            LoggingUtils.error('Failed to create product', 2);
             results.failed++;
           }
         }
@@ -759,14 +763,20 @@ class ProductSyncStrategy {
 
       batchNumber++;
 
+      // Log the cursor at the end of each batch for potential resumption
+      if (batchResult.cursor) {
+        console.log('');
+        LoggingUtils.subdued(`Current batch end cursor: ${batchResult.cursor}`, 1);
+      }
+
       // Fetch the next batch
       batchResult = await productsIterator.fetchNextBatch();
 
     } while (batchResult.products.length > 0 && !batchResult.done);
 
     // Add a newline before summary
-    consola.log('');
-    consola.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`);
+    console.log('');
+    LoggingUtils.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`, 0);
     return { definitionResults: results, dataResults: null };
   }
 }

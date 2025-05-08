@@ -7,6 +7,7 @@
  * - Color coding
  */
 const consola = require('consola');
+const chalk = require('chalk');
 
 class LoggingUtils {
   /**
@@ -18,18 +19,18 @@ class LoggingUtils {
    * @param {number} level - Indentation level (0, 1, 2, etc.)
    */
   static logProductAction(message, title, handle, type = 'update', level = 0) {
-    let color = '36'; // Default cyan for update
+    let color = chalk.cyan; // Default cyan for update
 
     if (type === 'create') {
-      color = '32'; // Green
+      color = chalk.green; // Green
     } else if (type === 'delete' || type === 'force-recreate') {
-      color = '33'; // Yellow/amber
+      color = chalk.yellow; // Yellow/amber
     } else if (type === 'error') {
-      color = '31'; // Red
+      color = chalk.red; // Red
     }
 
     const indent = '  '.repeat(level);
-    consola.log(`${indent}\u001b[1m\u001b[${color}m◆ ${message}: ${title} (${handle})\u001b[0m`);
+    consola.log(`${indent}${color.bold(`◆ ${message}: ${title} (${handle})`)}`);
   }
 
   /**
@@ -39,7 +40,18 @@ class LoggingUtils {
    */
   static success(message, level = 0) {
     const indent = '  '.repeat(level);
-    consola.log(`${indent}\u001b[32m✓ ${message}\u001b[0m`);
+    // Use green checkmark ✓ with consistent formatting
+    consola.log(`${indent}${chalk.green('✓')} ${message}`);
+  }
+
+  /**
+   * Format a success message with proper indentation and symbol
+   * @param {string} message - Log message
+   * @param {string} level - Indentation level (0, 1, 2, etc.)
+   */
+  static subdued(message, level = 0) {
+    const indent = '  '.repeat(level);
+    consola.log(`${indent}${chalk.gray('• ' + message)}`);
   }
 
   /**
@@ -51,9 +63,9 @@ class LoggingUtils {
   static error(message, level = 0, data = null) {
     const indent = '  '.repeat(level);
     if (data) {
-      consola.log(`${indent}\u001b[31m✖ ${message}\u001b[0m`, data);
+      consola.log(`${indent}${chalk.red('✖')} ${message}`, data);
     } else {
-      consola.log(`${indent}\u001b[31m✖ ${message}\u001b[0m`);
+      consola.log(`${indent}${chalk.red('✖')} ${message}`);
     }
   }
 
@@ -64,7 +76,7 @@ class LoggingUtils {
    */
   static warn(message, level = 0) {
     const indent = '  '.repeat(level);
-    consola.log(`${indent}\u001b[33m⚠ ${message}\u001b[0m`);
+    consola.log(`${indent}${chalk.yellow('⚠')} ${message}`);
   }
 
   /**

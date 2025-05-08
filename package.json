@@ -19,6 +19,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "consola": "^3.4.2",
     "shopify-api-node": "^3.15.0"

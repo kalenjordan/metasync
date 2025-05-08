@@ -5,6 +5,7 @@
  * Supports batching to respect Shopify's 25-metafield-per-call limit.
  */
 const consola = require('consola');
+const LoggingUtils = require('./LoggingUtils');
 
 class MetafieldHandler {
   constructor(client, options = {}) {
@@ -74,7 +75,7 @@ class MetafieldHandler {
             failedCount += metafieldBatch.length;
           } else {
             const metafieldCount = result.metafieldsSet.metafields.length;
-            consola.success(`${logPrefix}    ✓ Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`);
+            LoggingUtils.success(`Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`, 4);
             successCount += metafieldCount;
 
             // Log individual metafields if debug is enabled
