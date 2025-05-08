@@ -46,7 +46,7 @@ class ProductBaseHandler {
         const result = await this.client.graphql(mutation, { input: productInput }, 'CreateProduct');
 
         if (result.productCreate.userErrors.length > 0) {
-          consola.error(`${logPrefix}  ✖ Failed to create product "${productInput.title}":`, result.productCreate.userErrors);
+          LoggingUtils.error(`Failed to create product "${productInput.title}"`, 2, result.productCreate.userErrors);
           return null;
         }
 
@@ -54,7 +54,7 @@ class ProductBaseHandler {
         LoggingUtils.success(`Base product created successfully`, 2);
         return newProduct;
       } catch (error) {
-        consola.error(`${logPrefix}  ✖ Error creating product "${productInput.title}": ${error.message}`);
+        LoggingUtils.error(`Error creating product "${productInput.title}": ${error.message}`, 2);
         return null;
       }
     } else {
@@ -102,15 +102,15 @@ class ProductBaseHandler {
         );
 
         if (result.productUpdate.userErrors.length > 0) {
-          consola.error(`${logPrefix}  ✖ Failed to update product "${productInput.title}":`, result.productUpdate.userErrors);
+          LoggingUtils.error(`Failed to update product "${productInput.title}"`, 2, result.productUpdate.userErrors);
           return null;
         }
 
         const updatedProduct = result.productUpdate.product;
-        LoggingUtils.success(`Base product data updated successfully`, 2);
+        LoggingUtils.success(`Base product data updated successfully`, 3);
         return updatedProduct;
       } catch (error) {
-        consola.error(`${logPrefix}  ✖ Error updating product: ${error.message}`);
+        LoggingUtils.error(`Error updating product: ${error.message}`, 2);
         return null;
       }
     } else {
@@ -127,7 +127,7 @@ class ProductBaseHandler {
    */
   async deleteProduct(productId, logPrefix = '') {
     if (!productId) {
-      consola.error(`${logPrefix}✖ Cannot delete product: No product ID provided`);
+      LoggingUtils.error(`Cannot delete product: No product ID provided`, 2);
       return false;
     }
 
@@ -153,14 +153,14 @@ class ProductBaseHandler {
         }, 'ProductDelete');
 
         if (result.productDelete.userErrors.length > 0) {
-          consola.error(`${logPrefix}  ✖ Failed to delete product:`, result.productDelete.userErrors);
+          LoggingUtils.error(`Failed to delete product`, 2, result.productDelete.userErrors);
           return false;
         }
 
         LoggingUtils.success(`Product deleted successfully`, 2);
         return true;
       } catch (error) {
-        consola.error(`${logPrefix}  ✖ Error deleting product: ${error.message}`);
+        LoggingUtils.error(`Error deleting product: ${error.message}`, 2);
         return false;
       }
     } else {
@@ -192,7 +192,7 @@ class ProductBaseHandler {
       const response = await this.client.graphql(query, { handle }, 'GetProductByHandle');
       return response.productByHandle;
     } catch (error) {
-      consola.error(`Error fetching product by handle: ${error.message}`);
+      LoggingUtils.error(`Error fetching product by handle: ${error.message}`, 1);
       return null;
     }
   }

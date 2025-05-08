@@ -25,7 +25,7 @@ class MetafieldHandler {
   async syncMetafields(ownerId, metafields, logPrefix = '') {
     if (!metafields || metafields.length === 0) return true;
 
-    consola.info(`${logPrefix}• Syncing ${metafields.length} metafields for ID: ${ownerId}`);
+    LoggingUtils.info(`Syncing ${metafields.length} metafields for ID: ${ownerId}`, 2, 'main');
 
     // Split metafields into batches
     const metafieldBatches = [];
@@ -33,7 +33,7 @@ class MetafieldHandler {
       metafieldBatches.push(metafields.slice(i, i + this.batchSize));
     }
 
-    consola.info(`${logPrefix}  - Processing ${metafieldBatches.length} batches of metafields (max ${this.batchSize} per batch)`);
+    LoggingUtils.info(`Processing ${metafieldBatches.length} batches of metafields (max ${this.batchSize} per batch)`, 3);
 
     let successCount = 0;
     let failedCount = 0;
@@ -67,11 +67,11 @@ class MetafieldHandler {
 
       if (this.options.notADrill) {
         try {
-          consola.info(`${logPrefix}    - Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`);
+          LoggingUtils.info(`Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`, 4);
           const result = await this.client.graphql(mutation, { metafields: metafieldsInput }, 'MetafieldsSet');
 
           if (result.metafieldsSet.userErrors.length > 0) {
-            consola.error(`${logPrefix}    ✖ Failed to set metafields in batch ${batchIndex + 1}:`, result.metafieldsSet.userErrors);
+            LoggingUtils.error(`Failed to set metafields in batch ${batchIndex + 1}:`, 4, result.metafieldsSet.userErrors);
             failedCount += metafieldBatch.length;
           } else {
             const metafieldCount = result.metafieldsSet.metafields.length;
@@ -81,21 +81,21 @@ class MetafieldHandler {
             // Log individual metafields if debug is enabled
             if (this.debug) {
               result.metafieldsSet.metafields.forEach(metafield => {
-                consola.debug(`${logPrefix}      - Set metafield ${metafield.namespace}.${metafield.key}`);
+                consola.debug(`Set metafield ${metafield.namespace}.${metafield.key}`);
               });
             }
           }
         } catch (error) {
-          consola.error(`${logPrefix}    ✖ Error setting metafields in batch ${batchIndex + 1}: ${error.message}`);
+          LoggingUtils.error(`Error setting metafields in batch ${batchIndex + 1}: ${error.message}`, 4);
           failedCount += metafieldBatch.length;
         }
       } else {
-        consola.info(`${logPrefix}    - [DRY RUN] Would set ${metafieldBatch.length} metafields in batch ${batchIndex + 1}`);
+        LoggingUtils.info(`[DRY RUN] Would set ${metafieldBatch.length} metafields in batch ${batchIndex + 1}`, 4);
 
         // Log individual metafields if debug is enabled
         if (this.debug) {
           metafieldBatch.forEach(metafield => {
-            consola.debug(`${logPrefix}      - [DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
+            consola.debug(`[DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
           });
         }
       }
@@ -103,7 +103,7 @@ class MetafieldHandler {
 
     // Return success status
     if (this.options.notADrill) {
-      consola.info(`${logPrefix}  - Metafields sync complete: ${successCount} successful, ${failedCount} failed`);
+      LoggingUtils.info(`Metafields sync complete: ${successCount} successful, ${failedCount} failed`, 3);
       return failedCount === 0;
     } else {
       return true;

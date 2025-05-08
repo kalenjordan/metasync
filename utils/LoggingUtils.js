@@ -45,16 +45,6 @@ class LoggingUtils {
   }
 
   /**
-   * Format a success message with proper indentation and symbol
-   * @param {string} message - Log message
-   * @param {string} level - Indentation level (0, 1, 2, etc.)
-   */
-  static subdued(message, level = 0) {
-    const indent = '  '.repeat(level);
-    consola.log(`${indent}${chalk.gray('• ' + message)}`);
-  }
-
-  /**
    * Format an error message with proper indentation and symbol
    * @param {string} message - Log message
    * @param {string} level - Indentation level (0, 1, 2, etc.)
@@ -96,6 +86,16 @@ class LoggingUtils {
     }
 
     consola.log(`${indent}${symbol} ${message}`);
+  }
+
+  /**
+   * Format a subdued message with proper indentation (for less important info like cursor data)
+   * @param {string} message - Log message
+   * @param {string} level - Indentation level (0, 1, 2, etc.)
+   */
+  static subdued(message, level = 0) {
+    const indent = '  '.repeat(level);
+    consola.log(`${indent}${chalk.gray(message)}`);
   }
 
   /**

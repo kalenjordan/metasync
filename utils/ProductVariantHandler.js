@@ -345,14 +345,14 @@ class ProductVariantHandler {
           }, 'ProductVariantsBulkUpdate');
 
           if (result.productVariantsBulkUpdate.userErrors.length > 0) {
-            LoggingUtils.error(`Failed to update variants:`, 3, result.productVariantsBulkUpdate.userErrors);
+            LoggingUtils.error(`Failed to update variants:`, 4, result.productVariantsBulkUpdate.userErrors);
             updateSuccess = false;
           } else {
-            LoggingUtils.success(`Successfully updated ${result.productVariantsBulkUpdate.productVariants.length} variants`, 3);
+            LoggingUtils.success(`Successfully updated ${result.productVariantsBulkUpdate.productVariants.length} variants`, 4);
 
             // Update the variant images separately since imageId isn't supported in bulk updates
             if (imageUpdates.length > 0) {
-              LoggingUtils.info(`Updating images for ${imageUpdates.length} variants`, 3);
+              LoggingUtils.info(`Updating images for ${imageUpdates.length} variants`, 4);
 
               for (const update of imageUpdates) {
                 if (this.imageHandler) {
