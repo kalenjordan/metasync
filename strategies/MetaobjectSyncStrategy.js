@@ -1,4 +1,5 @@
 const consola = require('consola');
+const ErrorHandler = require('../utils/ErrorHandler');
 
 class MetaobjectSyncStrategy {
   constructor(sourceClient, targetClient, options) {
@@ -165,7 +166,21 @@ class MetaobjectSyncStrategy {
       try {
           const result = await client.graphql(mutation, { definition: input }, 'CreateMetaobjectDefinition');
           if (result.metaobjectDefinitionCreate.userErrors.length > 0) {
-            consola.error(`Failed to create metaobject definition ${definition.type}:`, result.metaobjectDefinitionCreate.userErrors);
+            // Use the ErrorHandler for consistent error handling
+            const getFieldDefDetails = (fieldDef, index, errorPath) => {
+              return {
+                itemName: `Definition field ${fieldDef.key}`,
+                valuePreview: null // Field definitions don't have a simple value to preview
+              };
+            };
+
+            ErrorHandler.handleGraphQLUserErrors(
+              result.metaobjectDefinitionCreate.userErrors,
+              input.fieldDefinitions,
+              getFieldDefDetails,
+              `metaobject definition ${definition.type}`
+            );
+
             return null;
           }
           return result.metaobjectDefinitionCreate.metaobjectDefinition;
@@ -212,7 +227,21 @@ class MetaobjectSyncStrategy {
       try {
           const result = await client.graphql(mutation, { id: existingDefinition.id, definition: input }, 'UpdateMetaobjectDefinition');
           if (result.metaobjectDefinitionUpdate.userErrors.length > 0) {
-            consola.error(`Failed to update metaobject definition ${definition.type}:`, result.metaobjectDefinitionUpdate.userErrors);
+            // Use the ErrorHandler for consistent error handling
+            const getFieldDefDetails = (fieldDef, index, errorPath) => {
+              return {
+                itemName: `Definition field ${fieldDef.key}`,
+                valuePreview: null // Field definitions don't have a simple value to preview
+              };
+            };
+
+            ErrorHandler.handleGraphQLUserErrors(
+              result.metaobjectDefinitionUpdate.userErrors,
+              input.fieldDefinitions,
+              getFieldDefDetails,
+              `metaobject definition ${definition.type}`
+            );
+
             return null;
           }
           return result.metaobjectDefinitionUpdate.metaobjectDefinition;
@@ -274,12 +303,33 @@ class MetaobjectSyncStrategy {
       try {
         const result = await client.graphql(mutation, { metaobject: input }, 'CreateMetaobject');
         if (result.metaobjectCreate.userErrors.length > 0) {
-          throw new Error(`Failed to create metaobject ${metaobject.handle || 'unknown'}: ${JSON.stringify(result.metaobjectCreate.userErrors)}`);
+          // Use the ErrorHandler for consistent error handling
+          const getFieldDetails = (field, index, errorPath) => {
+            // Format the value for display
+            let valuePreview = field.value ? String(field.value) : '';
+            if (valuePreview.length > 50) {
+              valuePreview = valuePreview.substring(0, 47) + '...';
+            }
+
+            return {
+              itemName: `Field ${field.key}`,
+              valuePreview: valuePreview
+            };
+          };
+
+          ErrorHandler.handleGraphQLUserErrors(
+            result.metaobjectCreate.userErrors,
+            fields,
+            getFieldDetails,
+            `metaobject ${metaobject.handle || 'unknown'}`
+          );
+
+          return null;
         }
         return result.metaobjectCreate.metaobject;
       } catch (error) {
         consola.error(`Error creating metaobject ${metaobject.handle || 'unknown'}: ${error.message}`);
-        throw error; // Rethrow after logging
+        return null;
       }
     } else {
       consola.info(`[DRY RUN] Would create metaobject ${metaobject.handle || 'unknown'} with ${fields.length} fields`);
@@ -308,12 +358,33 @@ class MetaobjectSyncStrategy {
        try {
             const result = await client.graphql(mutation, { id: existingMetaobject.id, metaobject: input }, 'UpdateMetaobject');
             if (result.metaobjectUpdate.userErrors.length > 0) {
-                throw new Error(`Failed to update metaobject ${metaobject.handle || 'unknown'}: ${JSON.stringify(result.metaobjectUpdate.userErrors)}`);
+                // Use the ErrorHandler for consistent error handling
+                const getFieldDetails = (field, index, errorPath) => {
+                  // Format the value for display
+                  let valuePreview = field.value ? String(field.value) : '';
+                  if (valuePreview.length > 50) {
+                    valuePreview = valuePreview.substring(0, 47) + '...';
+                  }
+
+                  return {
+                    itemName: `Field ${field.key}`,
+                    valuePreview: valuePreview
+                  };
+                };
+
+                ErrorHandler.handleGraphQLUserErrors(
+                  result.metaobjectUpdate.userErrors,
+                  fields,
+                  getFieldDetails,
+                  `metaobject ${metaobject.handle || 'unknown'}`
+                );
+
+                return null;
             }
             return result.metaobjectUpdate.metaobject;
        } catch (error) {
             consola.error(`Error updating metaobject ${metaobject.handle || 'unknown'}: ${error.message}`);
-            throw error; // Rethrow
+            return null;
        }
     } else {
       consola.info(`[DRY RUN] Would update metaobject ${metaobject.handle || 'unknown'}`);

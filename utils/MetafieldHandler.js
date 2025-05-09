@@ -6,6 +6,7 @@
  */
 const consola = require('consola');
 const LoggingUtils = require('./LoggingUtils');
+const ErrorHandler = require('./ErrorHandler');
 
 class MetafieldHandler {
   constructor(client, options = {}) {
@@ -71,7 +72,29 @@ class MetafieldHandler {
           const result = await this.client.graphql(mutation, { metafields: metafieldsInput }, 'MetafieldsSet');
 
           if (result.metafieldsSet.userErrors.length > 0) {
-            LoggingUtils.error(`Failed to set metafields in batch ${batchIndex + 1}:`, 4, result.metafieldsSet.userErrors);
+            // Use the generic error handler with a custom function to extract metafield details
+            const getMetafieldDetails = (metafield) => {
+              // Get a preview of the value (truncate if too long)
+              let valuePreview = String(metafield.value);
+              if (valuePreview.length > 50) {
+                valuePreview = valuePreview.substring(0, 47) + '...';
+              }
+
+              return {
+                itemName: `Metafield ${metafield.namespace}.${metafield.key} (${metafield.type})`,
+                valuePreview: valuePreview
+              };
+            };
+
+            // Handle the errors with our generic handler
+            ErrorHandler.handleGraphQLUserErrors(
+              result.metafieldsSet.userErrors,
+              metafieldBatch,
+              getMetafieldDetails,
+              `batch ${batchIndex + 1}/${metafieldBatches.length}`,
+              4
+            );
+
             failedCount += metafieldBatch.length;
           } else {
             const metafieldCount = result.metafieldsSet.metafields.length;
