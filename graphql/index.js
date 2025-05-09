@@ -12,4 +12,9 @@ module.exports = {
   // Collection queries
   GetCollectionByHandle: require('./GetCollectionByHandle.graphql'),
   GetCollectionById: require('./GetCollectionById.graphql'),
+
+  // Page queries
+  GetPages: require('./GetPages.graphql'),
+  CreatePage: require('./CreatePage.graphql'),
+  UpdatePage: require('./UpdatePage.graphql'),
 };

@@ -1,4 +1,5 @@
 const consola = require('consola');
+const { GetPages, CreatePage, UpdatePage } = require('../graphql');
 
 class PageSyncStrategy {
   constructor(sourceClient, targetClient, options) {
@@ -11,33 +12,8 @@ class PageSyncStrategy {
   // --- Page Methods ---
 
   async fetchPages(client) {
-    const query = `#graphql
-      query GetPages($first: Int!) {
-        pages(first: $first) {
-          edges {
-            node {
-              id
-              title
-              handle
-              bodySummary
-              body
-              templateSuffix
-              isPublished
-              createdAt
-              updatedAt
-              publishedAt
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-        }
-      }
-    `;
-
     try {
-      const response = await client.graphql(query, { first: 100 }, 'GetPages');
+      const response = await client.graphql(GetPages, { first: 100 }, 'GetPages');
       return response.pages.edges.map(edge => edge.node);
     } catch (error) {
       consola.error(`Error fetching pages: ${error.message}`);
@@ -61,27 +37,9 @@ class PageSyncStrategy {
       input.isPublished = page.isPublished;
     }
 
-    const mutation = `#graphql
-      mutation createPage($page: PageCreateInput!) {
-        pageCreate(page: $page) {
-          page {
-            id
-            title
-            handle
-            templateSuffix
-            isPublished
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
-
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(mutation, { page: input }, 'CreatePage');
+        const result = await client.graphql(CreatePage, { page: input }, 'CreatePage');
         if (result.pageCreate.userErrors.length > 0) {
           consola.error(`Failed to create page "${page.title}":`, result.pageCreate.userErrors);
           return null;
@@ -116,27 +74,9 @@ class PageSyncStrategy {
       input.isPublished = page.isPublished;
     }
 
-    const mutation = `#graphql
-      mutation updatePage($id: ID!, $page: PageUpdateInput!) {
-        pageUpdate(id: $id, page: $page) {
-          page {
-            id
-            title
-            handle
-            templateSuffix
-            isPublished
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
-
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(mutation, { id, page: input }, 'UpdatePage');
+        const result = await client.graphql(UpdatePage, { id, page: input }, 'UpdatePage');
         if (result.pageUpdate.userErrors.length > 0) {
           consola.error(`Failed to update page "${page.title}":`, result.pageUpdate.userErrors);
           return null;

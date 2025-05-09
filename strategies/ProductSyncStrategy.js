@@ -13,32 +13,13 @@
  * Weight information is stored in inventoryItem.measurement.weight according to latest Shopify Admin API.
  * Variant options are accessed via selectedOptions instead of deprecated option1/option2/option3 fields.
  *
- * TODO: Refactoring Plan
- * This class has grown too large and should be refactored into smaller, more focused classes:
- *
- * 1. Extract specialized handlers:
- *    - ProductImageHandler - image uploading, synchronization, variant image association
- *    - ProductMetafieldHandler - metafield batching and synchronization
- *    - ProductVariantHandler - variant creation, updating, image association
- *    - ProductPublicationHandler - channel and publication management
- *
- * 2. Create utilities:
- *    - ShopifyIDUtils - ID parsing, conversion, normalization
- *    - LoggerUtils - consistent log formatting and hierarchy
- *
- * 3. Convert to composition pattern:
- *    - Have ProductSyncStrategy use these specialized handlers
- *    - Share client instances and options between handlers
- *    - Maintain consistent logging patterns across handlers
  */
 const consola = require('consola');
-const { SHOPIFY_API_VERSION } = require('../constants');
 const chalk = require('chalk');
 
 // Import utility classes
 const MetafieldHandler = require('../utils/MetafieldHandler');
 const ProductImageHandler = require('../utils/ProductImageHandler');
-const ShopifyIDUtils = require('../utils/ShopifyIDUtils');
 const ProductPublicationHandler = require('../utils/ProductPublicationHandler');
 const ProductBaseHandler = require('../utils/ProductBaseHandler');
 const LoggingUtils = require('../utils/LoggingUtils');
