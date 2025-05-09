@@ -430,6 +430,170 @@ class ProductSyncStrategy {
     }
   }
 
+  async getCollectionByHandle(client, handle) {
+    const query = `#graphql
+      query GetCollectionByHandle($handle: String!) {
+        collectionByHandle(handle: $handle) {
+          id
+          title
+          handle
+        }
+      }
+    `;
+
+    try {
+      const response = await client.graphql(query, { handle }, 'GetCollectionByHandle');
+      return response.collectionByHandle;
+    } catch (error) {
+      LoggingUtils.error(`Error fetching collection by handle: ${error.message}`, 4);
+      return null;
+    }
+  }
+
+  async transformCollectionReferenceMetafields(metafields) {
+    const transformedMetafields = [];
+    let regularCount = 0;
+    let collectionCount = 0;
+    let listCollectionCount = 0;
+    let failedCount = 0;
+
+    LoggingUtils.info(`Starting metafield transformation on ${metafields.length} metafields`, 4);
+
+    for (const metafield of metafields) {
+      // Handle regular metafields normally
+      if (metafield.type !== 'collection_reference' && metafield.type !== 'list.collection_reference') {
+        transformedMetafields.push(metafield);
+        regularCount++;
+        continue;
+      }
+
+      try {
+        // For collection references, we need to resolve the ID through the handle
+        if (metafield.type === 'collection_reference') {
+          // Extract the source collection ID
+          const sourceCollectionId = metafield.value;
+
+          // Get the source collection handle
+          const sourceCollectionQuery = `#graphql
+            query GetCollectionById($id: ID!) {
+              collection(id: $id) {
+                handle
+              }
+            }
+          `;
+          const sourceResponse = await this.sourceClient.graphql(
+            sourceCollectionQuery,
+            { id: sourceCollectionId },
+            'GetCollectionById'
+          );
+
+          if (!sourceResponse.collection) {
+            LoggingUtils.error(`Could not find source collection for ID: ${sourceCollectionId}`, 4);
+            failedCount++;
+            continue;
+          }
+
+          const sourceHandle = sourceResponse.collection.handle;
+          LoggingUtils.info(`Found source collection handle: ${sourceHandle}`, 4);
+
+          // Now look up the collection in the target store by handle
+          const targetCollection = await this.getCollectionByHandle(
+            this.targetClient,
+            sourceHandle
+          );
+
+          if (!targetCollection) {
+            LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
+            failedCount++;
+            continue;
+          }
+
+          const targetId = targetCollection.id;
+          LoggingUtils.info(`Found target collection ID: ${targetId}`, 4);
+
+          // Add the transformed metafield with the target collection ID
+          const transformedMetafield = {
+            ...metafield,
+            value: targetId
+          };
+
+          transformedMetafields.push(transformedMetafield);
+          collectionCount++;
+
+        }
+        // Handle list.collection_reference similarly but with array processing
+        else if (metafield.type === 'list.collection_reference') {
+
+          // Parse the JSON array of collection IDs
+          const sourceCollectionIds = JSON.parse(metafield.value);
+          LoggingUtils.info(`Found ${sourceCollectionIds.length} source collection IDs in list`, 4);
+
+          const targetCollectionIds = [];
+
+          for (const sourceId of sourceCollectionIds) {
+            const sourceCollectionQuery = `#graphql
+              query GetCollectionById($id: ID!) {
+                collection(id: $id) {
+                  handle
+                }
+              }
+            `;
+            const sourceResponse = await this.sourceClient.graphql(
+              sourceCollectionQuery,
+              { id: sourceId },
+              'GetCollectionById'
+            );
+
+            if (!sourceResponse.collection) {
+              LoggingUtils.error(`Could not find source collection for ID: ${sourceId}`, 4);
+              continue;
+            }
+
+            const sourceHandle = sourceResponse.collection.handle;
+            LoggingUtils.info(`Found source collection handle: ${sourceHandle} for ID: ${sourceId}`, 5);
+
+            const targetCollection = await this.getCollectionByHandle(
+              this.targetClient,
+              sourceHandle
+            );
+
+            if (!targetCollection) {
+              LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
+              continue;
+            }
+
+            const targetId = targetCollection.id;
+            LoggingUtils.info(`Found target collection ID: ${targetId} for handle: ${sourceHandle}`, 5);
+            targetCollectionIds.push(targetId);
+          }
+
+          if (targetCollectionIds.length > 0) {
+            const transformedValue = JSON.stringify(targetCollectionIds);
+            const transformedMetafield = {
+              ...metafield,
+              value: transformedValue
+            };
+
+            transformedMetafields.push(transformedMetafield);
+            listCollectionCount++;
+
+            LoggingUtils.info(`Transformed list.collection_reference metafield: ${metafield.namespace}.${metafield.key} with ${targetCollectionIds.length} collections`, 4);
+          } else {
+            LoggingUtils.error(`Failed to transform any collections in list metafield: ${metafield.namespace}.${metafield.key}`, 4);
+            failedCount++;
+          }
+        }
+      } catch (error) {
+        LoggingUtils.error(`Error transforming collection reference metafield: ${error.message}`, 4);
+        failedCount++;
+      }
+    }
+
+    LoggingUtils.info(`Metafield transformation complete: ${regularCount} regular, ${collectionCount} collection refs, ${listCollectionCount} list refs, ${failedCount} failed`, 4);
+
+    return transformedMetafields;
+  }
+
   async createProduct(client, product) {
     // Step 1: First create the product with basic info (without variants)
     const productInput = {
@@ -467,17 +631,23 @@ class ProductSyncStrategy {
 
         // Step 4: Create metafields if any
         if (newProduct.id && product.metafields && product.metafields.length > 0) {
-          // Filter out collection_reference metafields
-          const filteredMetafields = product.metafields.filter(metafield =>
-            metafield.type !== 'collection_reference' &&
-            metafield.type !== 'list.collection_reference'
-          );
+          // Transform collection_reference metafields instead of filtering them out
+          const transformedMetafields = await this.transformCollectionReferenceMetafields(product.metafields);
 
-          if (filteredMetafields.length < product.metafields.length) {
-            LoggingUtils.info(`Skipped ${product.metafields.length - filteredMetafields.length} collection_reference metafields`, 4);
+          // Log the number of metafields before and after transformation
+          LoggingUtils.info(`Processing metafields: ${product.metafields.length} source, ${transformedMetafields.length} after transformation`, 4);
+
+          // Print each transformed metafield for debugging
+          if (this.debug) {
+            transformedMetafields.forEach(metafield => {
+              const valuePreview = typeof metafield.value === 'string' ?
+                `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
+                String(metafield.value);
+              LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 5);
+            });
           }
 
-          await this.metafieldHandler.syncMetafields(newProduct.id, filteredMetafields);
+          await this.metafieldHandler.syncMetafields(newProduct.id, transformedMetafields);
         }
 
         // Step 5: Sync publication status if any
@@ -540,17 +710,23 @@ class ProductSyncStrategy {
 
           // Update metafields if any
           if (product.metafields && product.metafields.length > 0) {
-            // Filter out collection_reference metafields
-            const filteredMetafields = product.metafields.filter(metafield =>
-              metafield.type !== 'collection_reference' &&
-              metafield.type !== 'list.collection_reference'
-            );
+            // Transform collection_reference metafields instead of filtering them out
+            const transformedMetafields = await this.transformCollectionReferenceMetafields(product.metafields);
 
-            if (filteredMetafields.length < product.metafields.length) {
-              LoggingUtils.info(`Skipped ${product.metafields.length - filteredMetafields.length} collection_reference metafields`, 4);
+            // Log the number of metafields before and after transformation
+            LoggingUtils.info(`Processing metafields: ${product.metafields.length} source, ${transformedMetafields.length} after transformation`, 4);
+
+            // Print each transformed metafield for debugging
+            if (this.debug) {
+              transformedMetafields.forEach(metafield => {
+                const valuePreview = typeof metafield.value === 'string' ?
+                  `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
+                  String(metafield.value);
+                LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 5);
+              });
             }
 
-            await this.metafieldHandler.syncMetafields(updatedProduct.id, filteredMetafields);
+            await this.metafieldHandler.syncMetafields(updatedProduct.id, transformedMetafields);
           }
 
           // Sync publication status if any
