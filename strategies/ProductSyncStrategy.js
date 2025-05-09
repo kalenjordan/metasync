@@ -450,6 +450,125 @@ class ProductSyncStrategy {
     }
   }
 
+  /**
+   * Gets a collection by its ID
+   * @param {Object} client - Shopify client
+   * @param {String} id - Collection ID
+   * @returns {Promise<Object>} Collection object with handle
+   */
+  async getCollectionById(client, id) {
+    const query = `#graphql
+      query GetCollectionById($id: ID!) {
+        collection(id: $id) {
+          handle
+        }
+      }
+    `;
+
+    try {
+      const response = await client.graphql(query, { id }, 'GetCollectionById');
+      return response.collection;
+    } catch (error) {
+      LoggingUtils.error(`Could not find collection for ID: ${id}`, 4);
+      return null;
+    }
+  }
+
+  /**
+   * Transform a single collection reference metafield
+   * @param {Object} metafield - The metafield to transform
+   * @returns {Promise<Object|null>} - Transformed metafield or null if failed
+   */
+  async transformSingleCollectionReference(metafield) {
+    try {
+      // Extract the source collection ID
+      const sourceCollectionId = metafield.value;
+
+      // Get the source collection handle
+      const sourceCollection = await this.getCollectionById(this.sourceClient, sourceCollectionId);
+
+      if (!sourceCollection) {
+        return null;
+      }
+
+      const sourceHandle = sourceCollection.handle;
+      LoggingUtils.info(`Found source collection handle: ${sourceHandle}`, 4);
+
+      // Look up the collection in the target store by handle
+      const targetCollection = await this.getCollectionByHandle(this.targetClient, sourceHandle);
+
+      if (!targetCollection) {
+        LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
+        return null;
+      }
+
+      const targetId = targetCollection.id;
+      LoggingUtils.info(`Found target collection ID: ${targetId}`, 4);
+
+      // Return the transformed metafield with the target collection ID
+      return {
+        ...metafield,
+        value: targetId
+      };
+    } catch (error) {
+      LoggingUtils.error(`Error transforming collection reference: ${error.message}`, 4);
+      return null;
+    }
+  }
+
+  /**
+   * Transform a list of collection references metafield
+   * @param {Object} metafield - The metafield containing a list of collection references
+   * @returns {Promise<Object|null>} - Transformed metafield or null if failed
+   */
+  async transformCollectionReferenceList(metafield) {
+    try {
+      // Parse the JSON array of collection IDs
+      const sourceCollectionIds = JSON.parse(metafield.value);
+      LoggingUtils.info(`Found ${sourceCollectionIds.length} source collection IDs in list`, 4);
+
+      const targetCollectionIds = [];
+
+      for (const sourceId of sourceCollectionIds) {
+        // Get the source collection handle
+        const sourceCollection = await this.getCollectionById(this.sourceClient, sourceId);
+
+        if (!sourceCollection) {
+          continue;
+        }
+
+        const sourceHandle = sourceCollection.handle;
+        LoggingUtils.info(`Found source collection handle: ${sourceHandle} for ID: ${sourceId}`, 5);
+
+        // Look up the collection in the target store by handle
+        const targetCollection = await this.getCollectionByHandle(this.targetClient, sourceHandle);
+
+        if (!targetCollection) {
+          LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
+          continue;
+        }
+
+        const targetId = targetCollection.id;
+        LoggingUtils.info(`Found target collection ID: ${targetId} for handle: ${sourceHandle}`, 5);
+        targetCollectionIds.push(targetId);
+      }
+
+      if (targetCollectionIds.length > 0) {
+        const transformedValue = JSON.stringify(targetCollectionIds);
+        return {
+          ...metafield,
+          value: transformedValue
+        };
+      } else {
+        LoggingUtils.error(`Failed to transform any collections in list metafield: ${metafield.namespace}.${metafield.key}`, 4);
+        return null;
+      }
+    } catch (error) {
+      LoggingUtils.error(`Error transforming collection reference list: ${error.message}`, 4);
+      return null;
+    }
+  }
+
   async transformCollectionReferenceMetafields(metafields) {
     const transformedMetafields = [];
     let regularCount = 0;
@@ -467,131 +586,104 @@ class ProductSyncStrategy {
         continue;
       }
 
-      try {
-        // For collection references, we need to resolve the ID through the handle
-        if (metafield.type === 'collection_reference') {
-          // Extract the source collection ID
-          const sourceCollectionId = metafield.value;
+      // Handle collection reference metafields
+      if (metafield.type === 'collection_reference') {
+        const transformedMetafield = await this.transformSingleCollectionReference(metafield);
 
-          // Get the source collection handle
-          const sourceCollectionQuery = `#graphql
-            query GetCollectionById($id: ID!) {
-              collection(id: $id) {
-                handle
-              }
-            }
-          `;
-          const sourceResponse = await this.sourceClient.graphql(
-            sourceCollectionQuery,
-            { id: sourceCollectionId },
-            'GetCollectionById'
-          );
-
-          if (!sourceResponse.collection) {
-            LoggingUtils.error(`Could not find source collection for ID: ${sourceCollectionId}`, 4);
-            failedCount++;
-            continue;
-          }
-
-          const sourceHandle = sourceResponse.collection.handle;
-          LoggingUtils.info(`Found source collection handle: ${sourceHandle}`, 4);
-
-          // Now look up the collection in the target store by handle
-          const targetCollection = await this.getCollectionByHandle(
-            this.targetClient,
-            sourceHandle
-          );
-
-          if (!targetCollection) {
-            LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
-            failedCount++;
-            continue;
-          }
-
-          const targetId = targetCollection.id;
-          LoggingUtils.info(`Found target collection ID: ${targetId}`, 4);
-
-          // Add the transformed metafield with the target collection ID
-          const transformedMetafield = {
-            ...metafield,
-            value: targetId
-          };
-
+        if (transformedMetafield) {
           transformedMetafields.push(transformedMetafield);
           collectionCount++;
-
+        } else {
+          failedCount++;
         }
-        // Handle list.collection_reference similarly but with array processing
-        else if (metafield.type === 'list.collection_reference') {
+      }
+      // Handle list.collection_reference metafields
+      else if (metafield.type === 'list.collection_reference') {
+        const transformedMetafield = await this.transformCollectionReferenceList(metafield);
 
-          // Parse the JSON array of collection IDs
-          const sourceCollectionIds = JSON.parse(metafield.value);
-          LoggingUtils.info(`Found ${sourceCollectionIds.length} source collection IDs in list`, 4);
-
-          const targetCollectionIds = [];
-
-          for (const sourceId of sourceCollectionIds) {
-            const sourceCollectionQuery = `#graphql
-              query GetCollectionById($id: ID!) {
-                collection(id: $id) {
-                  handle
-                }
-              }
-            `;
-            const sourceResponse = await this.sourceClient.graphql(
-              sourceCollectionQuery,
-              { id: sourceId },
-              'GetCollectionById'
-            );
-
-            if (!sourceResponse.collection) {
-              LoggingUtils.error(`Could not find source collection for ID: ${sourceId}`, 4);
-              continue;
-            }
-
-            const sourceHandle = sourceResponse.collection.handle;
-            LoggingUtils.info(`Found source collection handle: ${sourceHandle} for ID: ${sourceId}`, 5);
-
-            const targetCollection = await this.getCollectionByHandle(
-              this.targetClient,
-              sourceHandle
-            );
-
-            if (!targetCollection) {
-              LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
-              continue;
-            }
-
-            const targetId = targetCollection.id;
-            LoggingUtils.info(`Found target collection ID: ${targetId} for handle: ${sourceHandle}`, 5);
-            targetCollectionIds.push(targetId);
-          }
-
-          if (targetCollectionIds.length > 0) {
-            const transformedValue = JSON.stringify(targetCollectionIds);
-            const transformedMetafield = {
-              ...metafield,
-              value: transformedValue
-            };
-
-            transformedMetafields.push(transformedMetafield);
-            listCollectionCount++;
-
-            LoggingUtils.info(`Transformed list.collection_reference metafield: ${metafield.namespace}.${metafield.key} with ${targetCollectionIds.length} collections`, 4);
-          } else {
-            LoggingUtils.error(`Failed to transform any collections in list metafield: ${metafield.namespace}.${metafield.key}`, 4);
-            failedCount++;
-          }
+        if (transformedMetafield) {
+          transformedMetafields.push(transformedMetafield);
+          listCollectionCount++;
+          LoggingUtils.info(`Transformed list.collection_reference metafield: ${metafield.namespace}.${metafield.key}`, 4);
+        } else {
+          failedCount++;
         }
-      } catch (error) {
-        LoggingUtils.error(`Error transforming collection reference metafield: ${error.message}`, 4);
-        failedCount++;
       }
     }
 
     LoggingUtils.info(`Metafield transformation complete: ${regularCount} regular, ${collectionCount} collection refs, ${listCollectionCount} list refs, ${failedCount} failed`, 4);
 
     return transformedMetafields;
+  }
+
+  /**
+   * Filter metafields based on namespace and key options
+   * @param {Array} metafields - Array of metafields to filter
+   * @returns {Array} - Filtered metafields
+   */
+  filterMetafields(metafields) {
+    if (!this.options.namespace && !this.options.key) {
+      return metafields;
+    }
+
+    LoggingUtils.info(`Filtering metafields by ${this.options.namespace ? 'namespace: ' + this.options.namespace : ''} ${this.options.key ? 'key: ' + this.options.key : ''}`, 4);
+
+    const filteredMetafields = metafields.filter(metafield => {
+      // Filter by namespace if provided
+      if (this.options.namespace && metafield.namespace !== this.options.namespace) {
+        return false;
+      }
+
+      // Filter by key if provided
+      if (this.options.key) {
+        // Handle case where key includes namespace (namespace.key format)
+        if (this.options.key.includes('.')) {
+          const [keyNamespace, keyName] = this.options.key.split('.');
+          return metafield.namespace === keyNamespace && metafield.key === keyName;
+        } else {
+          // Key without namespace
+          return metafield.key === this.options.key;
+        }
+      }
+
+      return true;
+    });
+
+    LoggingUtils.info(`Filtered from ${metafields.length} to ${filteredMetafields.length} metafields`, 4);
+    return filteredMetafields;
+  }
+
+  /**
+   * Process and transform metafields for a product
+   * @param {String} productId - The product ID
+   * @param {Array} metafields - Raw metafields to process
+   * @returns {Promise<void>}
+   */
+  async processProductMetafields(productId, metafields) {
+    if (!metafields || metafields.length === 0) {
+      return;
+    }
+
+    // Filter metafields based on namespace/key options
+    const filteredMetafields = this.filterMetafields(metafields);
+
+    // Transform collection_reference metafields
+    const transformedMetafields = await this.transformCollectionReferenceMetafields(filteredMetafields);
+
+    // Log the number of metafields before and after transformation
+    LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ${transformedMetafields.length} after transformation`, 4);
+
+    // Print each transformed metafield for debugging
+    if (this.debug) {
+      transformedMetafields.forEach(metafield => {
+        const valuePreview = typeof metafield.value === 'string' ?
+          `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
+          String(metafield.value);
+        LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 5);
+      });
+    }
+
+    await this.metafieldHandler.syncMetafields(productId, transformedMetafields);
   }
 
   async createProduct(client, product) {
@@ -629,55 +721,9 @@ class ProductSyncStrategy {
           await this.imageHandler.syncProductImages(newProduct.id, product.images);
         }
 
-        // Step 4: Create metafields if any
+        // Step 4: Process and create metafields
         if (newProduct.id && product.metafields && product.metafields.length > 0) {
-          // Filter metafields by namespace/key if specified in options
-          let filteredMetafields = product.metafields;
-
-          if (this.options.namespace || this.options.key) {
-            LoggingUtils.info(`Filtering metafields by ${this.options.namespace ? 'namespace: ' + this.options.namespace : ''} ${this.options.key ? 'key: ' + this.options.key : ''}`, 4);
-
-            filteredMetafields = product.metafields.filter(metafield => {
-              // Filter by namespace if provided
-              if (this.options.namespace && metafield.namespace !== this.options.namespace) {
-                return false;
-              }
-
-              // Filter by key if provided
-              if (this.options.key) {
-                // Handle case where key includes namespace (namespace.key format)
-                if (this.options.key.includes('.')) {
-                  const [keyNamespace, keyName] = this.options.key.split('.');
-                  return metafield.namespace === keyNamespace && metafield.key === keyName;
-                } else {
-                  // Key without namespace
-                  return metafield.key === this.options.key;
-                }
-              }
-
-              return true;
-            });
-
-            LoggingUtils.info(`Filtered from ${product.metafields.length} to ${filteredMetafields.length} metafields`, 4);
-          }
-
-          // Transform collection_reference metafields
-          const transformedMetafields = await this.transformCollectionReferenceMetafields(filteredMetafields);
-
-          // Log the number of metafields before and after transformation
-          LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ${transformedMetafields.length} after transformation`, 4);
-
-          // Print each transformed metafield for debugging
-          if (this.debug) {
-            transformedMetafields.forEach(metafield => {
-              const valuePreview = typeof metafield.value === 'string' ?
-                `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
-                String(metafield.value);
-              LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 5);
-            });
-          }
-
-          await this.metafieldHandler.syncMetafields(newProduct.id, transformedMetafields);
+          await this.processProductMetafields(newProduct.id, product.metafields);
         }
 
         // Step 5: Sync publication status if any
@@ -731,68 +777,19 @@ class ProductSyncStrategy {
           LoggingUtils.info(`No variants to update for "${product.title}"`, 4);
         }
 
-        // Step 2: Sync images and metafields
-        if (updatedProduct.id) {
-          // Update images if any
-          if (product.images && product.images.length > 0) {
-            await this.imageHandler.syncProductImages(updatedProduct.id, product.images);
-          }
+        // Step 2: Sync images
+        if (updatedProduct.id && product.images && product.images.length > 0) {
+          await this.imageHandler.syncProductImages(updatedProduct.id, product.images);
+        }
 
-          // Update metafields if any
-          if (product.metafields && product.metafields.length > 0) {
-            // Filter metafields by namespace/key if specified in options
-            let filteredMetafields = product.metafields;
+        // Step 3: Process and update metafields
+        if (updatedProduct.id && product.metafields && product.metafields.length > 0) {
+          await this.processProductMetafields(updatedProduct.id, product.metafields);
+        }
 
-            if (this.options.namespace || this.options.key) {
-              LoggingUtils.info(`Filtering metafields by ${this.options.namespace ? 'namespace: ' + this.options.namespace : ''} ${this.options.key ? 'key: ' + this.options.key : ''}`, 4);
-
-              filteredMetafields = product.metafields.filter(metafield => {
-                // Filter by namespace if provided
-                if (this.options.namespace && metafield.namespace !== this.options.namespace) {
-                  return false;
-                }
-
-                // Filter by key if provided
-                if (this.options.key) {
-                  // Handle case where key includes namespace (namespace.key format)
-                  if (this.options.key.includes('.')) {
-                    const [keyNamespace, keyName] = this.options.key.split('.');
-                    return metafield.namespace === keyNamespace && metafield.key === keyName;
-                  } else {
-                    // Key without namespace
-                    return metafield.key === this.options.key;
-                  }
-                }
-
-                return true;
-              });
-
-              LoggingUtils.info(`Filtered from ${product.metafields.length} to ${filteredMetafields.length} metafields`, 4);
-            }
-
-            // Transform collection_reference metafields
-            const transformedMetafields = await this.transformCollectionReferenceMetafields(filteredMetafields);
-
-            // Log the number of metafields before and after transformation
-            LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ${transformedMetafields.length} after transformation`, 4);
-
-            // Print each transformed metafield for debugging
-            if (this.debug) {
-              transformedMetafields.forEach(metafield => {
-                const valuePreview = typeof metafield.value === 'string' ?
-                  `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
-                  String(metafield.value);
-                LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 5);
-              });
-            }
-
-            await this.metafieldHandler.syncMetafields(updatedProduct.id, transformedMetafields);
-          }
-
-          // Sync publication status if any
-          if (product.publications && product.publications.length > 0) {
-            await this.publicationHandler.syncProductPublications(updatedProduct.id, product.publications);
-          }
+        // Step 4: Sync publication status
+        if (updatedProduct.id && product.publications && product.publications.length > 0) {
+          await this.publicationHandler.syncProductPublications(updatedProduct.id, product.publications);
         }
 
         return updatedProduct;
