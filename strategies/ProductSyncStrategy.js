@@ -44,6 +44,14 @@ const ProductBaseHandler = require('../utils/ProductBaseHandler');
 const LoggingUtils = require('../utils/LoggingUtils');
 const ProductVariantHandler = require('../utils/ProductVariantHandler');
 
+// Import GraphQL queries
+const {
+  GetProducts,
+  GetProductByHandle,
+  GetCollectionByHandle,
+  GetCollectionById
+} = require('../graphql');
+
 class ProductSyncStrategy {
   constructor(sourceClient, targetClient, options) {
     this.sourceClient = sourceClient;
@@ -90,118 +98,6 @@ class ProductSyncStrategy {
       consola.info(`Starting pagination from cursor: ${chalk.blue(cursor)}`);
     }
 
-    // Construct the GraphQL query for products
-    const query = `#graphql
-      query GetProducts($first: Int!, $query: String, $after: String) {
-        products(first: $first, query: $query, after: $after) {
-          edges {
-            node {
-              id
-              title
-              handle
-              description
-              descriptionHtml
-              vendor
-              productType
-              status
-              tags
-              options {
-                name
-                values
-              }
-              publications(first: 20) {
-                edges {
-                  node {
-                    channel {
-                      id
-                      name
-                      handle
-                    }
-                    publishDate
-                    isPublished
-                  }
-                }
-              }
-              images(first: 10) {
-                edges {
-                  node {
-                    id
-                    src
-                    altText
-                    width
-                    height
-                  }
-                }
-              }
-              variants(first: 100) {
-                edges {
-                  node {
-                    id
-                    title
-                    sku
-                    price
-                    compareAtPrice
-                    inventoryQuantity
-                    inventoryPolicy
-                    inventoryItem {
-                      id
-                      tracked
-                      requiresShipping
-                      measurement {
-                        weight {
-                          value
-                          unit
-                        }
-                      }
-                    }
-                    taxable
-                    barcode
-                    selectedOptions {
-                      name
-                      value
-                    }
-                    image {
-                      id
-                      src
-                      altText
-                      width
-                      height
-                    }
-                    metafields(first: 50) {
-                      edges {
-                        node {
-                          id
-                          namespace
-                          key
-                          value
-                          type
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              metafields(first: 100) {
-                edges {
-                  node {
-                    id
-                    namespace
-                    key
-                    value
-                    type
-                  }
-                }
-              }
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-        }
-      }
-    `;
-
     // Return an async generator function
     return {
       // Method to fetch the next batch
@@ -221,7 +117,7 @@ class ProductSyncStrategy {
             after: cursor
           };
 
-          const response = await client.graphql(query, variables, 'GetProducts');
+          const response = await client.graphql(GetProducts, variables, 'GetProducts');
 
           // Process products
           const batchProducts = response.products.edges.map(edge => {
@@ -282,111 +178,8 @@ class ProductSyncStrategy {
   }
 
   async getProductByHandle(client, handle) {
-    const query = `#graphql
-      query GetProductByHandle($handle: String!) {
-        productByHandle(handle: $handle) {
-          id
-          title
-          handle
-          description
-          descriptionHtml
-          vendor
-          productType
-          status
-          tags
-          options {
-            name
-            values
-          }
-          publications(first: 20) {
-            edges {
-              node {
-                channel {
-                  id
-                  name
-                  handle
-                }
-                publishDate
-                isPublished
-              }
-            }
-          }
-          images(first: 10) {
-            edges {
-              node {
-                id
-                src
-                altText
-                width
-                height
-              }
-            }
-          }
-          variants(first: 100) {
-            edges {
-              node {
-                id
-                title
-                sku
-                price
-                compareAtPrice
-                inventoryQuantity
-                inventoryPolicy
-                inventoryItem {
-                  id
-                  tracked
-                  requiresShipping
-                  measurement {
-                    weight {
-                      value
-                      unit
-                    }
-                  }
-                }
-                taxable
-                barcode
-                selectedOptions {
-                  name
-                  value
-                }
-                image {
-                  id
-                  src
-                  altText
-                  width
-                  height
-                }
-                metafields(first: 50) {
-                  edges {
-                    node {
-                      id
-                      namespace
-                      key
-                      value
-                      type
-                    }
-                  }
-                }
-              }
-            }
-          }
-          metafields(first: 100) {
-            edges {
-              node {
-                id
-                namespace
-                key
-                value
-                type
-              }
-            }
-          }
-        }
-      }
-    `;
-
     try {
-      const response = await client.graphql(query, { handle }, 'GetProductByHandle');
+      const response = await client.graphql(GetProductByHandle, { handle }, 'GetProductByHandle');
 
       if (!response.productByHandle) {
         return null;
@@ -431,18 +224,8 @@ class ProductSyncStrategy {
   }
 
   async getCollectionByHandle(client, handle) {
-    const query = `#graphql
-      query GetCollectionByHandle($handle: String!) {
-        collectionByHandle(handle: $handle) {
-          id
-          title
-          handle
-        }
-      }
-    `;
-
     try {
-      const response = await client.graphql(query, { handle }, 'GetCollectionByHandle');
+      const response = await client.graphql(GetCollectionByHandle, { handle }, 'GetCollectionByHandle');
       return response.collectionByHandle;
     } catch (error) {
       LoggingUtils.error(`Error fetching collection by handle: ${error.message}`, 4);
@@ -457,16 +240,8 @@ class ProductSyncStrategy {
    * @returns {Promise<Object>} Collection object with handle
    */
   async getCollectionById(client, id) {
-    const query = `#graphql
-      query GetCollectionById($id: ID!) {
-        collection(id: $id) {
-          handle
-        }
-      }
-    `;
-
     try {
-      const response = await client.graphql(query, { id }, 'GetCollectionById');
+      const response = await client.graphql(GetCollectionById, { id }, 'GetCollectionById');
       return response.collection;
     } catch (error) {
       LoggingUtils.error(`Could not find collection for ID: ${id}`, 4);
