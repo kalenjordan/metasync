@@ -13,23 +13,25 @@ This project syncs Shopify Metaobject and Metafield definitions between stores.
     - Parsing command-line arguments using `commander`.
     - Reading store credentials from `.shops.json`.
     - Setting up Shopify API clients using `shopify-api-node`.
-    - Wrapping the clients with `ShopifyClientWrapper` for logging.
+    - Wrapping the clients with `ShopifyClient` for logging.
     - Selecting and executing the appropriate sync strategy based on the `--resource-type` option.
     - Displaying the final summary.
 
-- **`shopifyClientWrapper.js`**: [shopifyClientWrapper.js](mdc:shopifyClientWrapper.js) provides a wrapper around the `shopify-api-node` client to centralize GraphQL call logging using `consola`. It formats debug logs based on the `--debug` flag.
+- **`utils/ShopifyClient.js`**: [utils/ShopifyClient.js](mdc:utils/ShopifyClient.js) provides a wrapper around the `shopify-api-node` client to centralize GraphQL call logging using `consola`. It formats debug logs based on the `--debug` flag.
 
-- **`.shops.json`**: [`.shops.json`](mdc:.shops.json) (not committed, example in `run.js` commenffts) stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`).
+- **`.shops.json`**: [`.shops.json`](mdc:.shops.json) (not committed, example in `.shops.json.example`) stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`).
 
 ## Strategy Pattern
 
 The core sync logic is implemented using the Strategy pattern, located in the `strategies/` directory.
 
 - **`strategies/`**: Contains strategy classes for different resource types.
+    - **`BaseMetafieldSyncStrategy.js`**: [strategies/BaseMetafieldSyncStrategy.js](mdc:strategies/BaseMetafieldSyncStrategy.js) is the base class for all metafield sync strategies.
     - **`MetaobjectSyncStrategy.js`**: [strategies/MetaobjectSyncStrategy.js](mdc:strategies/MetaobjectSyncStrategy.js) handles all logic related to syncing Metaobject definitions and data (fetching, creating, updating, reconciling).
-    - **`ProductMetafieldSyncStrategy.js`**: [strategies/ProductMetafieldSyncStrategy.js](mdc:strategies/ProductMetafieldSyncStrategy.js) handles syncing Product Metafield definitions (fetching, creating, updating, reconciling).
-    - **`ProductSyncStrategy.js`**: @strategies/ProductSyncStrategy.js handles syncing Products between Shopify stores, including variants, images, metafields, and publication channels.
-    - *Future strategies for other resource types (e.g., Customer Metafields) would be added here.*
+    - **`ProductMetafieldSyncStrategy.js`**: [strategies/ProductMetafieldSyncStrategy.js](mdc:strategies/ProductMetafieldSyncStrategy.js) handles syncing Product Metafield definitions.
+    - **`ProductSyncStrategy.js`**: [strategies/ProductSyncStrategy.js](mdc:strategies/ProductSyncStrategy.js) handles syncing Products between Shopify stores, including variants, images, metafields, and publication channels.
+    - **`PageSyncStrategy.js`**: [strategies/PageSyncStrategy.js](mdc:strategies/PageSyncStrategy.js) handles syncing Pages between Shopify stores.
+    - Additional metafield sync strategies for various resources (Customers, Variants, Orders, Companies).
 
 Each strategy class typically:
 - Takes the wrapped source/target clients and options in its constructor.
@@ -37,16 +39,20 @@ Each strategy class typically:
 - Contains methods for fetching, creating, and updating the specific resource type.
 - May contain helper methods specific to that resource type.
 - Includes logic for listing available definitions if required options are missing.
+
 ## Utility Classes
 
 The project uses specialized utility classes to handle specific aspects of Shopify synchronization:
 
 - **`utils/`**: Contains utility classes that provide focused functionality.
-    - **`MetafieldHandler.js`**: @utils/MetafieldHandler.js manages batched metafield operations, respecting Shopify's 25-metafield limit per API call.
-    - **`ProductImageHandler.js`**: @utils/ProductImageHandler.js handles image uploads and variant image associations.
-    - **`ProductPublicationHandler.js`**: @utils/ProductPublicationHandler.js manages publication channels and publishing products to Shopify sales channels.
-    - **`ProductBaseHandler.js`**: @utils/ProductBaseHandler.js provides core product CRUD operations (create, read, update, delete).
-    - **`ShopifyIDUtils.js`**: @utils/ShopifyIDUtils.js provides utility methods for Shopify ID validation and conversion.
-    - **`LoggingUtils.js`**: @utils/LoggingUtils.js provides consistent log formatting with indentation, symbols, and color coding.
+    - **`MetafieldHandler.js`**: [utils/MetafieldHandler.js](mdc:utils/MetafieldHandler.js) manages batched metafield operations, respecting Shopify's 25-metafield limit per API call.
+    - **`ProductImageHandler.js`**: [utils/ProductImageHandler.js](mdc:utils/ProductImageHandler.js) handles image uploads and variant image associations.
+    - **`ProductPublicationHandler.js`**: [utils/ProductPublicationHandler.js](mdc:utils/ProductPublicationHandler.js) manages publication channels and publishing products to Shopify sales channels.
+    - **`ProductBaseHandler.js`**: [utils/ProductBaseHandler.js](mdc:utils/ProductBaseHandler.js) provides core product CRUD operations (create, read, update, delete).
+    - **`ProductVariantHandler.js`**: [utils/ProductVariantHandler.js](mdc:utils/ProductVariantHandler.js) handles product variant operations.
+    - **`ShopifyIDUtils.js`**: [utils/ShopifyIDUtils.js](mdc:utils/ShopifyIDUtils.js) provides utility methods for Shopify ID validation and conversion.
+    - **`LoggingUtils.js`**: [utils/LoggingUtils.js](mdc:utils/LoggingUtils.js) provides consistent log formatting with indentation, symbols, and color coding.
+    - **`ErrorHandler.js`**: [utils/ErrorHandler.js](mdc:utils/ErrorHandler.js) provides standardized error handling.
+    - **`commandSetup.js`**: [utils/commandSetup.js](mdc:utils/commandSetup.js) handles command-line interface setup.
 
 The utility classes follow a composition pattern, where strategy classes initialize and use these utilities rather than inheriting from them. This approach improves modularity and maintainability by breaking down complex operations into specialized components.

@@ -1,0 +1,24 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Naming Conventions
+
+## File Naming
+
+- **Utility Files**: All files in the `utils/` directory must follow `CamelCase.js` naming format
+  - Examples: `MetafieldHandler.js`, `ProductImageHandler.js`, `ShopifyIDUtils.js`
+
+- **Strategy Files**: Strategy classes in the `strategies/` directory should follow `CamelCase.js` naming format
+  - Examples: `MetaobjectSyncStrategy.js`, `ProductMetafieldSyncStrategy.js`
+
+## Class Naming
+
+Classes should match their filename:
+- A file named `MetafieldHandler.js` should export a class called `MetafieldHandler`
+
+## Method Naming
+
+- Use camelCase for method names (e.g., `createMetafield()`, `updateProduct()`)
+- Getter methods should begin with "get" (e.g., `getProductById()`)
