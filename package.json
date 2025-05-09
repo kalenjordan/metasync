@@ -7,7 +7,9 @@
     "metasync": "./run.js"
   },
   "scripts": {
-    "sync": "node run.js"
+    "sync": "node run.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "keywords": [
     "shopify",
@@ -23,6 +25,10 @@
     "commander": "^11.1.0",
     "consola": "^3.4.2",
     "shopify-api-node": "^3.15.0"
+  },
+  "devDependencies": {
+    "execa": "^5.1.1",
+    "jest": "^29.7.0"
   },
   "engines": {
     "node": ">=16.0.0"
