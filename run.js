@@ -7,6 +7,7 @@ const Shopify = require('shopify-api-node');
 const ShopifyClient = require('./utils/ShopifyClient'); // Updated import path and class name
 const consola = require('consola'); // Import consola
 const { SHOPIFY_API_VERSION } = require('./constants'); // Import centralized constants
+const { execSync } = require('child_process'); // Import for git commit access
 // Require strategies as needed (or dynamically)
 const MetaobjectSyncStrategy = require('./strategies/MetaobjectSyncStrategy');
 const ProductMetafieldSyncStrategy = require('./strategies/ProductMetafieldSyncStrategy');
@@ -331,7 +332,16 @@ Examples:
       }
     }
 
+    // Get current git commit
+    let currentCommit = 'unknown';
+    try {
+      currentCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    } catch (error) {
+      consola.warn('Could not determine current git commit');
+    }
+
     // Display info
+    consola.info(`Version: ${currentCommit}`);
     consola.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     consola.info(`Limit: ${this.options.limit}`);
 

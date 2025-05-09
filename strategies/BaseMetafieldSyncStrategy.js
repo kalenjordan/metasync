@@ -55,10 +55,6 @@ class BaseMetafieldSyncStrategy {
       description: definition.description || "",
       type: definition.type.name,
       validations: definition.validations || [],
-      access: {
-        admin: definition.access?.admin === "MERCHANT_READ_WRITE" ? "PUBLIC_READ_WRITE" : definition.access?.admin || "PUBLIC_READ_WRITE",
-        storefront: definition.access?.storefront || "PUBLIC_READ",
-      },
       pin: definition.pinnedPosition != null && definition.pinnedPosition >= 0
     };
     const mutation = `#graphql
@@ -96,10 +92,6 @@ class BaseMetafieldSyncStrategy {
       name: definition.name,
       description: definition.description || "",
       validations: definition.validations || [],
-      access: {
-        admin: definition.access?.admin === "MERCHANT_READ_WRITE" ? "PUBLIC_READ_WRITE" : definition.access?.admin || "PUBLIC_READ_WRITE",
-        storefront: definition.access?.storefront || "PUBLIC_READ",
-      },
       // Required identification fields for update
       ownerType: this.ownerType,
       namespace: definition.namespace, // Use source namespace for identification
