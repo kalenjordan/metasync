@@ -467,7 +467,17 @@ class ProductSyncStrategy {
 
         // Step 4: Create metafields if any
         if (newProduct.id && product.metafields && product.metafields.length > 0) {
-          await this.metafieldHandler.syncMetafields(newProduct.id, product.metafields);
+          // Filter out collection_reference metafields
+          const filteredMetafields = product.metafields.filter(metafield =>
+            metafield.type !== 'collection_reference' &&
+            metafield.type !== 'list.collection_reference'
+          );
+
+          if (filteredMetafields.length < product.metafields.length) {
+            LoggingUtils.info(`Skipped ${product.metafields.length - filteredMetafields.length} collection_reference metafields`, 4);
+          }
+
+          await this.metafieldHandler.syncMetafields(newProduct.id, filteredMetafields);
         }
 
         // Step 5: Sync publication status if any
@@ -530,7 +540,17 @@ class ProductSyncStrategy {
 
           // Update metafields if any
           if (product.metafields && product.metafields.length > 0) {
-            await this.metafieldHandler.syncMetafields(updatedProduct.id, product.metafields);
+            // Filter out collection_reference metafields
+            const filteredMetafields = product.metafields.filter(metafield =>
+              metafield.type !== 'collection_reference' &&
+              metafield.type !== 'list.collection_reference'
+            );
+
+            if (filteredMetafields.length < product.metafields.length) {
+              LoggingUtils.info(`Skipped ${product.metafields.length - filteredMetafields.length} collection_reference metafields`, 4);
+            }
+
+            await this.metafieldHandler.syncMetafields(updatedProduct.id, filteredMetafields);
           }
 
           // Sync publication status if any
