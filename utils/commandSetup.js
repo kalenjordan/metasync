@@ -109,6 +109,7 @@ Available resources:
   product       Sync product data
   metaobject    Sync metaobject data
   page          Sync page data
+  collection    Sync collection data
   customer      Sync customer data (if implemented)
   order         Sync order data (if implemented)
   variant       Sync variant data (if implemented)
@@ -116,10 +117,11 @@ Available resources:
 Examples:
   metasync data product --handle my-product
   metasync data metaobject --type territory
+  metasync data collection
     `);
 
   // Define resources and their options for data commands
-  const resources = ["product", "metaobject", "page", "customer", "order", "variant"];
+  const resources = ["product", "metaobject", "page", "collection", "customer", "order", "variant"];
   resources.forEach(resource => {
     const cmd = dataCommand
       .command(resource)
@@ -152,6 +154,16 @@ Examples:
     } else if (resource === "page") {
       cmd.option("--handle <handle>", "Page handle to sync")
          .option("--id <id>", "Page ID to sync");
+    } else if (resource === "collection") {
+      cmd.option("--handle <handle>", "Collection handle to sync")
+         .option("--id <id>", "Collection ID to sync")
+         .option("--skip-automated", "Skip automated (smart) collections", false)
+         .addHelpText('after', `
+Examples:
+  metasync data collection --source shopA --target shopB
+  metasync data collection --handle my-collection --source shopA --target shopB
+  metasync data collection --skip-automated --source shopA --target shopB
+         `);
     }
 
     // Add action

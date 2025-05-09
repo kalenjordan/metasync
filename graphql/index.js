@@ -10,8 +10,11 @@ module.exports = {
   GetProductByHandle: require('./GetProductByHandle.graphql'),
 
   // Collection queries
+  GetCollections: require('./GetCollections.graphql'),
   GetCollectionByHandle: require('./GetCollectionByHandle.graphql'),
   GetCollectionById: require('./GetCollectionById.graphql'),
+  CreateCollection: require('./CreateCollection.graphql'),
+  UpdateCollection: require('./UpdateCollection.graphql'),
 
   // Page queries
   GetPages: require('./GetPages.graphql'),

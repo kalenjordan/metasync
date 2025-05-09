@@ -106,7 +106,7 @@ class MetaSyncCli {
   }
 
   _validateResourceType() {
-    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page'];
+    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page', 'collection'];
 
     // Check if resource type was provided
     if (!this.options.resource) {
