@@ -631,11 +631,41 @@ class ProductSyncStrategy {
 
         // Step 4: Create metafields if any
         if (newProduct.id && product.metafields && product.metafields.length > 0) {
-          // Transform collection_reference metafields instead of filtering them out
-          const transformedMetafields = await this.transformCollectionReferenceMetafields(product.metafields);
+          // Filter metafields by namespace/key if specified in options
+          let filteredMetafields = product.metafields;
+
+          if (this.options.namespace || this.options.key) {
+            LoggingUtils.info(`Filtering metafields by ${this.options.namespace ? 'namespace: ' + this.options.namespace : ''} ${this.options.key ? 'key: ' + this.options.key : ''}`, 4);
+
+            filteredMetafields = product.metafields.filter(metafield => {
+              // Filter by namespace if provided
+              if (this.options.namespace && metafield.namespace !== this.options.namespace) {
+                return false;
+              }
+
+              // Filter by key if provided
+              if (this.options.key) {
+                // Handle case where key includes namespace (namespace.key format)
+                if (this.options.key.includes('.')) {
+                  const [keyNamespace, keyName] = this.options.key.split('.');
+                  return metafield.namespace === keyNamespace && metafield.key === keyName;
+                } else {
+                  // Key without namespace
+                  return metafield.key === this.options.key;
+                }
+              }
+
+              return true;
+            });
+
+            LoggingUtils.info(`Filtered from ${product.metafields.length} to ${filteredMetafields.length} metafields`, 4);
+          }
+
+          // Transform collection_reference metafields
+          const transformedMetafields = await this.transformCollectionReferenceMetafields(filteredMetafields);
 
           // Log the number of metafields before and after transformation
-          LoggingUtils.info(`Processing metafields: ${product.metafields.length} source, ${transformedMetafields.length} after transformation`, 4);
+          LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ${transformedMetafields.length} after transformation`, 4);
 
           // Print each transformed metafield for debugging
           if (this.debug) {
@@ -710,11 +740,41 @@ class ProductSyncStrategy {
 
           // Update metafields if any
           if (product.metafields && product.metafields.length > 0) {
-            // Transform collection_reference metafields instead of filtering them out
-            const transformedMetafields = await this.transformCollectionReferenceMetafields(product.metafields);
+            // Filter metafields by namespace/key if specified in options
+            let filteredMetafields = product.metafields;
+
+            if (this.options.namespace || this.options.key) {
+              LoggingUtils.info(`Filtering metafields by ${this.options.namespace ? 'namespace: ' + this.options.namespace : ''} ${this.options.key ? 'key: ' + this.options.key : ''}`, 4);
+
+              filteredMetafields = product.metafields.filter(metafield => {
+                // Filter by namespace if provided
+                if (this.options.namespace && metafield.namespace !== this.options.namespace) {
+                  return false;
+                }
+
+                // Filter by key if provided
+                if (this.options.key) {
+                  // Handle case where key includes namespace (namespace.key format)
+                  if (this.options.key.includes('.')) {
+                    const [keyNamespace, keyName] = this.options.key.split('.');
+                    return metafield.namespace === keyNamespace && metafield.key === keyName;
+                  } else {
+                    // Key without namespace
+                    return metafield.key === this.options.key;
+                  }
+                }
+
+                return true;
+              });
+
+              LoggingUtils.info(`Filtered from ${product.metafields.length} to ${filteredMetafields.length} metafields`, 4);
+            }
+
+            // Transform collection_reference metafields
+            const transformedMetafields = await this.transformCollectionReferenceMetafields(filteredMetafields);
 
             // Log the number of metafields before and after transformation
-            LoggingUtils.info(`Processing metafields: ${product.metafields.length} source, ${transformedMetafields.length} after transformation`, 4);
+            LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ${transformedMetafields.length} after transformation`, 4);
 
             // Print each transformed metafield for debugging
             if (this.debug) {

@@ -131,11 +131,19 @@ class MetaSyncCli {
     if (this.options.command === "define") {
       // Validations for define command
       if (metafieldResourceTypes.includes(this.options.resource)) {
-        // If key is provided, ensure it matches the namespace
-        if (this.options.key && this.options.namespace &&
-            !this.options.key.startsWith(this.options.namespace + '.')) {
-          consola.error(`Error: Provided --key "${this.options.key}" does not start with the provided --namespace "${this.options.namespace}".`);
-          process.exit(1);
+        // If key is provided, ensure it's properly formatted with namespace
+        if (this.options.key && this.options.namespace) {
+          // Check if key already includes the namespace
+          if (!this.options.key.includes('.')) {
+            // Key doesn't have a dot, so it's not namespace-prefixed
+            // Automatically modify the key to include the namespace
+            this.options.key = `${this.options.namespace}.${this.options.key}`;
+            consola.info(`Formatted key as: "${this.options.key}"`);
+          } else if (!this.options.key.startsWith(this.options.namespace + '.')) {
+            // Key includes a dot but doesn't start with the namespace
+            consola.error(`Error: Provided --key "${this.options.key}" does not match the provided --namespace "${this.options.namespace}".`);
+            process.exit(1);
+          }
         }
       }
     } else if (this.options.command === "data") {

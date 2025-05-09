@@ -118,9 +118,8 @@ Examples:
   metasync data metaobject --type territory
     `);
 
-  // Data subcommands
-  const resources = ["product", "customer", "order", "variant", "page", "metaobject"];
-
+  // Define resources and their options for data commands
+  const resources = ["product", "metaobject", "page", "customer", "order", "variant"];
   resources.forEach(resource => {
     const cmd = dataCommand
       .command(resource)
@@ -128,29 +127,31 @@ Examples:
 
     // Add resource-specific options
     if (resource === "product") {
-      cmd.option("--handle <handle>", "Specific product handle to sync")
-        .option("--force-recreate", "Delete and recreate products instead of updating", false)
-        .option("--batch-size <size>", "Number of products to process in each batch", 25)
-        .option("--start-cursor <cursor>", "Pagination cursor to start from (for resuming interrupted syncs)")
-        .addHelpText('after', `
+      cmd.option("--handle <handle>", "Product handle to sync")
+         .option("--id <id>", "Product ID to sync")
+         .option("--namespace <namespace>", "Sync only metafields with this namespace")
+         .option("--key <key>", "Sync only metafields with this key (format: 'key' or 'namespace.key')")
+         .option("--force-recreate", "Delete and recreate products instead of updating", false)
+         .option("--batch-size <size>", "Number of products to process in each batch", 25)
+         .option("--start-cursor <cursor>", "Pagination cursor to start from (for resuming interrupted syncs)")
+         .addHelpText('after', `
 Examples:
   metasync data product --handle my-product --source shopA --target shopB
   metasync data product --force-recreate --source shopA --target shopB
   metasync data product --batch-size 10 --source shopA --target shopB
   metasync data product --start-cursor "endCursor123" --source shopA --target shopB
-        `);
+  metasync data product --namespace custom --key breadcrumbs --source shopA --target shopB
+         `);
     } else if (resource === "metaobject") {
-      cmd.option("--type <type>", "Specific metaobject type to sync")
-        .addHelpText('after', `
+      cmd.option("--type <type>", "Metaobject definition type to sync (required)")
+         .option("--handle <handle>", "Metaobject handle to sync")
+         .addHelpText('after', `
 Examples:
   metasync data metaobject --type territory --source shopA --target shopB
-        `);
-    }
-
-    // Add metafield options for resources that support them
-    if (["product", "customer", "order", "variant"].includes(resource)) {
-      cmd.option("--namespace <namespace>", "Metafield namespace to sync")
-        .option("--key <key>", "Specific metafield key to sync (e.g., 'namespace.key')");
+         `);
+    } else if (resource === "page") {
+      cmd.option("--handle <handle>", "Page handle to sync")
+         .option("--id <id>", "Page ID to sync");
     }
 
     // Add action

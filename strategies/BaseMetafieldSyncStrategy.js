@@ -21,11 +21,22 @@ class BaseMetafieldSyncStrategy {
     if (key) {
       const parts = key.split(".");
       if (parts.length >= 2) {
+        // Key includes namespace (e.g., "namespace.key")
+        // Extract just the key part after the namespace
         definitionKey = parts.slice(1).join(".");
+
+        // If namespace wasn't provided but is in the key, extract it
+        if (!namespace) {
+          namespace = parts[0];
+          consola.info(`Using namespace "${namespace}" from the provided key`);
+        }
       } else {
-        consola.warn(`Invalid key format for metafield definition: ${key}. Expected 'namespace.key'. Ignoring key filter.`);
+        // Key doesn't include namespace, use as-is
+        definitionKey = key;
+        consola.info(`Using key "${definitionKey}" with namespace "${namespace}"`);
       }
     }
+
     const query = `#graphql
           query FetchMetafieldDefinitions($ownerType: MetafieldOwnerType!, $namespace: String, $key: String) {
             metafieldDefinitions(first: 100, ownerType: $ownerType, namespace: $namespace, key: $key) {
@@ -36,6 +47,11 @@ class BaseMetafieldSyncStrategy {
     const variables = { ownerType: this.ownerType };
     if (namespace) variables.namespace = namespace;
     if (definitionKey !== null) variables.key = definitionKey;
+
+    if (this.options.debug) {
+      consola.debug(`Fetching metafield definitions with: namespace=${namespace}, key=${definitionKey}`);
+    }
+
     const operationName = `Fetch${this.ownerType}MetafieldDefinitions`;
     try {
       const response = await client.graphql(query, variables, operationName);
