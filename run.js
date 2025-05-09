@@ -312,8 +312,8 @@ Examples:
       if (metafieldResourceTypes.includes(this.options.resource)) {
         // Namespace is required for metafield definitions
         if (!this.options.namespace) {
-            consola.error(`Error: --namespace is required when defining ${this.options.resource} metafield definitions.`);
-            process.exit(1);
+            // We'll handle this in the listing section below
+            // Validation will be moved to the shouldListAndExit check
         }
 
         // If key is provided, ensure it matches the namespace
@@ -345,15 +345,16 @@ Examples:
     consola.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     consola.info(`Limit: ${this.options.limit}`);
 
+    // Initialize variables for definition listing logic
+    let shouldListAndExit = false;
+    let listPrompt = "";
+
     // Log force-recreate if it's product data sync
     if (this.options.resource === 'product' && this.options.command === "data" && this.options.forceRecreate) {
       consola.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
     }
 
     // Determine if we need to list definitions and exit
-    let shouldListAndExit = false;
-    let listPrompt = "";
-
     if (this.options.resource === 'metaobject' && !this.options.key) {
         shouldListAndExit = true;
         listPrompt = "\nPlease run the command again with --type <type> to specify which metaobject type to sync.";
@@ -361,7 +362,7 @@ Examples:
     } else if (metafieldResourceTypes.includes(this.options.resource) && this.options.command === "define" && !this.options.namespace) {
         shouldListAndExit = true;
         listPrompt = `\nPlease run the command again with --namespace <namespace> to specify which ${this.options.resource} metafield namespace to sync.`;
-        consola.info(`No namespace specified (--namespace). Fetching all available ${this.options.resource} metafield definitions...`);
+        consola.info(`No namespace specified (--namespace). Fetching all available ${this.options.resource} metafield namespaces...`);
     }
 
     // If no specific key/namespace was provided (as required), show available definitions and exit

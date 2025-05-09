@@ -280,11 +280,26 @@ class BaseMetafieldSyncStrategy {
       consola.warn(`No ${this.resourceName} definitions found in source shop.`);
       return;
     }
-    consola.info(`\nAvailable ${this.resourceName} namespaces/keys:`);
-    definitions.forEach((def) => {
-      const identifier = `${def.namespace}.${def.key}`;
-      consola.log(`- ${identifier} (${def.name || "No name"})`);
+
+    // Group definitions by namespace
+    const namespaceGroups = {};
+    definitions.forEach(def => {
+      if (!namespaceGroups[def.namespace]) {
+        namespaceGroups[def.namespace] = [];
+      }
+      namespaceGroups[def.namespace].push(def);
     });
+
+    consola.info(`Available ${this.resourceName} namespaces/keys:`);
+
+    // Display namespaces and their keys with indentation
+    Object.keys(namespaceGroups).sort().forEach(namespace => {
+      consola.log(`${namespace}:`);
+      namespaceGroups[namespace].forEach(def => {
+        consola.log(`  - ${def.key} (${def.name || "No name"})`);
+      });
+    });
+
     consola.info(`\nPlease run the command again with --namespace <namespace> to specify which ${this.resourceName} namespace to sync.`);
   }
 
