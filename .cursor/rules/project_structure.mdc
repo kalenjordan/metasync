@@ -9,7 +9,7 @@ This project syncs Shopify Metaobject and Metafield definitions between stores.
 
 ## Core Files
 
-- **`run.js`**: [run.js](mdc:run.js) is the main entry point for the command-line tool. It handles:
+- **`cli.js`**: [cli.js](mdc:cli.js) e main entry point for the command-line tool. It handles:
     - Parsing command-line arguments using `commander`.
     - Reading store credentials from `.shops.json`.
     - Setting up Shopify API clients using `shopify-api-node`.
@@ -19,7 +19,7 @@ This project syncs Shopify Metaobject and Metafield definitions between stores.
 
 - **`utils/ShopifyClient.js`**: [utils/ShopifyClient.js](mdc:utils/ShopifyClient.js) provides a wrapper around the `shopify-api-node` client to centralize GraphQL call logging using `consola`. It formats debug logs based on the `--debug` flag.
 
-- **`.shops.json`**: [`.shops.json`](mdc:.shops.json) (not committed, example in `.shops.json.example`) stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`).
+- **`.shops.json`**: [`.shops.json`](mdc:.shops.json) (not committed, example in `.shops.example.json`) stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`).
 
 ## Strategy Pattern
 
@@ -35,7 +35,7 @@ The core sync logic is implemented using the Strategy pattern, located in the `s
 
 Each strategy class typically:
 - Takes the wrapped source/target clients and options in its constructor.
-- Implements a `sync()` method called by `run.js`.
+- Implements a `sync()` method called by `cli.js`.
 - Contains methods for fetching, creating, and updating the specific resource type.
 - May contain helper methods specific to that resource type.
 - Includes logic for listing available definitions if required options are missing.

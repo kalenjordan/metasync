@@ -2,7 +2,7 @@ const execa = require('execa')
 const path = require('path')
 const fs = require('fs')
 
-const cliPath = path.join(__dirname, '../run.js')
+const cliPath = path.join(__dirname, '../cli.js')
 
 // Helper to check if the shops config exists (for conditional testing)
 const shopsConfigExists = fs.existsSync(path.join(__dirname, '../.shops.json'))
@@ -26,11 +26,12 @@ if (!shopsConfigExists) {
         // Run the exact command from the user example
         await execa('node', [
           cliPath,
-          'define',
+          'definitions',
           'metafields',
           '--resource', 'product',
-          '--source', 'metasync-demo',
-          '--target', 'kalen-test-store'
+          '--namespace', 'custom',
+          '--source', 'demo',
+          '--target', 'test'
         ])
 
         // If it gets here, the command executed without throwing an error

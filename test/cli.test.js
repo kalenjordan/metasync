@@ -2,7 +2,7 @@ const execa = require('execa')
 const path = require('path')
 const fs = require('fs')
 
-const cliPath = path.join(__dirname, '../run.js')
+const cliPath = path.join(__dirname, '../cli.js')
 
 // Helper to check if the shops config exists (for conditional testing)
 const shopsConfigExists = fs.existsSync(path.join(__dirname, '../.shops.json'))
@@ -14,15 +14,15 @@ describe('metasync CLI tool', () => {
   it('shows help text', async () => {
     const { stdout } = await execa('node', [cliPath, '--help'])
     expect(stdout).toContain('Metasync - A CLI tool for synchronizing Shopify resources')
-    expect(stdout).toContain('metasync define metafields')
-    expect(stdout).toContain('metasync define metaobject')
+    expect(stdout).toContain('metasync definitions metafields')
+    expect(stdout).toContain('metasync definitions metaobject')
     expect(stdout).toContain('metasync data')
   })
 
-  it('shows help text for define metafields command', async () => {
-    const { stdout } = await execa('node', [cliPath, 'define', 'metafields', '--help'])
+  it('shows help text for definitions metafields command', async () => {
+    const { stdout } = await execa('node', [cliPath, 'definitions', 'metafields', '--help'])
     expect(stdout).toContain('Sync metafield definitions')
-    expect(stdout).toContain('--resource <type>')
+    expect(stdout).toContain('--resource <resource>')
     expect(stdout).toContain('--namespace <namespace>')
   })
 
@@ -38,28 +38,28 @@ describe('metasync CLI tool', () => {
 
   it('shows error for missing required resource parameter', async () => {
     try {
-      await execa('node', [cliPath, 'define', 'metafields', '--namespace', 'custom'])
+      await execa('node', [cliPath, 'definitions', 'metafields', '--namespace', 'custom'])
       // If the command doesn't throw, the test should fail
       expect(true).toBe(false)
     } catch (err) {
       // Check if the error indicates missing required parameter
-      expect(err.stderr).toMatch(/Error: (Source shop|resource type)/i)
+      expect(err.stderr).toMatch(/required option.*--resource/i)
     }
   })
 
   // Only run these tests if .shops.json exists
   if (shopsConfigExists) {
     describe('Live API tests', () => {
-      it('runs define metafields command for products', async () => {
+      it('runs definitions metafields command for products', async () => {
         try {
           // Run the command
           await execa('node', [
             cliPath,
-            'define',
+            'definitions',
             'metafields',
             '--resource', 'product',
-            '--source', 'metasync-demo',
-            '--target', 'kalen-test-store',
+            '--source', 'demo',
+            '--target', 'test',
             '--namespace', 'custom'
           ])
 
