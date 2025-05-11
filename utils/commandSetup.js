@@ -279,6 +279,43 @@ Sync ${singularResource} data
     addCommonOptions(cmd);
   });
 
+  // Add "everything" command to sync all resource types
+  const everythingCmd = dataCommand
+    .command("everything")
+    .description("Sync all resource types at once")
+    .option("--batch-size <size>", "Number of items to process in each batch", 25)
+    .action((cmdOptions) => {
+      // Merge command options with main options
+      Object.assign(mergedOptions, cmdOptions);
+      // Set command type to data
+      mergedOptions.command = "data";
+      // Set special resource type for everything
+      mergedOptions.resource = "everything";
+    });
+
+  // Add common options to everything command
+  addCommonOptions(everythingCmd);
+
+  const everythingHelpText = `
+Example: metasync data everything --source shopA --target shopB --live
+
+Syncs data for all supported resource types including:
+- Products data
+- Metaobjects data
+- Pages data
+- Collections data
+- Customers data
+- Orders data
+- Variants data
+
+Note: This command only syncs data, not definitions. For metaobjects, ensure definitions
+are synced first using: metasync definitions metaobject
+
+Options:
+  --batch-size <size>     Number of items to process in each batch
+`;
+  customizeHelp(everythingCmd, everythingHelpText);
+
   // For legacy support, show new command structure if someone uses older commands
   program
     .on('command:*', function (operands) {

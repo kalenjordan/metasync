@@ -108,7 +108,7 @@ class MetaSyncCli {
   }
 
   _validateResourceType() {
-    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page', 'collection'];
+    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page', 'collection', 'everything'];
 
     // Check if resource type was provided
     if (!this.options.resource) {
@@ -285,11 +285,16 @@ class MetaSyncCli {
         outputResults += `, ${definitionResults.deleted} deleted`;
       }
     } else {
-      outputTitle = `Data Sync Results for ${this.options.resource.toUpperCase()}:`;
+      // Special case for "everything" resource
+      if (this.options.resource === 'everything') {
+        outputTitle = `Complete Sync Results:`;
+      } else {
+        outputTitle = `Data Sync Results for ${this.options.resource.toUpperCase()}:`;
+      }
 
       // If definition results are available
       if (definitionResults.created !== undefined) {
-        outputResults = `${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
+        outputResults = `Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
 
         // Handle deleted count if available (for force recreate)
         if (definitionResults.deleted) {

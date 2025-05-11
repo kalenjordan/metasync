@@ -8,6 +8,7 @@ const CustomerMetafieldSyncStrategy = require('../strategies/CustomerMetafieldSy
 const PageSyncStrategy = require('../strategies/PageSyncStrategy');
 const ProductSyncStrategy = require('../strategies/ProductSyncStrategy');
 const CollectionSyncStrategy = require('../strategies/CollectionSyncStrategy');
+const EverythingSyncStrategy = require('../strategies/EverythingSyncStrategy');
 
 // Definition strategies mapping
 const definitionStrategies = {
@@ -24,7 +25,8 @@ const dataStrategies = {
   product: ProductSyncStrategy,
   page: PageSyncStrategy,
   collection: CollectionSyncStrategy,
-  metaobject: MetaobjectSyncStrategy
+  metaobject: MetaobjectSyncStrategy,
+  everything: EverythingSyncStrategy
   // Add other data strategies as they're implemented
 };
 
