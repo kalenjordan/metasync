@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: true
 ---
 # Project Structure
@@ -29,7 +29,7 @@ The core sync logic is implemented using the Strategy pattern, located in the `s
     - **`BaseMetafieldSyncStrategy.js`**: [strategies/BaseMetafieldSyncStrategy.js](mdc:strategies/BaseMetafieldSyncStrategy.js) is the base class for all metafield sync strategies.
     - **`MetaobjectSyncStrategy.js`**: [strategies/MetaobjectSyncStrategy.js](mdc:strategies/MetaobjectSyncStrategy.js) handles all logic related to syncing Metaobject definitions and data (fetching, creating, updating, reconciling).
     - **`ProductMetafieldSyncStrategy.js`**: [strategies/ProductMetafieldSyncStrategy.js](mdc:strategies/ProductMetafieldSyncStrategy.js) handles syncing Product Metafield definitions.
-    - **`ProductSyncStrategy.js`**: [strategies/ProductSyncStrategy.js](mdc:strategies/ProductSyncStrategy.js) handles syncing Products between Shopify stores, including variants, images, metafields, and publication channels.
+    - **`ProductSyncStrategy.js`**: [strategies/ProductSyncStrategy.js](mdc:strategies/ProductSyncStrategy.js) orchestrates syncing Products between Shopify stores, coordinating specialized utility classes for batch processing, CRUD operations, metafield handling, and result tracking.
     - **`PageSyncStrategy.js`**: [strategies/PageSyncStrategy.js](mdc:strategies/PageSyncStrategy.js) handles syncing Pages between Shopify stores.
     - Additional metafield sync strategies for various resources (Customers, Variants, Orders, Companies).
 
@@ -50,6 +50,11 @@ The project uses specialized utility classes to handle specific aspects of Shopi
     - **`ProductPublicationHandler.js`**: [utils/ProductPublicationHandler.js](mdc:utils/ProductPublicationHandler.js) manages publication channels and publishing products to Shopify sales channels.
     - **`ProductBaseHandler.js`**: [utils/ProductBaseHandler.js](mdc:utils/ProductBaseHandler.js) provides core product CRUD operations (create, read, update, delete).
     - **`ProductVariantHandler.js`**: [utils/ProductVariantHandler.js](mdc:utils/ProductVariantHandler.js) handles product variant operations.
+    - **`ProductBatchProcessor.js`**: [utils/ProductBatchProcessor.js](mdc:utils/ProductBatchProcessor.js) handles product batch fetching and pagination.
+    - **`ProductMetafieldProcessor.js`**: [utils/ProductMetafieldProcessor.js](mdc:utils/ProductMetafieldProcessor.js) processes and transforms product metafields.
+    - **`ProductOperationHandler.js`**: [utils/ProductOperationHandler.js](mdc:utils/ProductOperationHandler.js) coordinates product creation and updating with related entities.
+    - **`MetafieldFilterUtils.js`**: [utils/MetafieldFilterUtils.js](mdc:utils/MetafieldFilterUtils.js) filters metafields based on namespace and key constraints.
+    - **`SyncResultTracker.js`**: [utils/SyncResultTracker.js](mdc:utils/SyncResultTracker.js) tracks operation results and formats them for display.
     - **`ShopifyIDUtils.js`**: [utils/ShopifyIDUtils.js](mdc:utils/ShopifyIDUtils.js) provides utility methods for Shopify ID validation and conversion.
     - **`LoggingUtils.js`**: [utils/LoggingUtils.js](mdc:utils/LoggingUtils.js) provides consistent log formatting with indentation, symbols, and color coding.
     - **`ErrorHandler.js`**: [utils/ErrorHandler.js](mdc:utils/ErrorHandler.js) provides standardized error handling.
