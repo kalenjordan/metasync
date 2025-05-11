@@ -130,7 +130,7 @@ class MetaSyncCli {
     const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
 
     // Command-specific validations
-    if (this.options.command === "define") {
+    if (this.options.command === "definitions") {
       // Validations for define command
       if (metafieldResourceTypes.includes(this.options.resource)) {
         // If key is provided, ensure it's properly formatted with namespace
@@ -188,7 +188,7 @@ class MetaSyncCli {
       consola.info(`No specific metaobject type specified (--type). Fetching available types...`);
       return true;
     } else if (metafieldResourceTypes.includes(this.options.resource) &&
-              this.options.command === "define" &&
+              this.options.command === "definitions" &&
               !this.options.namespace) {
       consola.info(`No namespace specified (--namespace). Fetching all available ${this.options.resource} metafield namespaces...`);
       return true;
@@ -239,7 +239,7 @@ class MetaSyncCli {
     // Select the appropriate strategy based on resource and command mode
     let StrategyClass;
 
-    if (this.options.command === "define") {
+    if (this.options.command === "definitions") {
       StrategyClass = strategyLoader.getDefinitionStrategyForResource(this.options.resource);
     } else {
       StrategyClass = strategyLoader.getDataStrategyForResource(this.options.resource);
@@ -276,7 +276,7 @@ class MetaSyncCli {
     let outputResults = '';
 
     // Set output based on command
-    if (this.options.command === "define") {
+    if (this.options.command === "definitions") {
       outputTitle = `Definition Sync Results for ${this.options.resource.toUpperCase()}:`;
       outputResults = `${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
 

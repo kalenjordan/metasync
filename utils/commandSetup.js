@@ -6,6 +6,10 @@ const consola = require('consola');
  * @returns {Object} The parsed command line options
  */
 function setupCommandLineOptions() {
+  // Check if we're running a specific command to determine the appropriate help text
+  const isDataCommand = process.argv.length > 2 && process.argv[2] === 'data';
+  const isDefinitionsCommand = process.argv.length > 2 && process.argv[2] === 'definitions';
+
   // Define common options for all commands
   const addCommonOptions = (command) => {
     return command
@@ -20,50 +24,116 @@ function setupCommandLineOptions() {
   // Create an object to store merged options from all commands
   let mergedOptions = {};
 
-  // Main program
+  // Completely override the help output to suppress Commander's default formatting
+  // This prevents duplicated sections
+  const customizeHelp = (cmd, headerText) => {
+    cmd.configureHelp({
+      formatHelp: (cmd, helper) => {
+        return headerText;
+      }
+    });
+  };
+
+  // Main program setup
   program
     .name("metasync")
     .description("Metasync CLI for Shopify - sync resources between shops")
-    .version("1.0.0")
-    .addHelpText('beforeAll', `
+    .version("1.0.0");
+
+  // Global help text
+  const globalHelpText = `
 Metasync - A CLI tool for synchronizing Shopify resources
 
 USAGE:
-  metasync define metafields --resource <resource> --namespace <namespace> [options]
-  metasync define metaobject --type <type> [options]
+  metasync definitions metafields --resource <resource> --namespace <namespace> [options]
+  metasync definitions metaobject --type <type> [options]
   metasync data <resource> [options]
 
 COMMON OPTIONS:
+  -h, --help            Display help
   --source <shop>        Source shop name (must exist in .shops.json)
   --target <shop>        Target shop name (defaults to source if not specified)
   --live                 Make actual changes (default is dry run)
   --debug                Enable debug logging
   --limit <number>       Limit the number of items to process (default: 3)
-    `)
-    .addHelpText('afterAll', `
+
+COMMANDS:
+  definitions           Sync only the definitions, not the data
+  data                  Sync data for specified resources (no definitions)
+
 Examples:
-  # Define metafield definitions for products
-  metasync define metafields --resource product --namespace custom --source shopA --target shopB
-
-  # Define metaobject definitions
-  metasync define metaobject --type territory --source shopA --target shopB
-
-  # Sync product data
+  metasync definitions metafields --resource product --namespace custom --source shopA --target shopB
+  metasync definitions metaobject --type territory --source shopA --target shopB
   metasync data product --handle my-product --source shopA --target shopB --live
+  `;
 
-  # Sync metaobject data
-  metasync data metaobject --type territory --source shopA --target shopB
-    `);
+  // Definitions command help text
+  const definitionsHelpText = `
+Metasync - Definitions Command
 
-  // Define command - for definition-only work
-  const defineCommand = program
-    .command("define")
-    .description("Sync only the definitions, not the data")
-    .addHelpText('after', `
+USAGE:
+  metasync definitions metafields --resource <resource> --namespace <namespace> [options]
+  metasync definitions metaobject --type <type> [options]
+
+COMMON OPTIONS:
+  -h, --help            Display help
+  --source <shop>        Source shop name (must exist in .shops.json)
+  --target <shop>        Target shop name (defaults to source if not specified)
+  --live                 Make actual changes (default is dry run)
+  --debug                Enable debug logging
+  --limit <number>       Limit the number of items to process (default: 3)
+
+COMMANDS:
+  metafields            Sync metafield definitions
+  metaobject            Sync metaobject definitions
+
 Examples:
-  metasync define metafields --resource product --namespace custom
-  metasync define metaobject --type territory
-    `);
+  metasync definitions metafields --resource product --namespace custom
+  metasync definitions metaobject --type territory
+  `;
+
+  // Data command help text
+  const dataHelpText = `
+Metasync - Data Command
+
+USAGE:
+  metasync data <resource> [options]
+
+COMMON OPTIONS:
+  -h, --help            Display help
+  --source <shop>        Source shop name (must exist in .shops.json)
+  --target <shop>        Target shop name (defaults to source if not specified)
+  --live                 Make actual changes (default is dry run)
+  --debug                Enable debug logging
+  --limit <number>       Limit the number of items to process (default: 3)
+
+COMMANDS:
+  product               Sync product data
+  metaobject            Sync metaobject data
+  page                  Sync page data
+  collection            Sync collection data
+  customer              Sync customer data
+  order                 Sync order data
+  variant               Sync variant data
+
+Examples:
+  metasync data product --handle my-product --source shopA --target shopB
+  metasync data metaobject --type territory --source shopA --target shopB
+  `;
+
+  // Configure help for the different contexts
+  if (!isDataCommand && !isDefinitionsCommand) {
+    customizeHelp(program, globalHelpText);
+  }
+
+  // Definitions command
+  const defineCommand = program
+    .command("definitions")
+    .description("Sync only the definitions, not the data");
+
+  if (isDefinitionsCommand) {
+    customizeHelp(defineCommand, definitionsHelpText);
+  }
 
   // Define subcommands
   const defineMetafieldsCmd = defineCommand
@@ -76,7 +146,7 @@ Examples:
       // Merge command options with main options
       Object.assign(mergedOptions, cmdOptions);
       // Set command type
-      mergedOptions.command = "define";
+      mergedOptions.command = "definitions";
       mergedOptions.resource = cmdOptions.resource || "product"; // Default to product if not specified
     });
 
@@ -88,7 +158,7 @@ Examples:
       // Merge command options with main options
       Object.assign(mergedOptions, cmdOptions);
       // Set command type
-      mergedOptions.command = "define";
+      mergedOptions.command = "definitions";
       mergedOptions.resource = "metaobject";
       // Map type to key for backwards compatibility
       if (cmdOptions.type) {
@@ -100,25 +170,14 @@ Examples:
   addCommonOptions(defineMetafieldsCmd);
   addCommonOptions(defineMetaobjectsCmd);
 
-  // Data command - for data-only sync
+  // Data command
   const dataCommand = program
     .command("data")
-    .description("Sync data for specified resources (no definitions)")
-    .addHelpText('after', `
-Available resources:
-  product       Sync product data
-  metaobject    Sync metaobject data
-  page          Sync page data
-  collection    Sync collection data
-  customer      Sync customer data (if implemented)
-  order         Sync order data (if implemented)
-  variant       Sync variant data (if implemented)
+    .description("Sync data for specified resources (no definitions)");
 
-Examples:
-  metasync data product --handle my-product
-  metasync data metaobject --type territory
-  metasync data collection
-    `);
+  if (isDataCommand) {
+    customizeHelp(dataCommand, dataHelpText);
+  }
 
   // Define resources and their options for data commands
   const resources = ["product", "metaobject", "page", "collection", "customer", "order", "variant"];
@@ -135,35 +194,65 @@ Examples:
          .option("--key <key>", "Sync only metafields with this key (format: 'key' or 'namespace.key')")
          .option("--force-recreate", "Delete and recreate products instead of updating", false)
          .option("--batch-size <size>", "Number of products to process in each batch", 25)
-         .option("--start-cursor <cursor>", "Pagination cursor to start from (for resuming interrupted syncs)")
-         .addHelpText('after', `
-Examples:
-  metasync data product --handle my-product --source shopA --target shopB
-  metasync data product --force-recreate --source shopA --target shopB
-  metasync data product --batch-size 10 --source shopA --target shopB
-  metasync data product --start-cursor "endCursor123" --source shopA --target shopB
-  metasync data product --namespace custom --key breadcrumbs --source shopA --target shopB
-         `);
+         .option("--start-cursor <cursor>", "Pagination cursor to start from (for resuming interrupted syncs)");
+
+      const productHelpText = `
+Example: metasync data product --handle my-product --source shopA --target shopB
+
+Options:
+  --handle <handle>       Product handle to sync
+  --id <id>               Product ID to sync
+  --namespace <namespace> Sync only metafields with this namespace
+  --key <key>             Sync only metafields with this key
+  --force-recreate        Delete and recreate products instead of updating
+  --batch-size <size>     Number of products to process in each batch
+  --start-cursor <cursor> Pagination cursor for resuming interrupted syncs
+      `;
+      customizeHelp(cmd, productHelpText);
     } else if (resource === "metaobject") {
       cmd.option("--type <type>", "Metaobject definition type to sync (required)")
-         .option("--handle <handle>", "Metaobject handle to sync")
-         .addHelpText('after', `
-Examples:
-  metasync data metaobject --type territory --source shopA --target shopB
-         `);
+         .option("--handle <handle>", "Metaobject handle to sync");
+
+      const metaobjectHelpText = `
+Example: metasync data metaobject --type territory --source shopA --target shopB
+
+Options:
+  --type <type>           Metaobject definition type to sync (required)
+  --handle <handle>       Metaobject handle to sync
+      `;
+      customizeHelp(cmd, metaobjectHelpText);
     } else if (resource === "page") {
       cmd.option("--handle <handle>", "Page handle to sync")
          .option("--id <id>", "Page ID to sync");
+
+      const pageHelpText = `
+Options:
+  --handle <handle>       Page handle to sync
+  --id <id>               Page ID to sync
+      `;
+      customizeHelp(cmd, pageHelpText);
     } else if (resource === "collection") {
       cmd.option("--handle <handle>", "Collection handle to sync")
          .option("--id <id>", "Collection ID to sync")
-         .option("--skip-automated", "Skip automated (smart) collections", false)
-         .addHelpText('after', `
-Examples:
-  metasync data collection --source shopA --target shopB
-  metasync data collection --handle my-collection --source shopA --target shopB
-  metasync data collection --skip-automated --source shopA --target shopB
-         `);
+         .option("--skip-automated", "Skip automated (smart) collections", false);
+
+      const collectionHelpText = `
+Example: metasync data collection --handle my-collection --source shopA --target shopB
+
+Options:
+  --handle <handle>       Collection handle to sync
+  --id <id>               Collection ID to sync
+  --skip-automated        Skip automated (smart) collections
+      `;
+      customizeHelp(cmd, collectionHelpText);
+    } else {
+      // Generic help for other resource types
+      const genericHelpText = `
+Usage: metasync data ${resource} [options]
+
+Sync ${resource} data
+      `;
+      customizeHelp(cmd, genericHelpText);
     }
 
     // Add action
@@ -204,8 +293,8 @@ Examples:
   // For legacy support, show new command structure if someone uses older commands
   if (program.args.length > 0 && !mergedOptions.command) {
     consola.warn(`Note: Command structure has changed. Try using one of these commands instead:`);
-    consola.info(`  metasync define metafields --resource <resource> --namespace <namespace>`);
-    consola.info(`  metasync define metaobject --type <type>`);
+    consola.info(`  metasync definitions metafields --resource <resource> --namespace <namespace>`);
+    consola.info(`  metasync definitions metaobject --type <type>`);
     consola.info(`  metasync data product|metaobject|page [options]`);
   }
 
