@@ -300,20 +300,20 @@ class ProductSyncStrategy {
       transformedMetafields.forEach(metafield => {
         // Skip logging blanked metafields
         if (metafield._blanked) {
-          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [BLANKED]`, 5);
+          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [BLANKED]`, 6);
           return;
         }
 
         // Mark unsupported types differently
         if (metafield._unsupportedType) {
-          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [UNSUPPORTED TYPE]`, 5);
+          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [UNSUPPORTED TYPE]`, 6);
           return;
         }
 
         const valuePreview = typeof metafield.value === 'string' ?
           `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
           String(metafield.value);
-        LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 5);
+        LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 6);
       });
     }
 

@@ -27,7 +27,7 @@ class ProductImageHandler {
   async syncProductImages(productId, sourceImages, logPrefix = '') {
     if (!sourceImages || sourceImages.length === 0) return true;
 
-    LoggingUtils.info(`Processing ${sourceImages.length} images for product`, 1, 'main');
+    LoggingUtils.info(`Processing ${sourceImages.length} images for product`, 2, 'main');
 
     // Step 1: Get existing images to avoid duplicates
     const existingImagesQuery = `#graphql
@@ -55,9 +55,9 @@ class ProductImageHandler {
     try {
       const response = await this.client.graphql(existingImagesQuery, { productId }, 'GetProductMedia');
       existingImages = response.product.media.edges.map(edge => edge.node);
-      LoggingUtils.info(`Found ${existingImages.length} existing images on product`, 2);
+      LoggingUtils.info(`Found ${existingImages.length} existing images on product`, 3);
     } catch (error) {
-      LoggingUtils.error(`Error fetching existing product images: ${error.message}`, 2);
+      LoggingUtils.error(`Error fetching existing product images: ${error.message}`, 3);
       return false;
     }
 
@@ -79,7 +79,7 @@ class ProductImageHandler {
     });
 
     if (newImagesToUpload.length === 0) {
-      LoggingUtils.info(`All images already exist on product, no need to upload`, 2);
+      LoggingUtils.info(`All images already exist on product, no need to upload`, 3);
       return true;
     }
 
@@ -112,27 +112,27 @@ class ProductImageHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Uploading ${mediaInputs.length} new images for product`, 2);
+        LoggingUtils.info(`Uploading ${mediaInputs.length} new images for product`, 3);
         const result = await this.client.graphql(createMediaMutation, {
           productId,
           media: mediaInputs
         }, 'ProductCreateMedia');
 
         if (result.productCreateMedia.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to upload product images:`, 2, result.productCreateMedia.userErrors);
+          LoggingUtils.error(`Failed to upload product images:`, 3, result.productCreateMedia.userErrors);
           return false;
         } else {
-          LoggingUtils.success(`Successfully uploaded ${result.productCreateMedia.media.length} images`, 2);
+          LoggingUtils.success(`Successfully uploaded ${result.productCreateMedia.media.length} images`, 3);
           return true;
         }
       } catch (error) {
-        LoggingUtils.error(`Error uploading product images: ${error.message}`, 2);
+        LoggingUtils.error(`Error uploading product images: ${error.message}`, 3);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would upload ${mediaInputs.length} new images for product`, 2);
+      LoggingUtils.info(`[DRY RUN] Would upload ${mediaInputs.length} new images for product`, 3);
       for (const input of mediaInputs) {
-        LoggingUtils.info(`[DRY RUN] Image: ${input.originalSource} (${input.alt || 'No alt text'})`, 3);
+        LoggingUtils.info(`[DRY RUN] Image: ${input.originalSource} (${input.alt || 'No alt text'})`, 4);
       }
       return true;
     }

@@ -26,7 +26,7 @@ class ProductPublicationHandler {
    */
   async syncProductPublications(productId, sourcePublications, logPrefix = '') {
     if (!sourcePublications || sourcePublications.length === 0) {
-      LoggingUtils.info(`No publication channels to sync`, 1);
+      LoggingUtils.info(`No publication channels to sync`, 2);
       return true;
     }
 
@@ -59,7 +59,7 @@ class ProductPublicationHandler {
     const publicationsToProcess = validPublications;
 
     if (publicationsToProcess.length === 0) {
-      LoggingUtils.info(`No valid publication channels to sync after filtering`, 1);
+      LoggingUtils.info(`No valid publication channels to sync after filtering`, 2);
       return true;
     }
 
@@ -74,7 +74,7 @@ class ProductPublicationHandler {
       );
     }
 
-    LoggingUtils.info(`Syncing product publication to ${publicationsToProcess.length} channels`, 1, 'main');
+    LoggingUtils.info(`Syncing product publication to ${publicationsToProcess.length} channels`, 2, 'main');
 
     // First, get available channels and publications in the target store
     const getPublicationsQuery = `#graphql
@@ -221,7 +221,7 @@ class ProductPublicationHandler {
 
     // If no publications to create, we're done
     if (publicationsToCreate.length === 0) {
-      LoggingUtils.info(`No new publication channels to add`, 2);
+      LoggingUtils.info(`No new publication channels to add`, 3);
       return true;
     }
 
@@ -239,7 +239,7 @@ class ProductPublicationHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Publishing product to ${publicationsToCreate.length} channels`, 2);
+        LoggingUtils.info(`Publishing product to ${publicationsToCreate.length} channels`, 3);
 
         const input = publicationsToCreate.map(pub => ({
           publicationId: pub.publicationId,
@@ -253,20 +253,20 @@ class ProductPublicationHandler {
         }, 'publishablePublish');
 
         if (result.publishablePublish.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to publish product:`, 2, result.publishablePublish.userErrors);
+          LoggingUtils.error(`Failed to publish product:`, 3, result.publishablePublish.userErrors);
           return false;
         } else {
-          LoggingUtils.success(`Successfully published product to ${publicationsToCreate.length} channels`, 2);
+          LoggingUtils.success(`Successfully published product to ${publicationsToCreate.length} channels`, 3);
           return true;
         }
       } catch (error) {
-        LoggingUtils.error(`Error publishing product: ${error.message}`, 2);
+        LoggingUtils.error(`Error publishing product: ${error.message}`, 3);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would publish product to ${publicationsToCreate.length} channels`, 2);
+      LoggingUtils.info(`[DRY RUN] Would publish product to ${publicationsToCreate.length} channels`, 3);
       for (const pub of publicationsToCreate) {
-        LoggingUtils.info(`[DRY RUN] Channel: ${pub.channelHandle}`, 3);
+        LoggingUtils.info(`[DRY RUN] Channel: ${pub.channelHandle}`, 4);
       }
       return true;
     }

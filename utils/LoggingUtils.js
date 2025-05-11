@@ -55,9 +55,9 @@ class LoggingUtils {
   static error(message, level = 0, data = null) {
     const indent = '  '.repeat(level);
     if (data) {
-      consola.log(`${indent}${chalk.red('✖')} ${message}`, data);
+      console.log(`${indent}${chalk.red('✖')} ${message}`, data);
     } else {
-      consola.log(`${indent}${chalk.red('✖')} ${message}`);
+      console.log(`${indent}${chalk.red('✖')} ${message}`);
     }
   }
 
@@ -68,7 +68,7 @@ class LoggingUtils {
    */
   static warn(message, level = 0) {
     const indent = '  '.repeat(level);
-    consola.log(`${indent}${chalk.yellow('⚠')} ${message}`);
+    console.log(`${indent}${chalk.yellow('⚠')} ${message}`);
   }
 
   /**
@@ -87,7 +87,7 @@ class LoggingUtils {
       symbol = '◦'; // Sub-operation
     }
 
-    consola.log(`${indent}${symbol} ${message}`);
+    console.log(`${indent}${symbol} ${message}`);
   }
 
   /**

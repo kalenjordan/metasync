@@ -61,7 +61,7 @@ class MetafieldReferenceHandler {
       }
     };
 
-    LoggingUtils.info(`Starting reference transformation for ${metafields.length} metafields`, 3);
+    LoggingUtils.info(`Starting reference transformation for ${metafields.length} metafields`, 2, 'main');
 
     for (const metafield of metafields) {
       // Skip if no type (shouldn't happen)
@@ -133,7 +133,7 @@ class MetafieldReferenceHandler {
             if (isList) stats.byType.lists.unsupported++;
             else stats.byType.references.unsupported++;
 
-            LoggingUtils.warn(`Unsupported reference type: ${refType} for ${metafield.namespace}.${metafield.key} - keeping original value`, 4);
+            LoggingUtils.warn(`Unsupported reference type: ${refType} for ${metafield.namespace}.${metafield.key} - keeping original value`, 3);
             transformedMetafield = metafield;
             stats.transformed++;
             break;
@@ -150,11 +150,11 @@ class MetafieldReferenceHandler {
           stats.errors++;
           // Create a blanked metafield instead of keeping the original value
           const blankedMetafield = this.createBlankedMetafield(metafield);
-          LoggingUtils.warn(`Transformation failed for ${metafield.namespace}.${metafield.key}, blanking the value`, 4);
+          LoggingUtils.warn(`Transformation failed for ${metafield.namespace}.${metafield.key}, blanking the value`, 6);
           transformedMetafields.push(blankedMetafield);
         }
       } catch (error) {
-        LoggingUtils.error(`Error transforming reference ${metafield.namespace}.${metafield.key}: ${error.message}`, 4);
+        LoggingUtils.error(`Error transforming reference ${metafield.namespace}.${metafield.key}: ${error.message}`, 6);
         stats.blanked++;
         stats.errors++;
         // Create a blanked metafield instead of keeping the original
@@ -172,12 +172,6 @@ class MetafieldReferenceHandler {
       `Reference transformation complete: ${stats.byType.regular} regular, ` +
       `${refCount} single references, ${listCount} list references, ` +
       `${stats.blanked} blanked due to errors, ${unsupportedCount} unsupported types`, 3);
-
-    // If we have unsupported types, log them
-    if (stats.unsupportedTypes.size > 0) {
-      LoggingUtils.warn(
-        `Found ${stats.unsupportedTypes.size} unsupported reference types: ${Array.from(stats.unsupportedTypes).join(', ')}`, 3);
-    }
 
     return {
       transformedMetafields,
@@ -238,7 +232,7 @@ class MetafieldReferenceHandler {
           if (!sourceObject) return null;
 
           sourceIdentifier = sourceObject.handle;
-          LoggingUtils.info(`Found source collection handle: ${sourceIdentifier}`, 4);
+          LoggingUtils.info(`Found source collection handle: ${sourceIdentifier}`, 6);
 
           targetObject = await this.getCollectionByHandle(this.targetClient, sourceIdentifier);
           break;
@@ -247,14 +241,14 @@ class MetafieldReferenceHandler {
           // For variants, first try to match by SKU if possible, otherwise use product handle + options
           sourceObject = await this.variantHandler.getVariantWithProductInfo(this.sourceClient, sourceId);
           if (!sourceObject) {
-            LoggingUtils.error(`Could not find source variant with ID: ${sourceId}`, 4);
+            LoggingUtils.error(`Could not find source variant with ID: ${sourceId}`, 6);
             return null;
           }
 
           // If we have a SKU, try to match by that first
           if (sourceObject.sku) {
             sourceIdentifier = sourceObject.sku;
-            LoggingUtils.info(`Found source variant SKU: ${sourceIdentifier}`, 4);
+            LoggingUtils.info(`Found source variant SKU: ${sourceIdentifier}`, 6);
 
             targetObject = await this.variantHandler.getVariantBySku(this.targetClient, sourceIdentifier);
 
@@ -262,12 +256,12 @@ class MetafieldReferenceHandler {
             if (targetObject) {
               break;
             }
-            LoggingUtils.info(`Could not find target variant with SKU: ${sourceIdentifier}, trying to match by options`, 4);
+            LoggingUtils.info(`Could not find target variant with SKU: ${sourceIdentifier}, trying to match by options`, 6);
           }
 
           // If no SKU or no match found, try by product handle + options
           if (sourceObject.product && sourceObject.product.handle && sourceObject.selectedOptions) {
-            LoggingUtils.info(`Attempting to match variant by product handle: ${sourceObject.product.handle} and options`, 4);
+            LoggingUtils.info(`Attempting to match variant by product handle: ${sourceObject.product.handle} and options`, 6);
 
             // Use the product handle and option values to find the variant
             targetObject = await this.variantHandler.getVariantByOptions(
@@ -284,23 +278,23 @@ class MetafieldReferenceHandler {
           if (!sourceObject) return null;
 
           sourceIdentifier = sourceObject.handle;
-          LoggingUtils.info(`Found source product handle: ${sourceIdentifier}`, 4);
+          LoggingUtils.info(`Found source product handle: ${sourceIdentifier}`, 6);
 
           targetObject = await this.getProductByHandle(this.targetClient, sourceIdentifier);
           break;
 
         default:
-          LoggingUtils.error(`Unsupported reference type: ${refType}`, 4);
+          LoggingUtils.error(`Unsupported reference type: ${refType}`, 6);
           return null;
       }
 
       if (!targetObject) {
-        LoggingUtils.error(`Could not find target ${refType} for source ID: ${sourceId}`, 4);
+        LoggingUtils.error(`Could not find target ${refType} for source ID: ${sourceId}`, 6);
         return null;
       }
 
       targetId = targetObject.id;
-      LoggingUtils.info(`Found target ${refType} ID: ${targetId}`, 4);
+      LoggingUtils.info(`Found target ${refType} ID: ${targetId}`, 6);
 
       // Return the transformed metafield with the target ID
       return {
@@ -308,7 +302,7 @@ class MetafieldReferenceHandler {
         value: targetId
       };
     } catch (error) {
-      LoggingUtils.error(`Error transforming ${refType} reference: ${error.message}`, 4);
+      LoggingUtils.error(`Error transforming ${refType} reference: ${error.message}`, 6);
       return null;
     }
   }
@@ -323,7 +317,7 @@ class MetafieldReferenceHandler {
     try {
       // Parse the JSON array of IDs
       const sourceIds = JSON.parse(metafield.value);
-      LoggingUtils.info(`Found ${sourceIds.length} source ${refType} IDs in list`, 4);
+      LoggingUtils.info(`Found ${sourceIds.length} source ${refType} IDs in list`, 6);
 
       const targetIds = [];
 
@@ -337,7 +331,7 @@ class MetafieldReferenceHandler {
             if (!sourceObject) continue;
 
             sourceIdentifier = sourceObject.handle;
-            LoggingUtils.info(`Found source collection handle: ${sourceIdentifier} for ID: ${sourceId}`, 5);
+            LoggingUtils.info(`Found source collection handle: ${sourceIdentifier} for ID: ${sourceId}`, 7);
 
             targetObject = await this.getCollectionByHandle(this.targetClient, sourceIdentifier);
             break;
@@ -346,14 +340,14 @@ class MetafieldReferenceHandler {
             // For variants, try SKU first, then product handle + options
             sourceObject = await this.variantHandler.getVariantWithProductInfo(this.sourceClient, sourceId);
             if (!sourceObject) {
-              LoggingUtils.error(`Could not find source variant with ID: ${sourceId}`, 5);
+              LoggingUtils.error(`Could not find source variant with ID: ${sourceId}`, 7);
               continue;
             }
 
             // If we have a SKU, try to match by that first
             if (sourceObject.sku) {
               sourceIdentifier = sourceObject.sku;
-              LoggingUtils.info(`Found source variant SKU: ${sourceIdentifier} for ID: ${sourceId}`, 5);
+              LoggingUtils.info(`Found source variant SKU: ${sourceIdentifier} for ID: ${sourceId}`, 7);
 
               targetObject = await this.variantHandler.getVariantBySku(this.targetClient, sourceIdentifier);
 
@@ -361,12 +355,12 @@ class MetafieldReferenceHandler {
               if (targetObject) {
                 break;
               }
-              LoggingUtils.info(`Could not find target variant with SKU: ${sourceIdentifier}, trying to match by options`, 5);
+              LoggingUtils.info(`Could not find target variant with SKU: ${sourceIdentifier}, trying to match by options`, 7);
             }
 
             // If no SKU or no match found, try by product handle + options
             if (sourceObject.product && sourceObject.product.handle && sourceObject.selectedOptions) {
-              LoggingUtils.info(`Attempting to match variant by product handle: ${sourceObject.product.handle} and options for ID: ${sourceId}`, 5);
+              LoggingUtils.info(`Attempting to match variant by product handle: ${sourceObject.product.handle} and options for ID: ${sourceId}`, 7);
 
               // Use the product handle and option values to find the variant
               targetObject = await this.variantHandler.getVariantByOptions(
@@ -383,23 +377,23 @@ class MetafieldReferenceHandler {
             if (!sourceObject) continue;
 
             sourceIdentifier = sourceObject.handle;
-            LoggingUtils.info(`Found source product handle: ${sourceIdentifier} for ID: ${sourceId}`, 5);
+            LoggingUtils.info(`Found source product handle: ${sourceIdentifier} for ID: ${sourceId}`, 7);
 
             targetObject = await this.getProductByHandle(this.targetClient, sourceIdentifier);
             break;
 
           default:
-            LoggingUtils.error(`Unsupported reference type: ${refType}`, 5);
+            LoggingUtils.error(`Unsupported reference type: ${refType}`, 7);
             continue;
         }
 
         if (!targetObject) {
-          LoggingUtils.error(`Could not find target ${refType} for source ID: ${sourceId}`, 5);
+          LoggingUtils.error(`Could not find target ${refType} for source ID: ${sourceId}`, 7);
           continue;
         }
 
         const targetId = targetObject.id;
-        LoggingUtils.info(`Found target ${refType} ID: ${targetId} for source ID: ${sourceId}`, 5);
+        LoggingUtils.info(`Found target ${refType} ID: ${targetId} for source ID: ${sourceId}`, 7);
         targetIds.push(targetId);
       }
 
@@ -410,11 +404,11 @@ class MetafieldReferenceHandler {
           value: transformedValue
         };
       } else {
-        LoggingUtils.error(`Failed to transform any ${refType}s in list metafield: ${metafield.namespace}.${metafield.key}`, 4);
+        LoggingUtils.error(`Failed to transform any ${refType}s in list metafield: ${metafield.namespace}.${metafield.key}`, 6);
         return null;
       }
     } catch (error) {
-      LoggingUtils.error(`Error transforming ${refType} reference list: ${error.message}`, 4);
+      LoggingUtils.error(`Error transforming ${refType} reference list: ${error.message}`, 6);
       return null;
     }
   }
@@ -437,7 +431,7 @@ class MetafieldReferenceHandler {
         const response = await client.graphql(query, { id }, 'GetCollectionById');
         return response.collection;
       } catch (error) {
-        LoggingUtils.error(`Could not find collection for ID: ${id}`, 4);
+        LoggingUtils.error(`Could not find collection for ID: ${id}`, 6);
         return null;
       }
     } else {
@@ -461,7 +455,7 @@ class MetafieldReferenceHandler {
         const response = await client.graphql(query, { handle }, 'GetCollectionByHandle');
         return response.collectionByHandle;
       } catch (error) {
-        LoggingUtils.error(`Error fetching collection by handle: ${error.message}`, 4);
+        LoggingUtils.error(`Error fetching collection by handle: ${error.message}`, 6);
         return null;
       }
     } else {
@@ -485,7 +479,7 @@ class MetafieldReferenceHandler {
         const response = await client.graphql(query, { id }, 'GetProductById');
         return response.product;
       } catch (error) {
-        LoggingUtils.error(`Could not find product for ID: ${id}`, 4);
+        LoggingUtils.error(`Could not find product for ID: ${id}`, 6);
         return null;
       }
     } else {
@@ -509,7 +503,7 @@ class MetafieldReferenceHandler {
         const response = await client.graphql(query, { handle }, 'GetProductByHandle');
         return response.productByHandle;
       } catch (error) {
-        LoggingUtils.error(`Error fetching product by handle: ${error.message}`, 4);
+        LoggingUtils.error(`Error fetching product by handle: ${error.message}`, 6);
         return null;
       }
     } else {
