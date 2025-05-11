@@ -243,15 +243,35 @@ class ProductSyncStrategy {
    * @returns {Array} - Filtered metafields
    */
   filterMetafields(metafields) {
-    if (!this.options.namespace && !this.options.key) {
+    if (!this.options.namespace && !this.options.namespaces && !this.options.key) {
       return metafields;
     }
 
-    LoggingUtils.info(`Filtering metafields by ${this.options.namespace ? 'namespace: ' + this.options.namespace : ''} ${this.options.key ? 'key: ' + this.options.key : ''}`, 4);
+    let logMessage = '';
+
+    if (this.options.namespace) {
+      logMessage += `namespace: ${this.options.namespace} `;
+    } else if (this.options.namespaces) {
+      logMessage += `namespaces: ${this.options.namespaces.join(', ')} `;
+    }
+
+    if (this.options.key) {
+      logMessage += `key: ${this.options.key}`;
+    }
+
+    LoggingUtils.info(`Filtering metafields by ${logMessage}`, 4);
 
     const filteredMetafields = metafields.filter(metafield => {
       // Filter by namespace if provided
       if (this.options.namespace && metafield.namespace !== this.options.namespace) {
+        // Single namespace doesn't match
+        return false;
+      }
+
+      // Filter by namespaces array if provided
+      if (this.options.namespaces && Array.isArray(this.options.namespaces) &&
+          !this.options.namespaces.includes(metafield.namespace)) {
+        // Metafield namespace is not in the provided namespaces array
         return false;
       }
 

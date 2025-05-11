@@ -131,6 +131,12 @@ class MetaSyncCli {
 
     // Command-specific validations
     if (this.options.command === "definitions") {
+      // Handle comma-separated namespaces
+      if (this.options.namespace && this.options.namespace.includes(',')) {
+        this.options.namespaces = this.options.namespace.split(',').map(ns => ns.trim());
+        consola.info(`Parsed ${this.options.namespaces.length} namespaces: ${this.options.namespaces.join(', ')}`);
+      }
+
       // Validations for define command
       if (metafieldResourceTypes.includes(this.options.resource)) {
         // If key is provided, ensure it's properly formatted with namespace

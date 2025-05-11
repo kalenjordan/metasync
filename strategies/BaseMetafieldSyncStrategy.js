@@ -424,6 +424,44 @@ class BaseMetafieldSyncStrategy {
 
       return { definitionResults, dataResults };
     }
+    // Handle the comma-separated namespaces case
+    else if (this.options.namespaces && Array.isArray(this.options.namespaces)) {
+      LoggingUtils.info(`Syncing multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}...`);
+
+      // Preserve current indentation level when running multiple namespaces
+      const currentIndent = LoggingUtils.indentLevel;
+
+      // Sync each namespace separately
+      for (const namespace of this.options.namespaces) {
+        // Create a subsection for each namespace, indented under the resource type
+        LoggingUtils.info(`NAMESPACE: ${namespace}`, 0, 'main');
+        LoggingUtils.indent();
+
+        // Temporarily set the namespace option
+        const originalNamespace = this.options.namespace;
+        this.options.namespace = namespace;
+
+        // Run the sync for this namespace
+        const defSync = await this.syncDefinitionsOnly();
+
+        // Restore the original value
+        this.options.namespace = originalNamespace;
+
+        // Combine results
+        definitionResults.created += defSync.results.created;
+        definitionResults.updated += defSync.results.updated;
+        definitionResults.skipped += defSync.results.skipped;
+        definitionResults.failed += defSync.results.failed;
+
+        LoggingUtils.success(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}.`);
+        LoggingUtils.unindent();
+      }
+
+      // Restore original indentation level
+      LoggingUtils.indentLevel = currentIndent;
+
+      return { definitionResults, dataResults };
+    }
 
     // Only definition sync is supported for metafields
     if (!this.options.dataOnly) {
