@@ -507,11 +507,26 @@ class MetaobjectSyncStrategy {
           logger.warn(`No metaobject definitions found in source shop.`);
           return;
       }
-      logger.info(`\nAvailable metaobject types:`);
+
+      // Use a blank line with info method instead of \n escape character
+      logger.info(``);
+      logger.info(`Available metaobject definition types:`);
+
+      // Increase indentation level before listing types
+      logger.indent();
+
       definitions.forEach(def => {
-          logger.info(`- ${def.type} (${def.name || "No name"})`);
+          // Using 'main' type for info to get the bullet point
+          logger.info(`${def.type} (${def.name || "No name"})`, 0, 'main');
       });
-      logger.info("\nPlease run the command again with --key <type> to specify which metaobject type to sync.");
+
+      // Add a blank line after the list
+      logger.info(``);
+
+      // Reset indentation before the final message
+      logger.unindent();
+
+      logger.info(`Please run the command again with --key <type> to specify which metaobject type to sync.`);
   }
 
   async sync() {

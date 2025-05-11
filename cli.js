@@ -8,6 +8,7 @@ const ShopifyClient = require('./utils/ShopifyClient');
 const { SHOPIFY_API_VERSION } = require('./constants');
 const commandSetup = require('./utils/commandSetup');
 const shopConfig = require('./utils/shopConfig');
+const chalk = require('chalk');
 
 // Import strategies
 const strategyLoader = require('./utils/strategyLoader');
@@ -56,7 +57,7 @@ class MetaSyncCli {
       logger.info(`To allow changes, add "protected": false to this shop in .shops.json`);
       process.exit(1);
     } else if (!this.targetShopProtected) {
-      logger.info(`Target shop "${targetShopName}" is unprotected (protected: false).`);
+      logger.info(`Target shop ${chalk.cyan(targetShopName)} is ${chalk.green('unprotected')} (protected: false).')}`);
     } else {
       logger.info(`Target shop "${targetShopName}" is protected (default).`);
     }
@@ -198,13 +199,6 @@ class MetaSyncCli {
     logger.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     logger.info(`Limit: ${this.options.limit}`);
 
-    // Display protection status
-    if (this.targetShopProtected) {
-      logger.info(`Target Shop Protection: Enabled (default)`);
-    } else {
-      logger.info(`Target Shop Protection: Disabled`);
-    }
-
     // Log force-recreate if it's product data sync
     if (this.options.resource === 'product' && this.options.command === "data" && this.options.forceRecreate) {
       logger.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
@@ -224,16 +218,9 @@ class MetaSyncCli {
   }
 
   async _listDefinitionsAndExit() {
-    const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
-    let listPrompt = "";
-
     if (this.options.resource === 'metaobject') {
-      listPrompt = "\nPlease run the command again with --type <type> to specify which metaobject type to sync.";
       await this._listMetaobjectDefinitions();
     }
-    // We no longer need the metafield namespace prompt since namespace is required
-
-    logger.info(listPrompt);
   }
 
   async _listMetaobjectDefinitions() {
@@ -243,10 +230,22 @@ class MetaSyncCli {
       return;
     }
 
-    logger.info(`\nAvailable metaobject definition types:`);
+    // Use blank line and proper indentation with blank line after
+    logger.info(`Available metaobject definition types:`);
+
+    // Increase indentation level before listing types
+    logger.indent();
+
     definitions.forEach(def => {
-      logger.info(`- ${def.type} (${def.name || "No name"})`, 0, 'main');
+      // Using 'main' type for info to get the bullet point
+      logger.info(`${def.type} (${def.name || "No name"})`, 0, 'main');
     });
+
+    // Add a blank line after the list
+    logger.info(``);
+
+    // Reset indentation after the list
+    logger.unindent();
   }
 
   async _listMetafieldDefinitions() {

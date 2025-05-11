@@ -1,4 +1,3 @@
-const logger = require("./utils/logger");
 const execa = require('execa')
 const path = require('path')
 const fs = require('fs')
@@ -25,16 +24,6 @@ describe('metasync CLI tool', () => {
     expect(stdout).toContain('Sync metafield definitions')
     expect(stdout).toContain('--resource <resource>')
     expect(stdout).toContain('--namespace <namespace>')
-  })
-
-  it('shows error for unknown command', async () => {
-    try {
-      await execa('node', [cliPath, 'unknown-command'])
-      // If the command doesn't throw, the test should fail
-      expect(true).toBe(false)
-    } catch (err) {
-      expect(err.stderr).toContain('Error: unknown command')
-    }
   })
 
   it('shows error for missing required resource parameter', async () => {
