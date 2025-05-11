@@ -73,6 +73,7 @@ class MetaSyncCli {
     // Initialize result counters
     let definitionResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
+    let metafieldResults = { processed: 0, transformed: 0, blanked: 0, errors: 0 };
 
     // Validate resource type
     if (!this._validateResourceType()) {
@@ -99,10 +100,11 @@ class MetaSyncCli {
     if (syncResults) {
       definitionResults = syncResults.definitionResults || definitionResults;
       dataResults = syncResults.dataResults || dataResults;
+      metafieldResults = syncResults.metafieldResults || metafieldResults;
     }
 
     // Display summary
-    this._displaySummary(definitionResults, dataResults);
+    this._displaySummary(definitionResults, dataResults, metafieldResults);
   }
 
   _validateResourceType() {
@@ -249,39 +251,72 @@ class MetaSyncCli {
         consola.debug(`Options before creating strategy:`, this.options);
       }
 
-      const strategy = new StrategyClass(this.sourceClient, this.targetClient, this.options);
-      return await strategy.sync();
-    } else {
-      if (this.options.command === "data" && this.options.resource !== 'metaobject') {
-        consola.error(`Data sync is not yet implemented for ${this.options.resource} resource type.`);
-      } else {
-        consola.error(`Definition sync is not supported for ${this.options.resource} resource type.`);
+      const syncStrategy = new StrategyClass(this.sourceClient, this.targetClient, this.options);
+
+      // Run the strategy's sync method
+      const syncResults = await syncStrategy.sync();
+
+      if (syncResults && syncResults.metafieldResults) {
+        return {
+          definitionResults: syncResults.definitionResults || {},
+          dataResults: syncResults.dataResults || {},
+          metafieldResults: syncResults.metafieldResults || {}
+        };
       }
-      process.exit(1);
+
+      return syncResults;
+    } else {
+      consola.error(`No sync strategy available for ${this.options.resource} ${this.options.command} sync.`);
+      return null;
     }
   }
 
-  _displaySummary(definitionResults, dataResults) {
-    const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
+  _displaySummary(definitionResults, dataResults, metafieldResults) {
+    let outputTitle = '';
+    let outputResults = '';
 
-    consola.success("Sync completed:");
-
+    // Set output based on command
     if (this.options.command === "define") {
-      // Determine the friendly name for the resource type for definitions
-      let resourceNameFriendly = this.options.resource;
-      if (resourceNameFriendly === 'metaobject') {
-        resourceNameFriendly = 'Metaobject Definitions';
-      } else if (metafieldResourceTypes.includes(resourceNameFriendly)) {
-        // Capitalize first letter for metafield types
-        resourceNameFriendly = resourceNameFriendly.charAt(0).toUpperCase() + resourceNameFriendly.slice(1) + ' Metafield Definitions';
-      } else if (resourceNameFriendly === 'page') {
-        resourceNameFriendly = 'Pages';
+      outputTitle = `Definition Sync Results for ${this.options.resource.toUpperCase()}:`;
+      outputResults = `${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
+
+      // Handle deleted count if available (for force recreate)
+      if (definitionResults.deleted) {
+        outputResults += `, ${definitionResults.deleted} deleted`;
       }
-      consola.info(`${resourceNameFriendly}: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.failed} failed`);
+    } else {
+      outputTitle = `Data Sync Results for ${this.options.resource.toUpperCase()}:`;
+
+      // If definition results are available
+      if (definitionResults.created !== undefined) {
+        outputResults = `${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
+
+        // Handle deleted count if available (for force recreate)
+        if (definitionResults.deleted) {
+          outputResults += `, ${definitionResults.deleted} deleted`;
+        }
+      }
+
+      // If data results are available
+      if (dataResults && dataResults.created !== undefined) {
+        if (outputResults) {
+          outputResults += '\n';
+        }
+        outputResults += `Objects: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.skipped} skipped, ${dataResults.failed} failed`;
+      }
     }
 
-    if (this.options.command === "data" && this.options.resource === 'metaobject') {
-      consola.info(`Metaobject Data: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.failed} failed`);
+    consola.success(outputTitle);
+    consola.success(outputResults);
+
+    // Display metafield stats if available
+    if (metafieldResults && metafieldResults.processed > 0) {
+      consola.info(`Metafield References: ${metafieldResults.processed} processed, ${metafieldResults.transformed} transformed, ${metafieldResults.blanked} blanked due to errors`);
+
+      // If there were errors, highlight them
+      if (metafieldResults.errors > 0) {
+        consola.warn(`Found ${metafieldResults.errors} metafield reference errors. Check log for details.`);
+      }
     }
   }
 

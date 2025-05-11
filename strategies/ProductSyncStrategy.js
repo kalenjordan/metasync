@@ -24,6 +24,7 @@ const ProductPublicationHandler = require('../utils/ProductPublicationHandler');
 const ProductBaseHandler = require('../utils/ProductBaseHandler');
 const LoggingUtils = require('../utils/LoggingUtils');
 const ProductVariantHandler = require('../utils/ProductVariantHandler');
+const MetafieldReferenceHandler = require('../utils/MetafieldReferenceHandler');
 
 // Import GraphQL queries
 const {
@@ -57,6 +58,12 @@ class ProductSyncStrategy {
 
     // Also create a source version of the product handler for fetching
     this.sourceProductHandler = new ProductBaseHandler(sourceClient, options);
+
+    // Initialize the reference handler
+    this.referenceHandler = new MetafieldReferenceHandler(sourceClient, targetClient, options, {
+      variantHandler: this.variantHandler,
+      // We could add collection handlers and other handlers as needed
+    });
   }
 
   // --- Product Methods ---
@@ -231,148 +238,6 @@ class ProductSyncStrategy {
   }
 
   /**
-   * Transform a single collection reference metafield
-   * @param {Object} metafield - The metafield to transform
-   * @returns {Promise<Object|null>} - Transformed metafield or null if failed
-   */
-  async transformSingleCollectionReference(metafield) {
-    try {
-      // Extract the source collection ID
-      const sourceCollectionId = metafield.value;
-
-      // Get the source collection handle
-      const sourceCollection = await this.getCollectionById(this.sourceClient, sourceCollectionId);
-
-      if (!sourceCollection) {
-        return null;
-      }
-
-      const sourceHandle = sourceCollection.handle;
-      LoggingUtils.info(`Found source collection handle: ${sourceHandle}`, 4);
-
-      // Look up the collection in the target store by handle
-      const targetCollection = await this.getCollectionByHandle(this.targetClient, sourceHandle);
-
-      if (!targetCollection) {
-        LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
-        return null;
-      }
-
-      const targetId = targetCollection.id;
-      LoggingUtils.info(`Found target collection ID: ${targetId}`, 4);
-
-      // Return the transformed metafield with the target collection ID
-      return {
-        ...metafield,
-        value: targetId
-      };
-    } catch (error) {
-      LoggingUtils.error(`Error transforming collection reference: ${error.message}`, 4);
-      return null;
-    }
-  }
-
-  /**
-   * Transform a list of collection references metafield
-   * @param {Object} metafield - The metafield containing a list of collection references
-   * @returns {Promise<Object|null>} - Transformed metafield or null if failed
-   */
-  async transformCollectionReferenceList(metafield) {
-    try {
-      // Parse the JSON array of collection IDs
-      const sourceCollectionIds = JSON.parse(metafield.value);
-      LoggingUtils.info(`Found ${sourceCollectionIds.length} source collection IDs in list`, 4);
-
-      const targetCollectionIds = [];
-
-      for (const sourceId of sourceCollectionIds) {
-        // Get the source collection handle
-        const sourceCollection = await this.getCollectionById(this.sourceClient, sourceId);
-
-        if (!sourceCollection) {
-          continue;
-        }
-
-        const sourceHandle = sourceCollection.handle;
-        LoggingUtils.info(`Found source collection handle: ${sourceHandle} for ID: ${sourceId}`, 5);
-
-        // Look up the collection in the target store by handle
-        const targetCollection = await this.getCollectionByHandle(this.targetClient, sourceHandle);
-
-        if (!targetCollection) {
-          LoggingUtils.error(`Could not find target collection with handle: ${sourceHandle}`, 4);
-          continue;
-        }
-
-        const targetId = targetCollection.id;
-        LoggingUtils.info(`Found target collection ID: ${targetId} for handle: ${sourceHandle}`, 5);
-        targetCollectionIds.push(targetId);
-      }
-
-      if (targetCollectionIds.length > 0) {
-        const transformedValue = JSON.stringify(targetCollectionIds);
-        return {
-          ...metafield,
-          value: transformedValue
-        };
-      } else {
-        LoggingUtils.error(`Failed to transform any collections in list metafield: ${metafield.namespace}.${metafield.key}`, 4);
-        return null;
-      }
-    } catch (error) {
-      LoggingUtils.error(`Error transforming collection reference list: ${error.message}`, 4);
-      return null;
-    }
-  }
-
-  async transformCollectionReferenceMetafields(metafields) {
-    const transformedMetafields = [];
-    let regularCount = 0;
-    let collectionCount = 0;
-    let listCollectionCount = 0;
-    let failedCount = 0;
-
-    LoggingUtils.info(`Starting metafield transformation on ${metafields.length} metafields`, 4);
-
-    for (const metafield of metafields) {
-      // Handle regular metafields normally
-      if (metafield.type !== 'collection_reference' && metafield.type !== 'list.collection_reference') {
-        transformedMetafields.push(metafield);
-        regularCount++;
-        continue;
-      }
-
-      // Handle collection reference metafields
-      if (metafield.type === 'collection_reference') {
-        const transformedMetafield = await this.transformSingleCollectionReference(metafield);
-
-        if (transformedMetafield) {
-          transformedMetafields.push(transformedMetafield);
-          collectionCount++;
-        } else {
-          failedCount++;
-        }
-      }
-      // Handle list.collection_reference metafields
-      else if (metafield.type === 'list.collection_reference') {
-        const transformedMetafield = await this.transformCollectionReferenceList(metafield);
-
-        if (transformedMetafield) {
-          transformedMetafields.push(transformedMetafield);
-          listCollectionCount++;
-          LoggingUtils.info(`Transformed list.collection_reference metafield: ${metafield.namespace}.${metafield.key}`, 4);
-        } else {
-          failedCount++;
-        }
-      }
-    }
-
-    LoggingUtils.info(`Metafield transformation complete: ${regularCount} regular, ${collectionCount} collection refs, ${listCollectionCount} list refs, ${failedCount} failed`, 4);
-
-    return transformedMetafields;
-  }
-
-  /**
    * Filter metafields based on namespace and key options
    * @param {Array} metafields - Array of metafields to filter
    * @returns {Array} - Filtered metafields
@@ -413,25 +278,32 @@ class ProductSyncStrategy {
    * Process and transform metafields for a product
    * @param {String} productId - The product ID
    * @param {Array} metafields - Raw metafields to process
-   * @returns {Promise<void>}
+   * @returns {Promise<Object>} - Stats about the metafield processing
    */
   async processProductMetafields(productId, metafields) {
     if (!metafields || metafields.length === 0) {
-      return;
+      return { processed: 0, transformed: 0, blanked: 0, errors: 0 };
     }
 
     // Filter metafields based on namespace/key options
     const filteredMetafields = this.filterMetafields(metafields);
 
-    // Transform collection_reference metafields
-    const transformedMetafields = await this.transformCollectionReferenceMetafields(filteredMetafields);
+    // Transform reference metafields using the dedicated handler
+    const { transformedMetafields, stats } = await this.referenceHandler.transformReferences(filteredMetafields);
 
     // Log the number of metafields before and after transformation
-    LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ${transformedMetafields.length} after transformation`, 4);
+    LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ` +
+      `${stats.transformed} transformed, ${stats.blanked} blanked due to errors`, 4);
 
     // Print each transformed metafield for debugging
     if (this.debug) {
       transformedMetafields.forEach(metafield => {
+        // Skip logging blanked metafields
+        if (metafield._blanked) {
+          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [BLANKED]`, 5);
+          return;
+        }
+
         const valuePreview = typeof metafield.value === 'string' ?
           `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
           String(metafield.value);
@@ -440,6 +312,7 @@ class ProductSyncStrategy {
     }
 
     await this.metafieldHandler.syncMetafields(productId, transformedMetafields);
+    return stats;
   }
 
   async createProduct(client, product) {
@@ -602,7 +475,20 @@ class ProductSyncStrategy {
       // Process the returned products directly (for single product by handle case)
       const sourceProducts = productsIterator;
       let processedCount = 0;
-      const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
+      const results = {
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        deleted: 0,
+        metafields: {
+          processed: 0,
+          transformed: 0,
+          blanked: 0,
+          errors: 0
+        }
+      };
+
       for (let i = 0; i < sourceProducts.length; i++) {
         const product = sourceProducts[i];
         // Add newline before each product for better readability
@@ -625,9 +511,19 @@ class ProductSyncStrategy {
             // Now create the product instead of updating
             LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create');
             const created = await this.createProduct(this.targetClient, product);
+
             if (created) {
               LoggingUtils.success('Product created successfully', 1);
               results.created++;
+
+              // Track metafield stats from the creation process if metafields were processed
+              if (product.metafields && product.metafields.length > 0) {
+                const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
+                results.metafields.processed += metafieldStats.processed;
+                results.metafields.transformed += metafieldStats.transformed;
+                results.metafields.blanked += metafieldStats.blanked;
+                results.metafields.errors += metafieldStats.errors;
+              }
             } else {
               LoggingUtils.error('Failed to create product', 1);
               results.failed++;
@@ -639,6 +535,15 @@ class ProductSyncStrategy {
             if (updated) {
               LoggingUtils.success('Product updated successfully', 1);
               results.updated++;
+
+              // Track metafield stats from the update process if metafields were processed
+              if (product.metafields && product.metafields.length > 0) {
+                const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
+                results.metafields.processed += metafieldStats.processed;
+                results.metafields.transformed += metafieldStats.transformed;
+                results.metafields.blanked += metafieldStats.blanked;
+                results.metafields.errors += metafieldStats.errors;
+              }
             } else {
               LoggingUtils.error('Failed to update product', 1);
               results.failed++;
@@ -653,6 +558,15 @@ class ProductSyncStrategy {
           if (updated) {
             LoggingUtils.success('Product updated successfully', 1);
             results.updated++;
+
+            // Track metafield stats from the update process if metafields were processed
+            if (product.metafields && product.metafields.length > 0) {
+              const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
+              results.metafields.processed += metafieldStats.processed;
+              results.metafields.transformed += metafieldStats.transformed;
+              results.metafields.blanked += metafieldStats.blanked;
+              results.metafields.errors += metafieldStats.errors;
+            }
           } else {
             LoggingUtils.error('Failed to update product', 1);
             results.failed++;
@@ -666,6 +580,15 @@ class ProductSyncStrategy {
           if (created) {
             LoggingUtils.success('Product created successfully', 1);
             results.created++;
+
+            // Track metafield stats from the creation process if metafields were processed
+            if (product.metafields && product.metafields.length > 0) {
+              const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
+              results.metafields.processed += metafieldStats.processed;
+              results.metafields.transformed += metafieldStats.transformed;
+              results.metafields.blanked += metafieldStats.blanked;
+              results.metafields.errors += metafieldStats.errors;
+            }
           } else {
             LoggingUtils.error('Failed to create product', 1);
             results.failed++;
@@ -678,12 +601,40 @@ class ProductSyncStrategy {
       // Add a newline before summary
       console.log('');
       LoggingUtils.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`, 0);
-      return { definitionResults: results, dataResults: null };
+
+      // Add metafield stats to the summary if any were processed
+      if (results.metafields.processed > 0) {
+        LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors`, 0);
+      }
+
+      return {
+        definitionResults: results,
+        dataResults: null,
+        metafieldResults: {
+          processed: results.metafields.processed,
+          transformed: results.metafields.transformed,
+          blanked: results.metafields.blanked,
+          errors: results.metafields.errors
+        }
+      };
     }
 
     // For batch processing of multiple products
     let processedCount = 0;
     let batchNumber = 1;
+    const results = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      deleted: 0,
+      metafields: {
+        processed: 0,
+        transformed: 0,
+        blanked: 0,
+        errors: 0
+      }
+    };
 
     // Process products in batches
     consola.info(`Started fetching products in batches of ${this.options.batchSize || 25}`);
@@ -693,7 +644,16 @@ class ProductSyncStrategy {
 
     if (batchResult.products.length === 0) {
       consola.info(`No products found in source shop`);
-      return { definitionResults: results, dataResults: null };
+      return {
+        definitionResults: results,
+        dataResults: null,
+        metafieldResults: {
+          processed: 0,
+          transformed: 0,
+          blanked: 0,
+          errors: 0
+        }
+      };
     }
 
     do {
@@ -731,9 +691,19 @@ class ProductSyncStrategy {
             // Now create the product instead of updating
             LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create', 1);
             const created = await this.createProduct(this.targetClient, product);
+
             if (created) {
               LoggingUtils.success('Product created successfully', 2);
               results.created++;
+
+              // Track metafield stats from the creation process if metafields were processed
+              if (product.metafields && product.metafields.length > 0) {
+                const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
+                results.metafields.processed += metafieldStats.processed;
+                results.metafields.transformed += metafieldStats.transformed;
+                results.metafields.blanked += metafieldStats.blanked;
+                results.metafields.errors += metafieldStats.errors;
+              }
             } else {
               LoggingUtils.error('Failed to create product', 2);
               results.failed++;
@@ -745,6 +715,15 @@ class ProductSyncStrategy {
             if (updated) {
               LoggingUtils.success('Product updated successfully', 2);
               results.updated++;
+
+              // Track metafield stats from the update process if metafields were processed
+              if (product.metafields && product.metafields.length > 0) {
+                const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
+                results.metafields.processed += metafieldStats.processed;
+                results.metafields.transformed += metafieldStats.transformed;
+                results.metafields.blanked += metafieldStats.blanked;
+                results.metafields.errors += metafieldStats.errors;
+              }
             } else {
               LoggingUtils.error('Failed to update product', 2);
               results.failed++;
@@ -759,6 +738,15 @@ class ProductSyncStrategy {
           if (updated) {
             LoggingUtils.success('Product updated successfully', 2);
             results.updated++;
+
+            // Track metafield stats from the update process if metafields were processed
+            if (product.metafields && product.metafields.length > 0) {
+              const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
+              results.metafields.processed += metafieldStats.processed;
+              results.metafields.transformed += metafieldStats.transformed;
+              results.metafields.blanked += metafieldStats.blanked;
+              results.metafields.errors += metafieldStats.errors;
+            }
           } else {
             LoggingUtils.error('Failed to update product', 2);
             results.failed++;
@@ -772,6 +760,15 @@ class ProductSyncStrategy {
           if (created) {
             LoggingUtils.success('Product created successfully', 2);
             results.created++;
+
+            // Track metafield stats from the creation process if metafields were processed
+            if (product.metafields && product.metafields.length > 0) {
+              const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
+              results.metafields.processed += metafieldStats.processed;
+              results.metafields.transformed += metafieldStats.transformed;
+              results.metafields.blanked += metafieldStats.blanked;
+              results.metafields.errors += metafieldStats.errors;
+            }
           } else {
             LoggingUtils.error('Failed to create product', 2);
             results.failed++;
@@ -797,7 +794,22 @@ class ProductSyncStrategy {
     // Add a newline before summary
     console.log('');
     LoggingUtils.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`, 0);
-    return { definitionResults: results, dataResults: null };
+
+    // Add metafield stats to the summary if any were processed
+    if (results.metafields.processed > 0) {
+      LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors`, 0);
+    }
+
+    return {
+      definitionResults: results,
+      dataResults: null,
+      metafieldResults: {
+        processed: results.metafields.processed,
+        transformed: results.metafields.transformed,
+        blanked: results.metafields.blanked,
+        errors: results.metafields.errors
+      }
+    };
   }
 }
 

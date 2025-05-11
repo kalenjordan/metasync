@@ -274,14 +274,15 @@ class ProductVariantHandler {
             optionName: option.name
           })),
           sourceMetafields: sourceVariant.metafields, // Store metafields to apply after creation
-          sourceImage: sourceVariant.image // Store image to apply after creation
+          sourceImage: sourceVariant.image, // Store image to apply after creation
+          sourceOptions: sourceVariant.selectedOptions // Store options for reference matching later
         };
 
         // Add inventory item data if available
         if (sourceVariant.inventoryItem) {
           createInput.inventoryItem = {};
 
-          // Add sku to inventoryItem
+          // Add sku to inventoryItem if available
           if (sourceVariant.sku) {
             createInput.inventoryItem.sku = sourceVariant.sku;
           }
@@ -400,8 +401,8 @@ class ProductVariantHandler {
     if (variantsToCreate.length > 0) {
       LoggingUtils.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`, 3);
 
-      // Remove the sourceMetafields and sourceImage from the input as it's not part of the API
-      const createInputs = variantsToCreate.map(({ sourceMetafields, sourceImage, ...rest }) => rest);
+      // Remove the sourceMetafields, sourceImage, and sourceOptions from the input as they're not part of the API
+      const createInputs = variantsToCreate.map(({ sourceMetafields, sourceImage, sourceOptions, ...rest }) => rest);
 
       const createVariantsMutation = `#graphql
         mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -441,28 +442,38 @@ class ProductVariantHandler {
             // Now handle metafields and images for each created variant
             for (let i = 0; i < result.productVariantsBulkCreate.productVariants.length; i++) {
               const createdVariant = result.productVariantsBulkCreate.productVariants[i];
-              const sourceMetafields = variantsToCreate[i].sourceMetafields;
-              const sourceImage = variantsToCreate[i].sourceImage;
+              const sourceData = variantsToCreate[i];
+
+              // For matching multiple created variants to source variants when SKUs aren't available
+              // Match by option values to ensure we're processing the right variant
+              const matchingVariantIndex = this.findMatchingVariantIndex(
+                result.productVariantsBulkCreate.productVariants,
+                sourceData.sourceOptions
+              );
+
+              const targetVariant = matchingVariantIndex !== -1
+                ? result.productVariantsBulkCreate.productVariants[matchingVariantIndex]
+                : createdVariant;
 
               // Handle metafields
-              if (sourceMetafields && sourceMetafields.length > 0 && this.metafieldHandler) {
-                LoggingUtils.info(`Syncing ${sourceMetafields.length} metafields for new variant ${createdVariant.id}`, 4);
+              if (sourceData.sourceMetafields && sourceData.sourceMetafields.length > 0 && this.metafieldHandler) {
+                LoggingUtils.info(`Syncing ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
                 await this.metafieldHandler.syncMetafields(
-                  createdVariant.id,
-                  sourceMetafields
+                  targetVariant.id,
+                  sourceData.sourceMetafields
                 );
-              } else if (sourceMetafields && sourceMetafields.length > 0) {
-                LoggingUtils.info(`Would sync ${sourceMetafields.length} metafields for new variant ${createdVariant.id}`, 4);
+              } else if (sourceData.sourceMetafields && sourceData.sourceMetafields.length > 0) {
+                LoggingUtils.info(`Would sync ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
               }
 
               // Handle image
-              if (sourceImage && sourceImage.src) {
-                const sourceFilename = sourceImage.src.split('/').pop().split('?')[0];
+              if (sourceData.sourceImage && sourceData.sourceImage.src) {
+                const sourceFilename = sourceData.sourceImage.src.split('/').pop().split('?')[0];
                 if (imageIdMap[sourceFilename]) {
                   if (this.imageHandler) {
-                    await this.updateVariantImage(createdVariant.id, imageIdMap[sourceFilename], productId);
+                    await this.updateVariantImage(targetVariant.id, imageIdMap[sourceFilename], productId);
                   } else {
-                    LoggingUtils.info(`Would assign image to new variant ${createdVariant.id}`, 4);
+                    LoggingUtils.info(`Would assign image to new variant ${targetVariant.id}`, 4);
                   }
                 }
               }
@@ -493,6 +504,41 @@ class ProductVariantHandler {
 
     // Return overall success status
     return updateSuccess && createSuccess;
+  }
+
+  /**
+   * Find the index of a variant in the created variants array by matching option values
+   * @param {Array} variants - Array of created variants
+   * @param {Array} sourceOptions - Source variant option values to match
+   * @returns {Number} - Index of the matching variant or -1 if not found
+   */
+  findMatchingVariantIndex(variants, sourceOptions) {
+    if (!variants || !variants.length || !sourceOptions || !sourceOptions.length) {
+      return -1;
+    }
+
+    // Create a normalized key for the source options
+    const sourceKey = sourceOptions
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(opt => `${opt.name}:${opt.value}`)
+      .join('|');
+
+    // Find the index of the variant with matching options
+    for (let i = 0; i < variants.length; i++) {
+      const variant = variants[i];
+      if (variant.selectedOptions) {
+        const variantKey = variant.selectedOptions
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(opt => `${opt.name}:${opt.value}`)
+          .join('|');
+
+        if (variantKey === sourceKey) {
+          return i;
+        }
+      }
+    }
+
+    return -1;
   }
 
   /**
@@ -714,6 +760,189 @@ class ProductVariantHandler {
     } else {
       LoggingUtils.info(`[DRY RUN] Would update image for variant ID: ${variantId}`, 2);
       return true;
+    }
+  }
+
+  /**
+   * Get a variant by its ID from any store
+   * @param {Object} client - Shopify client to use
+   * @param {String} variantId - The variant ID to retrieve
+   * @returns {Promise<Object|null>} - The variant object or null if not found
+   */
+  async getVariantById(client, variantId) {
+    const query = `#graphql
+      query GetVariantById($variantId: ID!) {
+        productVariant(id: $variantId) {
+          id
+          sku
+          title
+          product {
+            id
+            title
+            handle
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await client.graphql(query, { variantId }, 'GetVariantById');
+      return response.productVariant;
+    } catch (error) {
+      LoggingUtils.error(`Error fetching variant by ID ${variantId}: ${error.message}`, 4);
+      return null;
+    }
+  }
+
+  /**
+   * Get a variant by its SKU in the target store
+   * @param {Object} client - Shopify client to use
+   * @param {String} sku - The SKU to search for
+   * @returns {Promise<Object|null>} - The variant object or null if not found
+   */
+  async getVariantBySku(client, sku) {
+    const query = `#graphql
+      query GetVariantBySku($query: String!) {
+        productVariants(first: 1, query: $query) {
+          edges {
+            node {
+              id
+              sku
+              title
+              product {
+                id
+                title
+                handle
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      // Use a query that filters variants by SKU
+      const response = await client.graphql(query, { query: `sku:${sku}` }, 'GetVariantBySku');
+
+      if (response.productVariants.edges.length === 0) {
+        LoggingUtils.info(`No variant found with SKU: ${sku}`, 4);
+        return null;
+      }
+
+      return response.productVariants.edges[0].node;
+    } catch (error) {
+      LoggingUtils.error(`Error fetching variant by SKU ${sku}: ${error.message}`, 4);
+      return null;
+    }
+  }
+
+  /**
+   * Get a variant by its product handle and option values when SKU matching isn't possible
+   * @param {Object} client - Shopify client to use
+   * @param {String} productHandle - The product handle
+   * @param {Array} optionValues - Array of {name, value} option pairs
+   * @returns {Promise<Object|null>} - The variant object or null if not found
+   */
+  async getVariantByOptions(client, productHandle, optionValues) {
+    const query = `#graphql
+      query GetProductByHandle($handle: String!) {
+        productByHandle(handle: $handle) {
+          id
+          title
+          handle
+          variants(first: 100) {
+            edges {
+              node {
+                id
+                sku
+                title
+                selectedOptions {
+                  name
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await client.graphql(query, { handle: productHandle }, 'GetProductByHandle');
+
+      if (!response.productByHandle) {
+        LoggingUtils.error(`No product found with handle: ${productHandle}`, 4);
+        return null;
+      }
+
+      // Get all variants from the product
+      const variants = response.productByHandle.variants.edges.map(edge => edge.node);
+
+      if (variants.length === 0) {
+        LoggingUtils.error(`No variants found for product: ${productHandle}`, 4);
+        return null;
+      }
+
+      // Create a normalized key for target option values for matching
+      const targetKey = optionValues
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(opt => `${opt.name}:${opt.value}`)
+        .join('|');
+
+      // Find matching variant
+      const matchingVariant = variants.find(variant => {
+        const variantKey = variant.selectedOptions
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(opt => `${opt.name}:${opt.value}`)
+          .join('|');
+
+        return variantKey === targetKey;
+      });
+
+      if (!matchingVariant) {
+        LoggingUtils.error(`No variant found with options ${targetKey} for product: ${productHandle}`, 4);
+        return null;
+      }
+
+      return matchingVariant;
+    } catch (error) {
+      LoggingUtils.error(`Error finding variant by options for product ${productHandle}: ${error.message}`, 4);
+      return null;
+    }
+  }
+
+  /**
+   * Get full details of a variant including its product and options
+   * @param {Object} client - Shopify client to use
+   * @param {String} variantId - The variant ID to retrieve
+   * @returns {Promise<Object|null>} - The variant object with product and options, or null if not found
+   */
+  async getVariantWithProductInfo(client, variantId) {
+    const query = `#graphql
+      query GetVariantWithProduct($variantId: ID!) {
+        productVariant(id: $variantId) {
+          id
+          sku
+          title
+          selectedOptions {
+            name
+            value
+          }
+          product {
+            id
+            title
+            handle
+          }
+        }
+      }
+    `;
+
+    try {
+      const response = await client.graphql(query, { variantId }, 'GetVariantWithProduct');
+      return response.productVariant;
+    } catch (error) {
+      LoggingUtils.error(`Error fetching variant with product info for ID ${variantId}: ${error.message}`, 4);
+      return null;
     }
   }
 }
