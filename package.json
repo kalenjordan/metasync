@@ -4,21 +4,14 @@
   "description": "Command-line tool to sync Shopify resources between stores",
   "main": "run.js",
   "bin": {
-    "metasync": "./run.js"
+    "metasync": "./cli.js"
   },
   "scripts": {
-    "sync": "node run.js",
-    "test": "jest",
+    "dev": "node cli.js",
     "codehawk": "codehawk .",
+    "test": "jest",
     "test:watch": "jest --watch"
   },
-  "keywords": [
-    "shopify",
-    "metaobjects",
-    "metafields",
-    "sync",
-    "cli"
-  ],
   "author": "",
   "license": "MIT",
   "dependencies": {

@@ -29,7 +29,8 @@ function setupCommandLineOptions() {
   const customizeHelp = (cmd, headerText) => {
     cmd.configureHelp({
       formatHelp: (cmd, helper) => {
-        return headerText;
+        // Ensure the help text ends with a newline
+        return headerText.endsWith('\n') ? headerText : headerText + '\n';
       }
     });
   };
@@ -65,7 +66,7 @@ Examples:
   metasync definitions metafields --resource product --namespace custom --source shopA --target shopB
   metasync definitions metaobject --type territory --source shopA --target shopB
   metasync data product --handle my-product --source shopA --target shopB --live
-  `;
+`;
 
   // Definitions command help text
   const definitionsHelpText = `
@@ -90,7 +91,7 @@ COMMANDS:
 Examples:
   metasync definitions metafields --resource product --namespace custom
   metasync definitions metaobject --type territory
-  `;
+`;
 
   // Data command help text
   const dataHelpText = `
@@ -119,7 +120,7 @@ COMMANDS:
 Examples:
   metasync data products --handle my-product --source shopA --target shopB
   metasync data metaobjects --type territory --source shopA --target shopB
-  `;
+`;
 
   // Configure help for the different contexts
   if (!isDataCommand && !isDefinitionsCommand) {
@@ -210,7 +211,7 @@ Options:
   --force-recreate        Delete and recreate products instead of updating
   --batch-size <size>     Number of products to process in each batch
   --start-cursor <cursor> Pagination cursor for resuming interrupted syncs
-      `;
+`;
       customizeHelp(cmd, productHelpText);
     } else if (pluralResource === "metaobjects") {
       cmd.option("--type <type>", "Metaobject definition type to sync (required)")
