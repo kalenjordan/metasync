@@ -1,4 +1,5 @@
 const logger = require("../utils/logger");
+const chalk = require('chalk');
 ;
 
 class BaseMetafieldSyncStrategy {
@@ -504,6 +505,7 @@ class BaseMetafieldSyncStrategy {
 
   async listAvailableDefinitions() {
     const logger = require('../utils/logger');
+    const chalk = require('chalk');
 
     logger.info(`Fetching all available ${this.resourceName} definitions...`);
     const definitions = await this.fetchMetafieldDefinitions(this.sourceClient);
@@ -526,18 +528,42 @@ class BaseMetafieldSyncStrategy {
     // Reset indentation
     logger.resetIndent();
 
+    // Add blank line before listing namespaces
+    logger.newline();
+
     // Display namespaces and their keys with indentation
     Object.keys(namespaceGroups).sort().forEach(namespace => {
-      logger.info(`${namespace}:`, 0, 'main');
+      // Get current indent and log with purple color
+      const indent = logger.getIndent();
+      console.log(`${indent}Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
+
+      // Increase indentation for contents under this namespace
       logger.indent();
+
       namespaceGroups[namespace].forEach(def => {
-        logger.info(`${def.key} (${def.name || "No name"})`, 0, 'sub');
+        logger.info(`${def.key} (${def.name || "No name"})`);
       });
+
       logger.unindent();
     });
 
     logger.info(`\nPlease run the command again with --namespace <namespace> to specify which ${this.resourceName} namespace to sync.`);
     logger.info(`Or use --namespace all to sync all namespaces at once.`);
+  }
+
+  /**
+   * Log a namespace heading with proper formatting
+   * @param {string} namespace - Namespace name
+   */
+  async logNamespaceHeading(namespace) {
+    const logger = require('../utils/logger');
+
+    // Get current indent and log with purple color
+    const indent = logger.getIndent();
+    console.log(`${indent}Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
+
+    // Increase indentation for everything under this namespace
+    logger.indent();
   }
 
   async sync() {
@@ -572,11 +598,13 @@ class BaseMetafieldSyncStrategy {
         // Preserve current indentation level when running multiple namespaces
         const currentIndent = logger.indentLevel;
 
+        // Create spacing before namespaces
+        logger.newline();
+
         // Delete each namespace separately
         for (const namespace of namespaces) {
-          // Create a subsection for each namespace, indented under the resource type
-          logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
-          logger.indent();
+          // Create a subsection for each namespace with purple heading
+          await this.logNamespaceHeading(namespace);
 
           // Temporarily set the namespace option
           const originalNamespace = this.options.namespace;
@@ -608,11 +636,13 @@ class BaseMetafieldSyncStrategy {
         // Preserve current indentation level when running multiple namespaces
         const currentIndent = logger.indentLevel;
 
+        // Create spacing before namespaces
+        logger.newline();
+
         // Delete each namespace separately
         for (const namespace of this.options.namespaces) {
-          // Create a subsection for each namespace, indented under the resource type
-          logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
-          logger.indent();
+          // Create a subsection for each namespace with purple heading
+          await this.logNamespaceHeading(namespace);
 
           // Temporarily set the namespace option
           const originalNamespace = this.options.namespace;
@@ -660,14 +690,16 @@ class BaseMetafieldSyncStrategy {
       const namespaces = [...new Set(definitions.map(def => def.namespace))];
       logger.info(`Found ${namespaces.length} namespaces to sync: ${namespaces.join(', ')}`);
 
+      // Create spacing before namespaces
+      logger.newline();
+
       // Preserve current indentation level when running multiple namespaces
       const currentIndent = logger.indentLevel;
 
       // Sync each namespace separately
       for (const namespace of namespaces) {
-        // Create a subsection for each namespace, indented under the resource type
-        logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
-        logger.indent();
+        // Create a subsection for each namespace with purple heading
+        await this.logNamespaceHeading(namespace);
 
         // Temporarily set the namespace option
         const originalNamespace = this.options.namespace;
@@ -702,11 +734,13 @@ class BaseMetafieldSyncStrategy {
       // Preserve current indentation level when running multiple namespaces
       const currentIndent = logger.indentLevel;
 
+      // Create spacing before namespaces
+      logger.newline();
+
       // Sync each namespace separately
       for (const namespace of this.options.namespaces) {
-        // Create a subsection for each namespace, indented under the resource type
-        logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
-        logger.indent();
+        // Create a subsection for each namespace with purple heading
+        await this.logNamespaceHeading(namespace);
 
         // Temporarily set the namespace option
         const originalNamespace = this.options.namespace;

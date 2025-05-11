@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # Project Structure
@@ -61,3 +61,7 @@ The project uses specialized utility classes to handle specific aspects of Shopi
     - **`commandSetup.js`**: [utils/commandSetup.js](mdc:utils/commandSetup.js) handles command-line interface setup.
 
 The utility classes follow a composition pattern, where strategy classes initialize and use these utilities rather than inheriting from them. This approach improves modularity and maintainability by breaking down complex operations into specialized components.
+
+## Chalk
+
+Use chalk package for coloringtext in cli.

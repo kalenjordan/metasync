@@ -176,6 +176,13 @@ function debug(message) {
   console.log(`${indent}${chalk.dim.blue('[DEBUG]')} ${message}`);
 }
 
+/**
+ * Log a blank line with no symbols or prefixes
+ */
+function newline() {
+  console.log('');
+}
+
 module.exports = {
   indent,
   unindent,
@@ -190,5 +197,6 @@ module.exports = {
   subdued,
   dryRun,
   section,
-  debug
+  debug,
+  newline
 };

@@ -248,7 +248,7 @@ class ProductVariantHandler {
         if (sourceVariant.metafields && sourceVariant.metafields.length > 0) {
           metafieldUpdates.push({
             targetVariantId: targetVariant.id,
-            metafields: sourceVariant.metafields
+            sourceMetafields: sourceVariant.metafields
           });
         }
 
