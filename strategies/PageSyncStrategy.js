@@ -1,4 +1,5 @@
-const consola = require('consola');
+const logger = require("../utils/logger");
+;
 const { GetPages, CreatePage, UpdatePage } = require('../graphql');
 
 class PageSyncStrategy {
@@ -16,7 +17,7 @@ class PageSyncStrategy {
       const response = await client.graphql(GetPages, { first: 100 }, 'GetPages');
       return response.pages.edges.map(edge => edge.node);
     } catch (error) {
-      consola.error(`Error fetching pages: ${error.message}`);
+      logger.error(`Error fetching pages: ${error.message}`);
       return [];
     }
   }
@@ -41,16 +42,16 @@ class PageSyncStrategy {
       try {
         const result = await client.graphql(CreatePage, { page: input }, 'CreatePage');
         if (result.pageCreate.userErrors.length > 0) {
-          consola.error(`Failed to create page "${page.title}":`, result.pageCreate.userErrors);
+          logger.error(`Failed to create page "${page.title}":`, result.pageCreate.userErrors);
           return null;
         }
         return result.pageCreate.page;
       } catch (error) {
-        consola.error(`Error creating page "${page.title}": ${error.message}`);
+        logger.error(`Error creating page "${page.title}": ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would create page "${page.title}"`);
+      logger.info(`[DRY RUN] Would create page "${page.title}"`);
       return { id: "dry-run-id", title: page.title, handle: page.handle };
     }
   }
@@ -78,16 +79,16 @@ class PageSyncStrategy {
       try {
         const result = await client.graphql(UpdatePage, { id, page: input }, 'UpdatePage');
         if (result.pageUpdate.userErrors.length > 0) {
-          consola.error(`Failed to update page "${page.title}":`, result.pageUpdate.userErrors);
+          logger.error(`Failed to update page "${page.title}":`, result.pageUpdate.userErrors);
           return null;
         }
         return result.pageUpdate.page;
       } catch (error) {
-        consola.error(`Error updating page "${page.title}": ${error.message}`);
+        logger.error(`Error updating page "${page.title}": ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would update page "${page.title}"`);
+      logger.info(`[DRY RUN] Would update page "${page.title}"`);
       return { id, title: page.title, handle: page.handle };
     }
   }
@@ -95,14 +96,14 @@ class PageSyncStrategy {
   // --- Sync Orchestration Methods ---
 
   async sync() {
-    consola.start(`Syncing pages...`);
+    logger.info(`Syncing pages...`);
 
     // Fetch pages from source and target shops
     const sourcePages = await this.fetchPages(this.sourceClient);
-    consola.info(`Found ${sourcePages.length} page(s) in source shop`);
+    logger.info(`Found ${sourcePages.length} page(s) in source shop`);
 
     const targetPages = await this.fetchPages(this.targetClient);
-    consola.info(`Found ${targetPages.length} page(s) in target shop`);
+    logger.info(`Found ${targetPages.length} page(s) in target shop`);
 
     // Create map of target pages by handle for easy lookup
     const targetPageMap = targetPages.reduce((map, page) => {
@@ -118,18 +119,18 @@ class PageSyncStrategy {
     // Process each source page
     for (const page of sourcePages) {
       if (processedCount >= this.options.limit) {
-        consola.info(`Reached processing limit (${this.options.limit}). Stopping page sync.`);
+        logger.info(`Reached processing limit (${this.options.limit}). Stopping page sync.`);
         break;
       }
 
       if (page.handle && targetPageMap[page.handle]) {
         // Update existing page
-        consola.info(`Updating page: ${page.title}`);
+        logger.info(`Updating page: ${page.title}`);
         const updated = await this.updatePage(this.targetClient, page, targetPageMap[page.handle]);
         updated ? results.updated++ : results.failed++;
       } else {
         // Create new page
-        consola.info(`Creating page: ${page.title}`);
+        logger.info(`Creating page: ${page.title}`);
         const created = await this.createPage(this.targetClient, page);
         created ? results.created++ : results.failed++;
       }
@@ -137,7 +138,7 @@ class PageSyncStrategy {
       processedCount++;
     }
 
-    consola.success(`Finished syncing pages.`);
+    logger.success(`Finished syncing pages.`);
     return { definitionResults: results, dataResults: null };
   }
 }

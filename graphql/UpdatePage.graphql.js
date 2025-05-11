@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 /**
  * GraphQL mutation to update a page in a Shopify store
  */

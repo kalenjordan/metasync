@@ -1,12 +1,12 @@
+const logger = require("./logger");
 /**
  * Product Batch Processor
  *
  * Handles batch processing of products during sync operations.
  * Provides a pagination-aware product fetcher and batch processing utilities.
  */
-const consola = require('consola');
+;
 const chalk = require('chalk');
-const LoggingUtils = require('./LoggingUtils');
 
 class ProductBatchProcessor {
   constructor(sourceClient, options = {}) {
@@ -37,7 +37,7 @@ class ProductBatchProcessor {
     let fetchedCount = 0;
 
     if (cursor) {
-      consola.info(`Starting pagination from cursor: ${chalk.blue(cursor)}`);
+      logger.info(`Starting pagination from cursor: ${chalk.blue(cursor)}`);
     }
 
     // Return an async generator function
@@ -102,7 +102,7 @@ class ProductBatchProcessor {
 
           // Log the current cursor in gray for reference
           if (this.debug) {
-            consola.debug(`Current pagination cursor: ${cursor}`);
+            logger.debug(`Current pagination cursor: ${cursor}`);
           }
 
           return {
@@ -113,7 +113,7 @@ class ProductBatchProcessor {
             cursor: cursor
           };
         } catch (error) {
-          consola.error(`Error fetching products: ${error.message}`);
+          logger.error(`Error fetching products: ${error.message}`);
           return { products: [], done: true, error: error.message };
         }
       }
@@ -162,7 +162,7 @@ class ProductBatchProcessor {
 
       return product;
     } catch (error) {
-      consola.error(`Error fetching product by handle: ${error.message}`);
+      logger.error(`Error fetching product by handle: ${error.message}`);
       return null;
     }
   }
@@ -175,7 +175,7 @@ class ProductBatchProcessor {
       const response = await client.graphql(require('../graphql').GetCollectionByHandle, { handle }, 'GetCollectionByHandle');
       return response.collectionByHandle;
     } catch (error) {
-      LoggingUtils.error(`Error fetching collection by handle: ${error.message}`, 4);
+      logger.error(`Error fetching collection by handle: ${error.message}`, 4);
       return null;
     }
   }
@@ -191,7 +191,7 @@ class ProductBatchProcessor {
       const response = await client.graphql(require('../graphql').GetCollectionById, { id }, 'GetCollectionById');
       return response.collection;
     } catch (error) {
-      LoggingUtils.error(`Could not find collection for ID: ${id}`, 4);
+      logger.error(`Could not find collection for ID: ${id}`, 4);
       return null;
     }
   }

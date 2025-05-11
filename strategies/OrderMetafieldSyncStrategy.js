@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 const BaseMetafieldSyncStrategy = require("./BaseMetafieldSyncStrategy");
 
 class OrderMetafieldSyncStrategy extends BaseMetafieldSyncStrategy {

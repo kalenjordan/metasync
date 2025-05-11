@@ -1,3 +1,4 @@
+const logger = require("./utils/logger");
 const execa = require('execa')
 const path = require('path')
 const fs = require('fs')

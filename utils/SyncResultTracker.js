@@ -4,7 +4,7 @@
  * Handles tracking and aggregating results from sync operations.
  * Provides methods to track success/failure counts and generate summary reports.
  */
-const LoggingUtils = require('./LoggingUtils');
+const logger = require('./logger');
 
 class SyncResultTracker {
   constructor() {
@@ -109,7 +109,7 @@ class SyncResultTracker {
    */
   logSummary() {
     console.log(''); // Add a newline before summary
-    LoggingUtils.success(
+    logger.success(
       `Finished syncing products. Results: ${this.results.created} created, ${this.results.updated} updated, ` +
       `${this.results.deleted} force deleted, ${this.results.failed} failed`,
       0
@@ -117,7 +117,7 @@ class SyncResultTracker {
 
     // Add metafield stats to the summary if any were processed
     if (this.results.metafields.processed > 0) {
-      LoggingUtils.info(
+      logger.info(
         `Metafield stats: ${this.results.metafields.processed} processed, ` +
         `${this.results.metafields.transformed} transformed, ` +
         `${this.results.metafields.blanked} blanked due to errors, ` +

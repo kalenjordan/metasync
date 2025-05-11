@@ -1,4 +1,5 @@
-const consola = require('consola');
+const logger = require("../utils/logger");
+;
 const ErrorHandler = require('../utils/ErrorHandler');
 
 class MetaobjectSyncStrategy {
@@ -100,7 +101,7 @@ class MetaobjectSyncStrategy {
             definitions = response.metaobjectDefinitions.nodes;
         }
     } catch (error) {
-        consola.error(`Error fetching metaobject definitions (type: ${type || 'all'}): ${error.message}`);
+        logger.error(`Error fetching metaobject definitions (type: ${type || 'all'}): ${error.message}`);
         definitions = []; // Return empty on error
     }
 
@@ -185,11 +186,11 @@ class MetaobjectSyncStrategy {
           }
           return result.metaobjectDefinitionCreate.metaobjectDefinition;
       } catch (error) {
-          consola.error(`Error creating metaobject definition ${definition.type}: ${error.message}`);
+          logger.error(`Error creating metaobject definition ${definition.type}: ${error.message}`);
           return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would create metaobject definition ${definition.type}`);
+      logger.info(`[DRY RUN] Would create metaobject definition ${definition.type}`);
       return { id: "dry-run-id", type: definition.type };
     }
   }
@@ -246,11 +247,11 @@ class MetaobjectSyncStrategy {
           }
           return result.metaobjectDefinitionUpdate.metaobjectDefinition;
       } catch (error) {
-          consola.error(`Error updating metaobject definition ${definition.type}: ${error.message}`);
+          logger.error(`Error updating metaobject definition ${definition.type}: ${error.message}`);
           return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would update metaobject definition ${definition.type}`);
+      logger.info(`[DRY RUN] Would update metaobject definition ${definition.type}`);
       return { id: existingDefinition.id, type: definition.type };
     }
   }
@@ -276,7 +277,7 @@ class MetaobjectSyncStrategy {
         const response = await client.graphql(query, { type }, 'GetMetaobjects');
         return response.metaobjects.edges.map(edge => edge.node);
     } catch (error) {
-        consola.error(`Error fetching metaobjects for type ${type}: ${error.message}`);
+        logger.error(`Error fetching metaobjects for type ${type}: ${error.message}`);
         return [];
     }
   }
@@ -299,7 +300,7 @@ class MetaobjectSyncStrategy {
     `;
 
     if (this.options.notADrill) {
-      consola.info(`Creating metaobject: ${input.handle || 'unknown'} with ${fields.length} fields`);
+      logger.info(`Creating metaobject: ${input.handle || 'unknown'} with ${fields.length} fields`);
       try {
         const result = await client.graphql(mutation, { metaobject: input }, 'CreateMetaobject');
         if (result.metaobjectCreate.userErrors.length > 0) {
@@ -328,11 +329,11 @@ class MetaobjectSyncStrategy {
         }
         return result.metaobjectCreate.metaobject;
       } catch (error) {
-        consola.error(`Error creating metaobject ${metaobject.handle || 'unknown'}: ${error.message}`);
+        logger.error(`Error creating metaobject ${metaobject.handle || 'unknown'}: ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would create metaobject ${metaobject.handle || 'unknown'} with ${fields.length} fields`);
+      logger.info(`[DRY RUN] Would create metaobject ${metaobject.handle || 'unknown'} with ${fields.length} fields`);
       return { id: "dry-run-id", handle: metaobject.handle || "dry-run-handle" };
     }
   }
@@ -354,7 +355,7 @@ class MetaobjectSyncStrategy {
     `;
 
     if (this.options.notADrill) {
-       consola.info(`Updating metaobject: ${metaobject.handle || 'unknown'}`);
+       logger.info(`Updating metaobject: ${metaobject.handle || 'unknown'}`);
        try {
             const result = await client.graphql(mutation, { id: existingMetaobject.id, metaobject: input }, 'UpdateMetaobject');
             if (result.metaobjectUpdate.userErrors.length > 0) {
@@ -383,11 +384,11 @@ class MetaobjectSyncStrategy {
             }
             return result.metaobjectUpdate.metaobject;
        } catch (error) {
-            consola.error(`Error updating metaobject ${metaobject.handle || 'unknown'}: ${error.message}`);
+            logger.error(`Error updating metaobject ${metaobject.handle || 'unknown'}: ${error.message}`);
             return null;
        }
     } else {
-      consola.info(`[DRY RUN] Would update metaobject ${metaobject.handle || 'unknown'}`);
+      logger.info(`[DRY RUN] Would update metaobject ${metaobject.handle || 'unknown'}`);
       return { id: existingMetaobject.id, handle: metaobject.handle || existingMetaobject.handle };
     }
   }
@@ -395,17 +396,17 @@ class MetaobjectSyncStrategy {
   // --- Sync Orchestration Methods ---
 
   async syncDefinitionsOnly() {
-    consola.start("Syncing metaobject definitions...");
+    logger.info("Syncing metaobject definitions...");
     const sourceDefinitions = await this.fetchMetaobjectDefinitions(this.sourceClient, this.options.key);
 
     if (sourceDefinitions.length === 0) {
-      consola.warn(this.options.key ? `No metaobject definitions found in source for type: ${this.options.key}` : `No metaobject definitions found in source.`);
+      logger.warn(this.options.key ? `No metaobject definitions found in source for type: ${this.options.key}` : `No metaobject definitions found in source.`);
       return { results: { created: 0, updated: 0, skipped: 0, failed: 0 }, definitionTypes: [] };
     }
-    consola.info(`Found ${sourceDefinitions.length} definition(s) in source${this.options.key ? ` for type: ${this.options.key}` : ''}`);
+    logger.info(`Found ${sourceDefinitions.length} definition(s) in source${this.options.key ? ` for type: ${this.options.key}` : ''}`);
 
     const targetDefinitions = await this.fetchMetaobjectDefinitions(this.targetClient);
-    consola.info(`Found ${targetDefinitions.length} definition(s) in target`);
+    logger.info(`Found ${targetDefinitions.length} definition(s) in target`);
     const targetDefinitionMap = targetDefinitions.reduce((map, def) => { map[def.type] = def; return map; }, {});
 
     const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
@@ -413,33 +414,33 @@ class MetaobjectSyncStrategy {
 
     for (const definition of sourceDefinitions) {
       if (processedCount >= this.options.limit) {
-        consola.info(`Reached processing limit (${this.options.limit}). Stopping definition sync.`);
+        logger.info(`Reached processing limit (${this.options.limit}). Stopping definition sync.`);
         break;
       }
       if (targetDefinitionMap[definition.type]) {
-        consola.info(`Updating metaobject definition: ${definition.type}`);
+        logger.info(`Updating metaobject definition: ${definition.type}`);
         const updated = await this.updateMetaobjectDefinition(this.targetClient, definition, targetDefinitionMap[definition.type]);
         updated ? results.updated++ : results.failed++;
       } else {
-        consola.info(`Creating metaobject definition: ${definition.type}`);
+        logger.info(`Creating metaobject definition: ${definition.type}`);
         const created = await this.createMetaobjectDefinition(this.targetClient, definition);
         created ? results.created++ : results.failed++;
       }
       processedCount++;
     }
-    consola.success("Finished syncing metaobject definitions.");
+    logger.success("Finished syncing metaobject definitions.");
     return { results, definitionTypes: sourceDefinitions.map(def => def.type) };
   }
 
   async syncDataOnly(definitionTypes) {
-      consola.start("Syncing metaobject data...");
+      logger.info("Syncing metaobject data...");
       const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
       for (const definitionType of definitionTypes) {
-          consola.start(`Syncing data for type: ${definitionType}`);
+          logger.info(`Syncing data for type: ${definitionType}`);
           const sourceDefinitions = await this.fetchMetaobjectDefinitions(this.sourceClient, definitionType);
           if (sourceDefinitions.length === 0) {
-              consola.warn(`No definition found for type: ${definitionType}, skipping data sync`);
+              logger.warn(`No definition found for type: ${definitionType}, skipping data sync`);
               continue;
           }
           const definition = sourceDefinitions[0];
@@ -449,26 +450,26 @@ class MetaobjectSyncStrategy {
           }, {}) || {};
 
           const sourceMetaobjects = await this.fetchMetaobjects(this.sourceClient, definitionType);
-          consola.info(`Found ${sourceMetaobjects.length} object(s) in source for type ${definitionType}`);
+          logger.info(`Found ${sourceMetaobjects.length} object(s) in source for type ${definitionType}`);
           const targetMetaobjects = await this.fetchMetaobjects(this.targetClient, definitionType);
-          consola.info(`Found ${targetMetaobjects.length} object(s) in target for type ${definitionType}`);
+          logger.info(`Found ${targetMetaobjects.length} object(s) in target for type ${definitionType}`);
           const targetMetaobjectMap = targetMetaobjects.reduce((map, obj) => { if(obj.handle) map[obj.handle] = obj; return map; }, {});
 
           let processedCount = 0;
           for (const metaobject of sourceMetaobjects) {
               if (processedCount >= this.options.limit) {
-                  consola.info(`Reached data processing limit (${this.options.limit}) for type ${definitionType}.`);
+                  logger.info(`Reached data processing limit (${this.options.limit}) for type ${definitionType}.`);
                   break;
               }
               const existingFieldMap = metaobject.fields.reduce((map, f) => { map[f.key] = f; return map; }, {});
               const processedMetaobject = { ...metaobject, fields: [...metaobject.fields] }; // Clone
 
               if (this.debug && Object.keys(requiredFields).length > 0) {
-                  consola.debug(`Metaobject ${metaobject.handle || 'unknown'} required fields: ${Object.keys(requiredFields).join(', ')}`);
+                  logger.debug(`Metaobject ${metaobject.handle || 'unknown'} required fields: ${Object.keys(requiredFields).join(', ')}`);
               }
               Object.entries(requiredFields).forEach(([key, fieldInfo]) => {
                   if (!existingFieldMap[key] || existingFieldMap[key].value === null || existingFieldMap[key].value === undefined) {
-                      consola.warn(`Adding missing required field '${fieldInfo.name}' (${key}) to metaobject ${metaobject.handle || 'unknown'}`);
+                      logger.warn(`Adding missing required field '${fieldInfo.name}' (${key}) to metaobject ${metaobject.handle || 'unknown'}`);
                       let defaultValue = "";
                       // Simplified default value logic
                       if (fieldInfo.type === "boolean") defaultValue = "false";
@@ -493,24 +494,24 @@ class MetaobjectSyncStrategy {
               }
               processedCount++;
           }
-          consola.success(`Finished syncing data for type: ${definitionType}`);
+          logger.success(`Finished syncing data for type: ${definitionType}`);
       }
-      consola.success("Finished syncing metaobject data.");
+      logger.success("Finished syncing metaobject data.");
       return results;
   }
 
   async listAvailableDefinitions() {
-      consola.info(`No specific metaobject type specified (--key). Fetching available types...`);
+      logger.info(`No specific metaobject type specified (--key). Fetching available types...`);
       const definitions = await this.fetchMetaobjectDefinitions(this.sourceClient);
       if (definitions.length === 0) {
-          consola.warn(`No metaobject definitions found in source shop.`);
+          logger.warn(`No metaobject definitions found in source shop.`);
           return;
       }
-      consola.info(`\nAvailable metaobject types:`);
+      logger.info(`\nAvailable metaobject types:`);
       definitions.forEach(def => {
-          consola.log(`- ${def.type} (${def.name || "No name"})`);
+          logger.info(`- ${def.type} (${def.name || "No name"})`);
       });
-      consola.info("\nPlease run the command again with --key <type> to specify which metaobject type to sync.");
+      logger.info("\nPlease run the command again with --key <type> to specify which metaobject type to sync.");
   }
 
   async sync() {

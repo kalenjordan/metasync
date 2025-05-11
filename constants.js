@@ -1,3 +1,4 @@
+const logger = require("./utils/logger");
 /**
  * Centralized constants for the application
  */

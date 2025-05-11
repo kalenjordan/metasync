@@ -1,6 +1,7 @@
+const logger = require("./logger");
 const path = require('path');
 const fs = require('fs');
-const consola = require('consola');
+;
 
 /**
  * Get shop configuration from .shops.json file by shop name
@@ -29,7 +30,7 @@ function getShopConfig(shopName) {
 
     return shopConfig;
   } catch (error) {
-    consola.error('Error reading .shops.json:', error.message);
+    logger.error('Error reading .shops.json:', error.message);
     return null;
   }
 }

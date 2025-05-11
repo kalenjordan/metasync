@@ -1,5 +1,6 @@
+const logger = require("./logger");
 const { program } = require("commander");
-const consola = require('consola');
+;
 
 /**
  * Setup command line options and parse argv
@@ -333,8 +334,8 @@ Options:
   program
     .on('command:*', function (operands) {
       const availableCommands = program.commands.map(cmd => cmd.name());
-      consola.error(`Error: unknown command '${operands[0]}'`);
-      consola.info(`Available commands: ${availableCommands.join(', ')}`);
+      logger.error(`Error: unknown command '${operands[0]}'`);
+      logger.info(`Available commands: ${availableCommands.join(', ')}`);
       process.exit(1);
     });
 
@@ -347,10 +348,10 @@ Options:
 
   // For legacy support, show new command structure if someone uses older commands
   if (program.args.length > 0 && !mergedOptions.command) {
-    consola.warn(`Note: Command structure has changed. Try using one of these commands instead:`);
-    consola.info(`  metasync definitions metafields --resource <resource> --namespace <namespace>`);
-    consola.info(`  metasync definitions metaobject --type <type>`);
-    consola.info(`  metasync data products|metaobjects|pages [options]`);
+    logger.warn(`Note: Command structure has changed. Try using one of these commands instead:`);
+    logger.info(`  metasync definitions metafields --resource <resource> --namespace <namespace>`);
+    logger.info(`  metasync definitions metaobject --type <type>`);
+    logger.info(`  metasync data products|metaobjects|pages [options]`);
   }
 
   return mergedOptions;

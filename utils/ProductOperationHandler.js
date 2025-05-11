@@ -1,10 +1,10 @@
+const logger = require("./logger");
 /**
  * Product Operation Handler
  *
  * Handles creation and updating of products during sync operations.
  * Coordinates the complex process of syncing products with their related entities.
  */
-const LoggingUtils = require('./LoggingUtils');
 const SyncResultTracker = require('./SyncResultTracker');
 
 class ProductOperationHandler {
@@ -105,19 +105,19 @@ class ProductOperationHandler {
           results
         };
       } catch (error) {
-        LoggingUtils.error(`Error creating product "${product.title}": ${error.message}`, 3);
+        logger.error(`Error creating product "${product.title}": ${error.message}`, 3);
         return null;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would create product "${product.title}"`, 3, 'main');
-      LoggingUtils.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`, 4);
-      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
+      logger.info(`[DRY RUN] Would create product "${product.title}"`, 3, 'main');
+      logger.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`, 4);
+      logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
 
       if (product.publications && product.publications.length > 0) {
         const publishedChannels = product.publications
           .filter(pub => pub.isPublished)
           .map(pub => pub.channel.handle);
-        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
+        logger.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
       }
 
       return {
@@ -188,7 +188,7 @@ class ProductOperationHandler {
         if (updatedProduct.id && product.variants && product.variants.length > 0) {
           await this.variantHandler.updateProductVariants(updatedProduct.id, product.variants);
         } else {
-          LoggingUtils.info(`No variants to update for "${product.title}"`, 4);
+          logger.info(`No variants to update for "${product.title}"`, 4);
         }
 
         // Step 2: Sync images
@@ -217,19 +217,19 @@ class ProductOperationHandler {
           results
         };
       } catch (error) {
-        LoggingUtils.error(`Error updating product "${product.title}": ${error.message}`, 3);
+        logger.error(`Error updating product "${product.title}": ${error.message}`, 3);
         return null;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would update product "${product.title}"`, 2, 'main');
-      LoggingUtils.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 3);
-      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
+      logger.info(`[DRY RUN] Would update product "${product.title}"`, 2, 'main');
+      logger.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 3);
+      logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
 
       if (product.publications && product.publications.length > 0) {
         const publishedChannels = product.publications
           .filter(pub => pub.isPublished)
           .map(pub => pub.channel.handle);
-        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
+        logger.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
       }
 
       return {

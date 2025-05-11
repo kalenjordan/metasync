@@ -14,14 +14,14 @@
  * Variant options are accessed via selectedOptions instead of deprecated option1/option2/option3 fields.
  *
  */
-const consola = require('consola');
+;
 
 // Import utility classes
 const MetafieldHandler = require('../utils/MetafieldHandler');
 const ProductImageHandler = require('../utils/ProductImageHandler');
 const ProductPublicationHandler = require('../utils/ProductPublicationHandler');
 const ProductBaseHandler = require('../utils/ProductBaseHandler');
-const LoggingUtils = require('../utils/LoggingUtils');
+const logger = require('../utils/logger');
 const ProductVariantHandler = require('../utils/ProductVariantHandler');
 const MetafieldReferenceHandler = require('../utils/MetafieldReferenceHandler');
 const ProductBatchProcessor = require('../utils/ProductBatchProcessor');
@@ -82,11 +82,11 @@ class ProductSyncStrategy {
   // --- Sync Orchestration Methods ---
 
   async sync() {
-    consola.start(`Syncing products...`);
+    logger.info(`Syncing products...`);
 
     // Debug: Log all options to help diagnose issues
     if (this.debug) {
-      consola.debug(`Options received by ProductSyncStrategy:`, this.options);
+      logger.debug(`Options received by ProductSyncStrategy:`, this.options);
     }
 
     // Fetch products from source shop with options
@@ -94,7 +94,7 @@ class ProductSyncStrategy {
 
     // If a specific handle was provided, use it for filtering
     if (this.options.handle) {
-      consola.info(`Syncing only product with handle: ${this.options.handle}`);
+      logger.info(`Syncing only product with handle: ${this.options.handle}`);
       options.handle = this.options.handle;
     }
 
@@ -120,7 +120,7 @@ class ProductSyncStrategy {
    * @param {Array} sourceProducts - The source product(s) to process
    */
   async processSingleProduct(sourceProducts) {
-    consola.info(`Found ${sourceProducts.length} product(s) in source shop`);
+    logger.info(`Found ${sourceProducts.length} product(s) in source shop`);
 
     let processedCount = 0;
 
@@ -152,13 +152,13 @@ class ProductSyncStrategy {
     let batchNumber = 1;
 
     // Process products in batches
-    consola.info(`Started fetching products in batches of ${this.options.batchSize || 25}`);
+    logger.info(`Started fetching products in batches of ${this.options.batchSize || 25}`);
 
     // Fetch the first batch
     let batchResult = await productsIterator.fetchNextBatch();
 
     if (batchResult.products.length === 0) {
-      consola.info(`No products found in source shop`);
+      logger.info(`No products found in source shop`);
       return;
     }
 
@@ -167,13 +167,13 @@ class ProductSyncStrategy {
       // Add a proper empty line without an info icon
       console.log('');
       // Remove the \n from the beginning of this string
-      consola.info(`Processing batch ${batchNumber}: ${sourceProducts.length} products (${batchResult.fetchedCount} total so far)`);
+      logger.info(`Processing batch ${batchNumber}: ${sourceProducts.length} products (${batchResult.fetchedCount} total so far)`);
 
       // Process each source product in this batch
       for (let i = 0; i < sourceProducts.length; i++) {
         const product = sourceProducts[i];
         if (processedCount >= this.options.limit) {
-          consola.info(`  Reached processing limit (${this.options.limit}). Stopping product sync.`);
+          logger.info(`  Reached processing limit (${this.options.limit}). Stopping product sync.`);
           break;
         }
 
@@ -198,7 +198,7 @@ class ProductSyncStrategy {
       // Log the cursor at the end of each batch for potential resumption
       if (batchResult.cursor) {
         console.log('');
-        LoggingUtils.subdued(`Current batch end cursor: ${batchResult.cursor}`, 1);
+        logger.subdued(`Current batch end cursor: ${batchResult.cursor}`, 1);
       }
 
       // Fetch the next batch
@@ -218,7 +218,7 @@ class ProductSyncStrategy {
   async processProduct(product, targetProduct, productNumInBatch, batchSize, totalProcessed) {
     // If force recreate is enabled and the product exists, delete it first
     if (this.forceRecreate && targetProduct) {
-      LoggingUtils.logProductAction(
+      logger.logProductAction(
         `Force recreating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
         product.title,
         product.handle,
@@ -229,11 +229,11 @@ class ProductSyncStrategy {
       const deleted = await this.productHandler.deleteProduct(targetProduct.id);
 
       if (deleted) {
-        LoggingUtils.success('Successfully deleted existing product', 2);
+        logger.success('Successfully deleted existing product', 2);
         this.resultTracker.trackDeletion();
 
         // Now create the product instead of updating
-        LoggingUtils.logProductAction(
+        logger.logProductAction(
           `Creating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
           product.title,
           product.handle,
@@ -244,29 +244,29 @@ class ProductSyncStrategy {
         const createResult = await this.productOperationHandler.createProduct(product);
 
         if (createResult) {
-          LoggingUtils.success('Product created successfully', 2);
+          logger.success('Product created successfully', 2);
           this.resultTracker.trackCreation(createResult);
         } else {
-          LoggingUtils.error('Failed to create product', 2);
+          logger.error('Failed to create product', 2);
           this.resultTracker.trackFailure();
         }
       } else {
-        LoggingUtils.error('Failed to delete existing product', 2);
-        LoggingUtils.info('Attempting to update instead', 2);
+        logger.error('Failed to delete existing product', 2);
+        logger.info('Attempting to update instead', 2);
 
         const updateResult = await this.productOperationHandler.updateProduct(product, targetProduct);
 
         if (updateResult) {
-          LoggingUtils.success('Product updated successfully', 2);
+          logger.success('Product updated successfully', 2);
           this.resultTracker.trackUpdate(updateResult);
         } else {
-          LoggingUtils.error('Failed to update product', 2);
+          logger.error('Failed to update product', 2);
           this.resultTracker.trackFailure();
         }
       }
     } else if (targetProduct) {
       // Update existing product
-      LoggingUtils.logProductAction(
+      logger.logProductAction(
         `Updating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
         product.title,
         product.handle,
@@ -277,15 +277,15 @@ class ProductSyncStrategy {
       const updateResult = await this.productOperationHandler.updateProduct(product, targetProduct);
 
       if (updateResult) {
-        LoggingUtils.success('Product updated successfully', 2);
+        logger.success('Product updated successfully', 2);
         this.resultTracker.trackUpdate(updateResult);
       } else {
-        LoggingUtils.error('Failed to update product', 2);
+        logger.error('Failed to update product', 2);
         this.resultTracker.trackFailure();
       }
     } else {
       // Create new product
-      LoggingUtils.logProductAction(
+      logger.logProductAction(
         `Creating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
         product.title,
         product.handle,
@@ -296,10 +296,10 @@ class ProductSyncStrategy {
       const createResult = await this.productOperationHandler.createProduct(product);
 
       if (createResult) {
-        LoggingUtils.success('Product created successfully', 2);
+        logger.success('Product created successfully', 2);
         this.resultTracker.trackCreation(createResult);
       } else {
-        LoggingUtils.error('Failed to create product', 2);
+        logger.error('Failed to create product', 2);
         this.resultTracker.trackFailure();
       }
     }

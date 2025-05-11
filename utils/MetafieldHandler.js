@@ -4,8 +4,8 @@
  * Handles batching and synchronization of metafields for various Shopify resources.
  * Supports batching to respect Shopify's 25-metafield-per-call limit.
  */
-const consola = require('consola');
-const LoggingUtils = require('./LoggingUtils');
+;
+const logger = require('./logger');
 const ErrorHandler = require('./ErrorHandler');
 
 class MetafieldHandler {
@@ -27,7 +27,7 @@ class MetafieldHandler {
     if (!metafields || metafields.length === 0) return true;
 
     // Log how many metafields we're syncing
-    LoggingUtils.info(`Syncing ${metafields.length} metafields for ID: ${ownerId}`, 2, 'main');
+    logger.info(`Syncing ${metafields.length} metafields for ID: ${ownerId}`, 2, 'main');
 
     // Split metafields into batches of 25 (Shopify limit per metafieldsSet mutation)
     const metafieldBatches = [];
@@ -38,7 +38,7 @@ class MetafieldHandler {
       metafieldBatches.push(metafields.slice(i, i + BATCH_SIZE));
     }
 
-    LoggingUtils.info(`Processing ${metafieldBatches.length} batches of metafields (max ${BATCH_SIZE} per batch)`, 3);
+    logger.info(`Processing ${metafieldBatches.length} batches of metafields (max ${BATCH_SIZE} per batch)`, 3);
 
     let successCount = 0;
     let failedCount = 0;
@@ -46,7 +46,7 @@ class MetafieldHandler {
     // Process each batch
     for (let batchIndex = 0; batchIndex < metafieldBatches.length; batchIndex++) {
       const metafieldBatch = metafieldBatches[batchIndex];
-      LoggingUtils.info(`Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`, 4);
+      logger.info(`Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`, 4);
 
       // Prepare metafields inputs for this batch
       const metafieldsInput = metafieldBatch.map(metafield => ({
@@ -104,27 +104,27 @@ class MetafieldHandler {
             failedCount += metafieldBatch.length;
           } else {
             const metafieldCount = result.metafieldsSet.metafields.length;
-            LoggingUtils.success(`Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`, 4);
+            logger.success(`Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`, 4);
             successCount += metafieldCount;
 
             // Log individual metafields if debug is enabled
             if (this.debug) {
               result.metafieldsSet.metafields.forEach(metafield => {
-                consola.debug(`Set metafield ${metafield.namespace}.${metafield.key}`);
+                logger.debug(`Set metafield ${metafield.namespace}.${metafield.key}`);
               });
             }
           }
         } catch (error) {
-          LoggingUtils.error(`Error setting metafields in batch ${batchIndex + 1}: ${error.message}`, 5);
+          logger.error(`Error setting metafields in batch ${batchIndex + 1}: ${error.message}`, 5);
           failedCount += metafieldBatch.length;
         }
       } else {
-        LoggingUtils.info(`[DRY RUN] Would set ${metafieldBatch.length} metafields in batch ${batchIndex + 1}`, 5);
+        logger.info(`[DRY RUN] Would set ${metafieldBatch.length} metafields in batch ${batchIndex + 1}`, 5);
 
         // Log individual metafields if debug is enabled
         if (this.debug) {
           metafieldBatch.forEach(metafield => {
-            consola.debug(`[DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
+            logger.debug(`[DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
           });
         }
       }
@@ -132,7 +132,7 @@ class MetafieldHandler {
 
     // Return success status
     if (this.options.notADrill) {
-      LoggingUtils.info(`Metafields sync complete: ${successCount} successful, ${failedCount} failed`, 4);
+      logger.info(`Metafields sync complete: ${successCount} successful, ${failedCount} failed`, 4);
       return failedCount === 0;
     } else {
       return true;

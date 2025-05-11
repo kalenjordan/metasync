@@ -7,8 +7,8 @@
  * - Variant image association
  * - Variant metafield management
  */
-const consola = require('consola');
-const LoggingUtils = require('./LoggingUtils');
+;
+const logger = require('./logger');
 
 class ProductVariantHandler {
   constructor(client, options = {}, dependencies = {}) {
@@ -29,7 +29,7 @@ class ProductVariantHandler {
    * @returns {Promise<boolean>} - Success status
    */
   async updateProductVariants(productId, sourceVariants, logPrefix = '') {
-    LoggingUtils.info(`Preparing to update variants for product ID: ${productId}`, 2, 'main');
+    logger.info(`Preparing to update variants for product ID: ${productId}`, 2, 'main');
 
     // First, fetch current variants from the target product to get their IDs
     const targetVariantsQuery = `#graphql
@@ -94,11 +94,11 @@ class ProductVariantHandler {
       targetVariants = response.product.variants.edges.map(edge => edge.node);
       targetImages = response.product.images.edges.map(edge => edge.node);
 
-      LoggingUtils.info(`Found ${targetVariants.length} existing variants in target product`, 3);
-      LoggingUtils.info(`Found ${targetImages.length} existing images in target product`, 3);
+      logger.info(`Found ${targetVariants.length} existing variants in target product`, 3);
+      logger.info(`Found ${targetImages.length} existing images in target product`, 3);
 
     } catch (error) {
-      LoggingUtils.error(`Error fetching target product variants: ${error.message}`, 3);
+      logger.error(`Error fetching target product variants: ${error.message}`, 3);
       return false;
     }
 
@@ -146,7 +146,7 @@ class ProductVariantHandler {
 
     // Upload new variant images if needed
     if (variantImagesToUpload.length > 0 && this.imageHandler && this.options.notADrill) {
-      LoggingUtils.info(`Uploading ${variantImagesToUpload.length} variant images`, 3);
+      logger.info(`Uploading ${variantImagesToUpload.length} variant images`, 3);
       await this.imageHandler.syncProductImages(productId, variantImagesToUpload);
 
       // Refresh image IDs after upload
@@ -176,9 +176,9 @@ class ProductVariantHandler {
           imageIdMap[filename] = img.id;
         });
 
-        LoggingUtils.success(`Successfully refreshed image IDs after upload`, 3);
+        logger.success(`Successfully refreshed image IDs after upload`, 3);
       } catch (error) {
-        LoggingUtils.error(`Error refreshing images: ${error.message}`, 3);
+        logger.error(`Error refreshing images: ${error.message}`, 3);
       }
     }
 
@@ -260,7 +260,7 @@ class ProductVariantHandler {
         }
       } else {
         // Variant doesn't exist in target - CREATE instead of just warning
-        LoggingUtils.info(`Preparing to create new variant with options: ${optionKey}`, 3);
+        logger.info(`Preparing to create new variant with options: ${optionKey}`, 3);
 
         // Format for productVariantsBulkCreate
         const createInput = {
@@ -318,7 +318,7 @@ class ProductVariantHandler {
 
     // STEP 1: Update existing variants
     if (variantsToUpdate.length > 0) {
-      LoggingUtils.info(`Updating ${variantsToUpdate.length} existing variants for product ID: ${productId}`, 3);
+      logger.info(`Updating ${variantsToUpdate.length} existing variants for product ID: ${productId}`, 3);
 
       const updateVariantsMutation = `#graphql
         mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -346,20 +346,20 @@ class ProductVariantHandler {
           }, 'ProductVariantsBulkUpdate');
 
           if (result.productVariantsBulkUpdate.userErrors.length > 0) {
-            LoggingUtils.error(`Failed to update variants:`, 4, result.productVariantsBulkUpdate.userErrors);
+            logger.error(`Failed to update variants:`, 4, result.productVariantsBulkUpdate.userErrors);
             updateSuccess = false;
           } else {
-            LoggingUtils.success(`Successfully updated ${result.productVariantsBulkUpdate.productVariants.length} variants`, 4);
+            logger.success(`Successfully updated ${result.productVariantsBulkUpdate.productVariants.length} variants`, 4);
 
             // Update the variant images separately since imageId isn't supported in bulk updates
             if (imageUpdates.length > 0) {
-              LoggingUtils.info(`Updating images for ${imageUpdates.length} variants`, 4);
+              logger.info(`Updating images for ${imageUpdates.length} variants`, 4);
 
               for (const update of imageUpdates) {
                 if (this.imageHandler) {
                   await this.updateVariantImage(update.variantId, update.imageId, productId);
                 } else {
-                  LoggingUtils.info(`Would update image for variant ${update.variantId}`, 4);
+                  logger.info(`Would update image for variant ${update.variantId}`, 4);
                 }
               }
             }
@@ -367,39 +367,39 @@ class ProductVariantHandler {
             // Now update metafields for each variant
             for (const metafieldUpdate of metafieldUpdates) {
               if (this.metafieldHandler) {
-                LoggingUtils.info(`Syncing ${metafieldUpdate.metafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`, 3);
+                logger.info(`Syncing ${metafieldUpdate.metafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`, 3);
                 await this.metafieldHandler.syncMetafields(
                   metafieldUpdate.targetVariantId,
                   metafieldUpdate.metafields
                 );
               } else {
-                LoggingUtils.info(`Would update ${metafieldUpdate.metafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`, 4);
+                logger.info(`Would update ${metafieldUpdate.metafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`, 4);
               }
             }
           }
         } catch (error) {
-          LoggingUtils.error(`Error updating variants: ${error.message}`, 3);
+          logger.error(`Error updating variants: ${error.message}`, 3);
           updateSuccess = false;
         }
       } else {
-        LoggingUtils.info(`[DRY RUN] Would update ${variantsToUpdate.length} variants for product ID: ${productId}`, 3);
+        logger.info(`[DRY RUN] Would update ${variantsToUpdate.length} variants for product ID: ${productId}`, 3);
 
         if (imageUpdates.length > 0) {
-          LoggingUtils.info(`[DRY RUN] Would update images for ${imageUpdates.length} variants`, 4);
+          logger.info(`[DRY RUN] Would update images for ${imageUpdates.length} variants`, 4);
         }
 
         // Log metafield updates
         for (const metafieldUpdate of metafieldUpdates) {
-          LoggingUtils.info(`[DRY RUN] Would update ${metafieldUpdate.metafields.length} metafields for variant ID: ${metafieldUpdate.targetVariantId}`, 4);
+          logger.info(`[DRY RUN] Would update ${metafieldUpdate.metafields.length} metafields for variant ID: ${metafieldUpdate.targetVariantId}`, 4);
         }
       }
     } else {
-      LoggingUtils.info(`No existing variants to update`, 3);
+      logger.info(`No existing variants to update`, 3);
     }
 
     // STEP 2: Create new variants that don't exist in target
     if (variantsToCreate.length > 0) {
-      LoggingUtils.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`, 3);
+      logger.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`, 3);
 
       // Remove the sourceMetafields, sourceImage, and sourceOptions from the input as they're not part of the API
       const createInputs = variantsToCreate.map(({ sourceMetafields, sourceImage, sourceOptions, ...rest }) => rest);
@@ -434,10 +434,10 @@ class ProductVariantHandler {
           }, 'ProductVariantsBulkCreate');
 
           if (result.productVariantsBulkCreate.userErrors.length > 0) {
-            LoggingUtils.error(`Failed to create new variants:`, 3, result.productVariantsBulkCreate.userErrors);
+            logger.error(`Failed to create new variants:`, 3, result.productVariantsBulkCreate.userErrors);
             createSuccess = false;
           } else {
-            LoggingUtils.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} new variants`, 3);
+            logger.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} new variants`, 3);
 
             // Now handle metafields and images for each created variant
             for (let i = 0; i < result.productVariantsBulkCreate.productVariants.length; i++) {
@@ -457,13 +457,13 @@ class ProductVariantHandler {
 
               // Handle metafields
               if (sourceData.sourceMetafields && sourceData.sourceMetafields.length > 0 && this.metafieldHandler) {
-                LoggingUtils.info(`Syncing ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
+                logger.info(`Syncing ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
                 await this.metafieldHandler.syncMetafields(
                   targetVariant.id,
                   sourceData.sourceMetafields
                 );
               } else if (sourceData.sourceMetafields && sourceData.sourceMetafields.length > 0) {
-                LoggingUtils.info(`Would sync ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
+                logger.info(`Would sync ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
               }
 
               // Handle image
@@ -473,33 +473,33 @@ class ProductVariantHandler {
                   if (this.imageHandler) {
                     await this.updateVariantImage(targetVariant.id, imageIdMap[sourceFilename], productId);
                   } else {
-                    LoggingUtils.info(`Would assign image to new variant ${targetVariant.id}`, 4);
+                    logger.info(`Would assign image to new variant ${targetVariant.id}`, 4);
                   }
                 }
               }
             }
           }
         } catch (error) {
-          LoggingUtils.error(`Error creating new variants: ${error.message}`, 3);
+          logger.error(`Error creating new variants: ${error.message}`, 3);
           createSuccess = false;
         }
       } else {
-        LoggingUtils.info(`[DRY RUN] Would create ${variantsToCreate.length} new variants for product ID: ${productId}`, 3);
+        logger.info(`[DRY RUN] Would create ${variantsToCreate.length} new variants for product ID: ${productId}`, 3);
 
         // Log variant image and metafield creation info
         for (let i = 0; i < variantsToCreate.length; i++) {
           if (variantsToCreate[i].sourceImage) {
-            LoggingUtils.info(`[DRY RUN] New variant #${i + 1} would have an image assigned`, 4);
+            logger.info(`[DRY RUN] New variant #${i + 1} would have an image assigned`, 4);
           }
 
           const sourceMetafields = variantsToCreate[i].sourceMetafields;
           if (sourceMetafields && sourceMetafields.length > 0) {
-            LoggingUtils.info(`[DRY RUN] Would create ${sourceMetafields.length} metafields for new variant #${i + 1}`, 4);
+            logger.info(`[DRY RUN] Would create ${sourceMetafields.length} metafields for new variant #${i + 1}`, 4);
           }
         }
       }
     } else {
-      LoggingUtils.info(`No new variants to create`, 3);
+      logger.info(`No new variants to create`, 3);
     }
 
     // Return overall success status
@@ -549,7 +549,7 @@ class ProductVariantHandler {
    * @returns {Promise<boolean>} - Success status
    */
   async createProductVariants(productId, variants, logPrefix = '') {
-    LoggingUtils.info(`Creating ${variants.length} variants for product ID: ${productId}`, 1, 'main');
+    logger.info(`Creating ${variants.length} variants for product ID: ${productId}`, 1, 'main');
 
     // First check if we have valid option combinations - set to track unique combinations
     const optionCombinations = new Set();
@@ -571,8 +571,8 @@ class ProductVariantHandler {
 
     // Log if duplicates are found
     if (duplicates.length > 0) {
-      LoggingUtils.warn(`Found ${duplicates.length} duplicate option combinations:`, 2);
-      duplicates.forEach(dup => LoggingUtils.warn(`${dup}`, 3));
+      logger.warn(`Found ${duplicates.length} duplicate option combinations:`, 2);
+      duplicates.forEach(dup => logger.warn(`${dup}`, 3));
     }
 
     // Transform variants to the format expected by productVariantsBulkCreate
@@ -659,11 +659,11 @@ class ProductVariantHandler {
           );
 
           if (nonExistingVariantErrors.length > 0) {
-            LoggingUtils.error(`Failed to create variants:`, 2, nonExistingVariantErrors);
+            logger.error(`Failed to create variants:`, 2, nonExistingVariantErrors);
 
             // Log created variants even if there were some errors
             if (result.productVariantsBulkCreate.productVariants.length > 0) {
-              LoggingUtils.info(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants despite errors`, 2);
+              logger.info(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants despite errors`, 2);
             }
 
             // Return false if no variants were created
@@ -673,14 +673,14 @@ class ProductVariantHandler {
           }
         }
 
-        LoggingUtils.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants`, 1);
+        logger.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants`, 1);
         return true;
       } catch (error) {
-        LoggingUtils.error(`Error creating variants: ${error.message}`, 2);
+        logger.error(`Error creating variants: ${error.message}`, 2);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would create ${variantsInput.length} variants for product`, 2);
+      logger.info(`[DRY RUN] Would create ${variantsInput.length} variants for product`, 2);
       return true;
     }
   }
@@ -738,7 +738,7 @@ class ProductVariantHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Updating image for variant ID: ${variantId}`, 2);
+        logger.info(`Updating image for variant ID: ${variantId}`, 2);
         const result = await this.client.graphql(mutation, {
           input: {
             id: variantId,
@@ -747,18 +747,18 @@ class ProductVariantHandler {
         }, 'ProductVariantUpdate');
 
         if (result.productVariantUpdate.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to update variant image:`, 3, result.productVariantUpdate.userErrors);
+          logger.error(`Failed to update variant image:`, 3, result.productVariantUpdate.userErrors);
           return false;
         } else {
-          LoggingUtils.success(`Successfully updated variant image`, 3);
+          logger.success(`Successfully updated variant image`, 3);
           return true;
         }
       } catch (error) {
-        LoggingUtils.error(`Error updating variant image: ${error.message}`, 2);
+        logger.error(`Error updating variant image: ${error.message}`, 2);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would update image for variant ID: ${variantId}`, 2);
+      logger.info(`[DRY RUN] Would update image for variant ID: ${variantId}`, 2);
       return true;
     }
   }
@@ -789,7 +789,7 @@ class ProductVariantHandler {
       const response = await client.graphql(query, { variantId }, 'GetVariantById');
       return response.productVariant;
     } catch (error) {
-      LoggingUtils.error(`Error fetching variant by ID ${variantId}: ${error.message}`, 4);
+      logger.error(`Error fetching variant by ID ${variantId}: ${error.message}`, 4);
       return null;
     }
   }
@@ -825,13 +825,13 @@ class ProductVariantHandler {
       const response = await client.graphql(query, { query: `sku:${sku}` }, 'GetVariantBySku');
 
       if (response.productVariants.edges.length === 0) {
-        LoggingUtils.info(`No variant found with SKU: ${sku}`, 4);
+        logger.info(`No variant found with SKU: ${sku}`, 4);
         return null;
       }
 
       return response.productVariants.edges[0].node;
     } catch (error) {
-      LoggingUtils.error(`Error fetching variant by SKU ${sku}: ${error.message}`, 4);
+      logger.error(`Error fetching variant by SKU ${sku}: ${error.message}`, 4);
       return null;
     }
   }
@@ -871,7 +871,7 @@ class ProductVariantHandler {
       const response = await client.graphql(query, { handle: productHandle }, 'GetProductByHandle');
 
       if (!response.productByHandle) {
-        LoggingUtils.error(`No product found with handle: ${productHandle}`, 4);
+        logger.error(`No product found with handle: ${productHandle}`, 4);
         return null;
       }
 
@@ -879,7 +879,7 @@ class ProductVariantHandler {
       const variants = response.productByHandle.variants.edges.map(edge => edge.node);
 
       if (variants.length === 0) {
-        LoggingUtils.error(`No variants found for product: ${productHandle}`, 4);
+        logger.error(`No variants found for product: ${productHandle}`, 4);
         return null;
       }
 
@@ -900,13 +900,13 @@ class ProductVariantHandler {
       });
 
       if (!matchingVariant) {
-        LoggingUtils.error(`No variant found with options ${targetKey} for product: ${productHandle}`, 4);
+        logger.error(`No variant found with options ${targetKey} for product: ${productHandle}`, 4);
         return null;
       }
 
       return matchingVariant;
     } catch (error) {
-      LoggingUtils.error(`Error finding variant by options for product ${productHandle}: ${error.message}`, 4);
+      logger.error(`Error finding variant by options for product ${productHandle}: ${error.message}`, 4);
       return null;
     }
   }
@@ -941,7 +941,7 @@ class ProductVariantHandler {
       const response = await client.graphql(query, { variantId }, 'GetVariantWithProduct');
       return response.productVariant;
     } catch (error) {
-      LoggingUtils.error(`Error fetching variant with product info for ID ${variantId}: ${error.message}`, 4);
+      logger.error(`Error fetching variant with product info for ID ${variantId}: ${error.message}`, 4);
       return null;
     }
   }

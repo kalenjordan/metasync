@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 /**
  * GraphQL query to fetch all collections with pagination support
  */

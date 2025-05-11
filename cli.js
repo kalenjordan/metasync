@@ -3,7 +3,6 @@
 const path = require("path");
 const fs = require("fs");
 const { execSync } = require('child_process');
-const consola = require('consola');
 const Shopify = require('shopify-api-node');
 const ShopifyClient = require('./utils/ShopifyClient');
 const { SHOPIFY_API_VERSION } = require('./constants');
@@ -12,6 +11,8 @@ const shopConfig = require('./utils/shopConfig');
 
 // Import strategies
 const strategyLoader = require('./utils/strategyLoader');
+const ShopifyIDUtils = require('./utils/ShopifyIDUtils');
+const logger = require('./utils/logger');
 
 class MetaSyncCli {
   constructor(options = {}) {
@@ -51,13 +52,13 @@ class MetaSyncCli {
 
     // If trying to make changes and target shop is protected, exit with error
     if (this.options.notADrill && this.targetShopProtected) {
-      consola.error(`Error: Target shop "${targetShopName}" is protected. No changes can be made.`);
-      consola.info(`To allow changes, add "protected": false to this shop in .shops.json`);
+      logger.error(`Error: Target shop "${targetShopName}" is protected. No changes can be made.`);
+      logger.info(`To allow changes, add "protected": false to this shop in .shops.json`);
       process.exit(1);
     } else if (!this.targetShopProtected) {
-      consola.info(`Target shop "${targetShopName}" is unprotected (protected: false).`);
+      logger.info(`Target shop "${targetShopName}" is unprotected (protected: false).`);
     } else {
-      consola.info(`Target shop "${targetShopName}" is protected (default).`);
+      logger.info(`Target shop "${targetShopName}" is protected (default).`);
     }
 
     // Create Shopify clients
@@ -123,14 +124,14 @@ class MetaSyncCli {
 
     // Check if resource type was provided
     if (!this.options.resource) {
-      consola.info("Please specify the resource type to sync.");
-      consola.info(`Available resource types: ${validResourceTypes.join(', ')}`);
+      logger.info("Please specify the resource type to sync.");
+      logger.info(`Available resource types: ${validResourceTypes.join(', ')}`);
       return false;
     }
 
     // Validate provided resource type
     if (!validResourceTypes.includes(this.options.resource)) {
-      consola.error(`Error: Invalid resource type "${this.options.resource}". Valid types are: ${validResourceTypes.join(', ')}`);
+      logger.error(`Error: Invalid resource type "${this.options.resource}". Valid types are: ${validResourceTypes.join(', ')}`);
       process.exit(1);
     }
 
@@ -145,7 +146,7 @@ class MetaSyncCli {
       // Handle comma-separated namespaces
       if (this.options.namespace && this.options.namespace.includes(',')) {
         this.options.namespaces = this.options.namespace.split(',').map(ns => ns.trim());
-        consola.info(`Parsed ${this.options.namespaces.length} namespaces: ${this.options.namespaces.join(', ')}`);
+        logger.info(`Parsed ${this.options.namespaces.length} namespaces: ${this.options.namespaces.join(', ')}`);
       }
 
       // Validations for define command
@@ -157,10 +158,10 @@ class MetaSyncCli {
             // Key doesn't have a dot, so it's not namespace-prefixed
             // Automatically modify the key to include the namespace
             this.options.key = `${this.options.namespace}.${this.options.key}`;
-            consola.info(`Formatted key as: "${this.options.key}"`);
+            logger.info(`Formatted key as: "${this.options.key}"`);
           } else if (!this.options.key.startsWith(this.options.namespace + '.')) {
             // Key includes a dot but doesn't start with the namespace
-            consola.error(`Error: Provided --key "${this.options.key}" does not match the provided --namespace "${this.options.namespace}".`);
+            logger.error(`Error: Provided --key "${this.options.key}" does not match the provided --namespace "${this.options.namespace}".`);
             process.exit(1);
           }
         }
@@ -169,13 +170,13 @@ class MetaSyncCli {
       // Handle comma-separated namespaces for data command as well
       if (this.options.namespace && this.options.namespace.includes(',')) {
         this.options.namespaces = this.options.namespace.split(',').map(ns => ns.trim());
-        consola.info(`Parsed ${this.options.namespaces.length} namespaces for data sync: ${this.options.namespaces.join(', ')}`);
+        logger.info(`Parsed ${this.options.namespaces.length} namespaces for data sync: ${this.options.namespaces.join(', ')}`);
       }
 
       // Validations for data command
       // For metaobject, type/key is required when syncing data
       if (this.options.resource === 'metaobject' && !this.options.key) {
-        consola.error(`Error: --type is required when syncing metaobject data.`);
+        logger.error(`Error: --type is required when syncing metaobject data.`);
         process.exit(1);
       }
     }
@@ -189,24 +190,24 @@ class MetaSyncCli {
     try {
       currentCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
     } catch (error) {
-      consola.warn('Could not determine current git commit');
+      logger.warn('Could not determine current git commit');
     }
 
     // Display info
-    consola.info(`Version: ${currentCommit}`);
-    consola.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
-    consola.info(`Limit: ${this.options.limit}`);
+    logger.info(`Version: ${currentCommit}`);
+    logger.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
+    logger.info(`Limit: ${this.options.limit}`);
 
     // Display protection status
     if (this.targetShopProtected) {
-      consola.info(`Target Shop Protection: Enabled (default)`);
+      logger.info(`Target Shop Protection: Enabled (default)`);
     } else {
-      consola.info(`Target Shop Protection: Disabled`);
+      logger.info(`Target Shop Protection: Disabled`);
     }
 
     // Log force-recreate if it's product data sync
     if (this.options.resource === 'product' && this.options.command === "data" && this.options.forceRecreate) {
-      consola.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
+      logger.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
     }
   }
 
@@ -215,7 +216,7 @@ class MetaSyncCli {
 
     // Determine if we need to list definitions and exit
     if (this.options.resource === 'metaobject' && !this.options.key) {
-      consola.info(`No specific metaobject type specified (--type). Fetching available types...`);
+      logger.info(`No specific metaobject type specified (--type). Fetching available types...`);
       return true;
     }
 
@@ -232,19 +233,19 @@ class MetaSyncCli {
     }
     // We no longer need the metafield namespace prompt since namespace is required
 
-    consola.info(listPrompt);
+    logger.info(listPrompt);
   }
 
   async _listMetaobjectDefinitions() {
     const definitions = await this.fetchMetaobjectDefinitions(this.sourceClient);
     if (definitions.length === 0) {
-      consola.warn(`No metaobject definitions found in source shop.`);
+      logger.warn(`No metaobject definitions found in source shop.`);
       return;
     }
 
-    consola.info(`\nAvailable metaobject definition types:`);
+    logger.info(`\nAvailable metaobject definition types:`);
     definitions.forEach(def => {
-      consola.log(`- ${def.type} (${def.name || "No name"})`);
+      logger.info(`- ${def.type} (${def.name || "No name"})`, 0, 'main');
     });
   }
 
@@ -261,24 +262,23 @@ class MetaSyncCli {
   async _selectAndRunStrategy() {
     // Select the appropriate strategy based on resource and command mode
     let StrategyClass;
-    const LoggingUtils = require('./utils/LoggingUtils');
 
     // Special case for 'all' resource type in definitions mode
     if (this.options.command === "definitions" && this.options.resource.toLowerCase() === 'all') {
-      consola.info(`Syncing all metafield resource types...`);
+      logger.info(`Syncing all metafield resource types...`);
       const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
 
       let combinedResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
-      // Reset indentation to ensure we start clean
-      LoggingUtils.resetIndent();
+      // Reset indentation level before each operation
+      logger.resetIndent();
 
       // Process each resource type
       for (const resourceType of metafieldResourceTypes) {
-        // Use section header instead of separator line
-        LoggingUtils.section(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
-        // Indent everything under this resource type
-        LoggingUtils.indent();
+        // Log the resource type
+        logger.section(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
+
+        logger.indent();
 
         // Get the strategy for this resource type
         const ResourceStrategyClass = strategyLoader.getDefinitionStrategyForResource(resourceType);
@@ -303,11 +303,11 @@ class MetaSyncCli {
             combinedResults.failed += syncResults.definitionResults.failed || 0;
           }
         } else {
-          consola.warn(`No sync strategy available for ${resourceType} definitions.`);
+          logger.warn(`No sync strategy available for ${resourceType} definitions.`);
         }
 
         // Unindent after this resource type is done
-        LoggingUtils.unindent();
+        logger.unindent();
       }
 
       return { definitionResults: combinedResults, dataResults: null };
@@ -322,7 +322,7 @@ class MetaSyncCli {
     if (StrategyClass) {
       // Debugging output for options
       if (this.options.debug) {
-        consola.debug(`Options before creating strategy:`, this.options);
+        logger.debug(`Options before creating strategy: ${JSON.stringify(this.options, null, 2)}`);
       }
 
       const syncStrategy = new StrategyClass(this.sourceClient, this.targetClient, this.options);
@@ -340,7 +340,7 @@ class MetaSyncCli {
 
       return syncResults;
     } else {
-      consola.error(`No sync strategy available for ${this.options.resource} ${this.options.command} sync.`);
+      logger.error(`No sync strategy available for ${this.options.resource} ${this.options.command} sync.`);
       return null;
     }
   }
@@ -385,22 +385,22 @@ class MetaSyncCli {
       }
     }
 
-    consola.success(outputTitle);
-    consola.success(outputResults);
+    logger.success(outputTitle);
+    logger.success(outputResults);
 
     // Display metafield stats if available
     if (metafieldResults && metafieldResults.processed > 0) {
-      consola.info(`Metafield References: ${metafieldResults.processed} processed, ${metafieldResults.transformed} transformed, ${metafieldResults.blanked} blanked due to errors, ${metafieldResults.warnings || 0} warnings`);
+      logger.info(`Metafield References: ${metafieldResults.processed} processed, ${metafieldResults.transformed} transformed, ${metafieldResults.blanked} blanked due to errors, ${metafieldResults.warnings || 0} warnings`);
 
       // If there were errors, highlight them
       if (metafieldResults.errors > 0) {
-        consola.warn(`Found ${metafieldResults.errors} metafield reference errors. Check log for details.`);
+        logger.warn(`Found ${metafieldResults.errors} metafield reference errors. Check log for details.`);
       }
 
       // If there were unsupported reference types, list them
       if (metafieldResults.warnings > 0 && metafieldResults.unsupportedTypes && metafieldResults.unsupportedTypes.length > 0) {
-        consola.warn(`Encountered ${metafieldResults.unsupportedTypes.length} unsupported reference types: ${metafieldResults.unsupportedTypes.join(', ')}`);
-        consola.info(`These reference types were preserved in their original form. For proper syncing, consider adding support for these types.`);
+        logger.warn(`Encountered ${metafieldResults.unsupportedTypes.length} unsupported reference types: ${metafieldResults.unsupportedTypes.join(', ')}`);
+        logger.info(`These reference types were preserved in their original form. For proper syncing, consider adding support for these types.`);
       }
     }
   }
@@ -434,7 +434,7 @@ class MetaSyncCli {
         const response = await client.graphql(query, undefined, 'FetchMetaobjectDefinitions');
         return response.metaobjectDefinitions.nodes;
     } catch (error) {
-        consola.error(`Error fetching metaobject definitions: ${error.message}`);
+        logger.error(`Error fetching metaobject definitions: ${error.message}`);
         return [];
     }
   }
@@ -443,19 +443,20 @@ class MetaSyncCli {
 async function main() {
   const options = commandSetup.setupCommandLineOptions();
 
-  // Set consola log level based on debug flag
+  // Set debug level based on flag
   if (options.debug) {
-    consola.level = 3;
+    // Note: We don't need to set a log level for our logger since it simply
+    // uses console.log and includes [DEBUG] prefix for debug logs
   }
 
   // Validate we have minimal required configuration
   if (!options.source) {
-    consola.error("Error: Source shop name is required");
+    logger.error("Error: Source shop name is required");
     process.exit(1);
   }
 
   if (!shopConfig.getShopConfig(options.source)) {
-    consola.error("Error: Source shop not found in .shops.json");
+    logger.error("Error: Source shop not found in .shops.json");
     process.exit(1);
   }
 
@@ -464,6 +465,7 @@ async function main() {
 }
 
 main().catch(error => {
-  consola.fatal("Unhandled Error:", error);
+  logger.error(`Unhandled Error: ${error.message}`);
+  logger.debug(error.stack || '');
   process.exit(1);
 });

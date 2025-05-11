@@ -3,7 +3,7 @@
  *
  * Provides consistent error handling for Shopify GraphQL API responses.
  */
-const LoggingUtils = require('./LoggingUtils');
+const logger = require('./logger');
 
 class ErrorHandler {
   /**
@@ -19,7 +19,7 @@ class ErrorHandler {
     if (!userErrors || userErrors.length === 0) return 0;
 
     // Log the overall error message
-    LoggingUtils.error(`Failed to process ${batchInfo}:`, indentLevel);
+    logger.error(`Failed to process ${batchInfo}:`, indentLevel);
 
     // Handle each user error
     userErrors.forEach(err => {
@@ -35,11 +35,11 @@ class ErrorHandler {
             const details = getItemDetails(items[itemIndex], itemIndex, err.field);
             if (details) {
               // Log detailed error with item information - add +1 to indentation level
-              LoggingUtils.error(`${details.itemName}: ${err.message}`, indentLevel + 1);
+              logger.error(`${details.itemName}: ${err.message}`, indentLevel + 1);
 
               // Log value preview if available - add +1 to indentation level
               if (details.valuePreview) {
-                LoggingUtils.error(`Value: ${details.valuePreview}`, indentLevel + 1);
+                logger.error(`Value: ${details.valuePreview}`, indentLevel + 1);
               }
               return;
             }
@@ -47,10 +47,10 @@ class ErrorHandler {
         }
 
         // Fallback for errors without proper field path or when details extraction fails
-        LoggingUtils.error(`Error: ${err.message}`, indentLevel + 1);
+        logger.error(`Error: ${err.message}`, indentLevel + 1);
       } catch (error) {
         // Ensure error handling doesn't break if something goes wrong
-        LoggingUtils.error(`Error: ${err.message}`, indentLevel + 1);
+        logger.error(`Error: ${err.message}`, indentLevel + 1);
       }
     });
 

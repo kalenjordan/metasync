@@ -1,3 +1,4 @@
+const logger = require("./logger");
 /**
  * Product Publication Handler
  *
@@ -7,8 +8,7 @@
  * - Publishing products to channels
  * - Managing publication errors
  */
-const consola = require('consola');
-const LoggingUtils = require('./LoggingUtils');
+;
 
 class ProductPublicationHandler {
   constructor(client, options = {}) {
@@ -26,7 +26,7 @@ class ProductPublicationHandler {
    */
   async syncProductPublications(productId, sourcePublications, logPrefix = '') {
     if (!sourcePublications || sourcePublications.length === 0) {
-      LoggingUtils.info(`No publication channels to sync`, 2);
+      logger.info(`No publication channels to sync`, 2);
       return true;
     }
 
@@ -37,14 +37,14 @@ class ProductPublicationHandler {
 
     // Log skipped publications only in debug mode
     if (validPublications.length < sourcePublications.length && this.debug) {
-      consola.debug(`${logPrefix}- Filtered out ${sourcePublications.length - validPublications.length} invalid publications without valid channel handles`);
+      logger.debug(`${logPrefix}- Filtered out ${sourcePublications.length - validPublications.length} invalid publications without valid channel handles`);
 
       // Debug the problematic publications
       const invalidPublications = sourcePublications.filter(pub =>
         !pub || !pub.channel || typeof pub.channel.handle !== 'string' || pub.channel.handle.length === 0
       );
 
-      consola.debug(`${logPrefix}- Invalid publication details:`,
+      logger.debug(`${logPrefix}- Invalid publication details:`,
         invalidPublications.map(pub => ({
           isPublished: pub.isPublished || false,
           hasChannel: !!pub.channel,
@@ -59,13 +59,13 @@ class ProductPublicationHandler {
     const publicationsToProcess = validPublications;
 
     if (publicationsToProcess.length === 0) {
-      LoggingUtils.info(`No valid publication channels to sync after filtering`, 2);
+      logger.info(`No valid publication channels to sync after filtering`, 2);
       return true;
     }
 
     // Log detailed information about the publications we'll process
     if (this.debug) {
-      consola.debug(`${logPrefix}- Valid publications to process:`,
+      logger.debug(`${logPrefix}- Valid publications to process:`,
         publicationsToProcess.map(pub => ({
           channelHandle: pub.channel.handle,
           channelName: pub.channel.name || 'unknown',
@@ -74,7 +74,7 @@ class ProductPublicationHandler {
       );
     }
 
-    LoggingUtils.info(`Syncing product publication to ${publicationsToProcess.length} channels`, 2, 'main');
+    logger.info(`Syncing product publication to ${publicationsToProcess.length} channels`, 2, 'main');
 
     // First, get available channels and publications in the target store
     const getPublicationsQuery = `#graphql
@@ -110,14 +110,14 @@ class ProductPublicationHandler {
       targetPublications = response.publications.edges.map(edge => edge.node);
 
       if (this.debug) {
-        consola.debug(`${logPrefix}  - Found ${targetChannels.length} available channels in target store`);
-        consola.debug(`${logPrefix}  - Found ${targetPublications.length} publications in target store`);
+        logger.debug(`${logPrefix}  - Found ${targetChannels.length} available channels in target store`);
+        logger.debug(`${logPrefix}  - Found ${targetPublications.length} publications in target store`);
         if (targetChannels.length > 0) {
-          consola.debug(`${logPrefix}  - Available channels: ${targetChannels.map(c => c.handle).join(', ')}`);
+          logger.debug(`${logPrefix}  - Available channels: ${targetChannels.map(c => c.handle).join(', ')}`);
         }
       }
     } catch (error) {
-      LoggingUtils.error(`Error fetching target store publications: ${error.message}`, 2);
+      logger.error(`Error fetching target store publications: ${error.message}`, 2);
       return false;
     }
 
@@ -148,13 +148,13 @@ class ProductPublicationHandler {
       }
 
       if (this.debug) {
-        consola.debug(`${logPrefix}  - Product is currently published to ${currentPublications.length} channels`);
+        logger.debug(`${logPrefix}  - Product is currently published to ${currentPublications.length} channels`);
         if (currentPublications.length > 0) {
-          consola.debug(`${logPrefix}  - Currently published to: ${currentPublications.filter(p => p.isPublished).map(p => p.channel.handle).join(', ')}`);
+          logger.debug(`${logPrefix}  - Currently published to: ${currentPublications.filter(p => p.isPublished).map(p => p.channel.handle).join(', ')}`);
         }
       }
     } catch (error) {
-      LoggingUtils.warn(`Unable to fetch current publications: ${error.message}`, 2);
+      logger.warn(`Unable to fetch current publications: ${error.message}`, 2);
       // Continue anyway since we can still try to publish
     }
 
@@ -195,13 +195,13 @@ class ProductPublicationHandler {
             addedPublicationIds.add(targetPublication.id);
           } else if (this.debug) {
             if (alreadyPublished) {
-              consola.debug(`${logPrefix}  - Product already published to ${sourceChannelHandle}`);
+              logger.debug(`${logPrefix}  - Product already published to ${sourceChannelHandle}`);
             } else {
-              consola.debug(`${logPrefix}  - Skipping duplicate publication ID for channel ${sourceChannelHandle}`);
+              logger.debug(`${logPrefix}  - Skipping duplicate publication ID for channel ${sourceChannelHandle}`);
             }
           }
         } else {
-          LoggingUtils.warn(`Found channel ${sourceChannelHandle} but no associated publication in target store`, 2);
+          logger.warn(`Found channel ${sourceChannelHandle} but no associated publication in target store`, 2);
           skippedChannels.push(sourceChannelHandle);
         }
       } else {
@@ -212,16 +212,16 @@ class ProductPublicationHandler {
     // Log skipped channels only when there are any and only as a debug message if not important
     if (skippedChannels.length > 0) {
       if (this.debug) {
-        consola.debug(`${logPrefix}  - Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`);
+        logger.debug(`${logPrefix}  - Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`);
       } else if (skippedChannels.length > 1 || skippedChannels[0] !== 'online_store') {
         // Only warn about non-standard channels being skipped
-        LoggingUtils.warn(`Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`, 2);
+        logger.warn(`Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`, 2);
       }
     }
 
     // If no publications to create, we're done
     if (publicationsToCreate.length === 0) {
-      LoggingUtils.info(`No new publication channels to add`, 3);
+      logger.info(`No new publication channels to add`, 3);
       return true;
     }
 
@@ -239,7 +239,7 @@ class ProductPublicationHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Publishing product to ${publicationsToCreate.length} channels`, 3);
+        logger.info(`Publishing product to ${publicationsToCreate.length} channels`, 3);
 
         const input = publicationsToCreate.map(pub => ({
           publicationId: pub.publicationId,
@@ -253,20 +253,20 @@ class ProductPublicationHandler {
         }, 'publishablePublish');
 
         if (result.publishablePublish.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to publish product:`, 3, result.publishablePublish.userErrors);
+          logger.error(`Failed to publish product:`, 3, result.publishablePublish.userErrors);
           return false;
         } else {
-          LoggingUtils.success(`Successfully published product to ${publicationsToCreate.length} channels`, 3);
+          logger.success(`Successfully published product to ${publicationsToCreate.length} channels`, 3);
           return true;
         }
       } catch (error) {
-        LoggingUtils.error(`Error publishing product: ${error.message}`, 3);
+        logger.error(`Error publishing product: ${error.message}`, 3);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would publish product to ${publicationsToCreate.length} channels`, 3);
+      logger.info(`[DRY RUN] Would publish product to ${publicationsToCreate.length} channels`, 3);
       for (const pub of publicationsToCreate) {
-        LoggingUtils.info(`[DRY RUN] Channel: ${pub.channelHandle}`, 4);
+        logger.info(`[DRY RUN] Channel: ${pub.channelHandle}`, 4);
       }
       return true;
     }

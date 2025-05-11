@@ -1,3 +1,4 @@
+const logger = require("./logger");
 /**
  * Product Image Handler
  *
@@ -6,9 +7,8 @@
  * - Associating images with variants
  * - Managing media attachments
  */
-const consola = require('consola');
+;
 const ShopifyIDUtils = require('./ShopifyIDUtils');
-const LoggingUtils = require('./LoggingUtils');
 
 class ProductImageHandler {
   constructor(client, options = {}) {
@@ -27,7 +27,7 @@ class ProductImageHandler {
   async syncProductImages(productId, sourceImages, logPrefix = '') {
     if (!sourceImages || sourceImages.length === 0) return true;
 
-    LoggingUtils.info(`Processing ${sourceImages.length} images for product`, 2, 'main');
+    logger.info(`Processing ${sourceImages.length} images for product`, 2, 'main');
 
     // Step 1: Get existing images to avoid duplicates
     const existingImagesQuery = `#graphql
@@ -55,9 +55,9 @@ class ProductImageHandler {
     try {
       const response = await this.client.graphql(existingImagesQuery, { productId }, 'GetProductMedia');
       existingImages = response.product.media.edges.map(edge => edge.node);
-      LoggingUtils.info(`Found ${existingImages.length} existing images on product`, 3);
+      logger.info(`Found ${existingImages.length} existing images on product`, 3);
     } catch (error) {
-      LoggingUtils.error(`Error fetching existing product images: ${error.message}`, 3);
+      logger.error(`Error fetching existing product images: ${error.message}`, 3);
       return false;
     }
 
@@ -79,7 +79,7 @@ class ProductImageHandler {
     });
 
     if (newImagesToUpload.length === 0) {
-      LoggingUtils.info(`All images already exist on product, no need to upload`, 3);
+      logger.info(`All images already exist on product, no need to upload`, 3);
       return true;
     }
 
@@ -112,27 +112,27 @@ class ProductImageHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Uploading ${mediaInputs.length} new images for product`, 3);
+        logger.info(`Uploading ${mediaInputs.length} new images for product`, 3);
         const result = await this.client.graphql(createMediaMutation, {
           productId,
           media: mediaInputs
         }, 'ProductCreateMedia');
 
         if (result.productCreateMedia.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to upload product images:`, 3, result.productCreateMedia.userErrors);
+          logger.error(`Failed to upload product images:`, 3, result.productCreateMedia.userErrors);
           return false;
         } else {
-          LoggingUtils.success(`Successfully uploaded ${result.productCreateMedia.media.length} images`, 3);
+          logger.success(`Successfully uploaded ${result.productCreateMedia.media.length} images`, 3);
           return true;
         }
       } catch (error) {
-        LoggingUtils.error(`Error uploading product images: ${error.message}`, 3);
+        logger.error(`Error uploading product images: ${error.message}`, 3);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would upload ${mediaInputs.length} new images for product`, 3);
+      logger.info(`[DRY RUN] Would upload ${mediaInputs.length} new images for product`, 3);
       for (const input of mediaInputs) {
-        LoggingUtils.info(`[DRY RUN] Image: ${input.originalSource} (${input.alt || 'No alt text'})`, 4);
+        logger.info(`[DRY RUN] Image: ${input.originalSource} (${input.alt || 'No alt text'})`, 4);
       }
       return true;
     }
@@ -149,7 +149,7 @@ class ProductImageHandler {
   async updateVariantImage(variantId, imageId, productId, logPrefix = '') {
     // Validate IDs
     if (!ShopifyIDUtils.isValidID(variantId) || !ShopifyIDUtils.isValidID(imageId)) {
-      LoggingUtils.error(`Invalid parameters: variantId or imageId is missing or invalid`, 2);
+      logger.error(`Invalid parameters: variantId or imageId is missing or invalid`, 2);
       return false;
     }
 
@@ -157,14 +157,14 @@ class ProductImageHandler {
     if (!productId) {
       productId = await ShopifyIDUtils.getProductIdFromVariantId(variantId, this.client);
       if (!productId) {
-        LoggingUtils.error(`Could not determine product ID for variant`, 2);
+        logger.error(`Could not determine product ID for variant`, 2);
         return false;
       }
     }
 
     // Validate we have a product ID
     if (!ShopifyIDUtils.isValidID(productId)) {
-      LoggingUtils.error(`Invalid product ID`, 2);
+      logger.error(`Invalid product ID`, 2);
       return false;
     }
 
@@ -174,14 +174,14 @@ class ProductImageHandler {
       if (mediaImageId) {
         imageId = mediaImageId;
       } else {
-        LoggingUtils.error(`Could not find a MediaImage corresponding to ProductImage`, 2);
+        logger.error(`Could not find a MediaImage corresponding to ProductImage`, 2);
         return false;
       }
     }
 
     // Confirm we now have a MediaImage ID
     if (!imageId.includes('MediaImage/')) {
-      LoggingUtils.error(`Unable to use image: ID is not a MediaImage ID`, 2);
+      logger.error(`Unable to use image: ID is not a MediaImage ID`, 2);
       return false;
     }
 
@@ -206,7 +206,7 @@ class ProductImageHandler {
 
         // If the variant already has this media attached, we can skip the operation
         if (existingMediaIds.includes(imageId)) {
-          LoggingUtils.info(`Variant already has the image attached, skipping`, 2);
+          logger.info(`Variant already has the image attached, skipping`, 2);
           return true;
         }
 
@@ -237,15 +237,15 @@ class ProductImageHandler {
             }, 'productVariantDetachMedia');
 
             if (detachResult.productVariantDetachMedia.userErrors.length > 0) {
-              LoggingUtils.warn(`Failed to detach existing media, but will continue with attach operation`, 2);
+              logger.warn(`Failed to detach existing media, but will continue with attach operation`, 2);
             }
           } catch (error) {
-            LoggingUtils.warn(`Error detaching media: ${error.message}, but will continue with attach operation`, 2);
+            logger.warn(`Error detaching media: ${error.message}, but will continue with attach operation`, 2);
           }
         }
       }
     } catch (error) {
-      LoggingUtils.warn(`Could not check existing variant media: ${error.message}, will continue anyway`, 2);
+      logger.warn(`Could not check existing variant media: ${error.message}, will continue anyway`, 2);
     }
 
     // The mutation to append media to variant
@@ -268,7 +268,7 @@ class ProductImageHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Updating variant image`, 2);
+        logger.info(`Updating variant image`, 2);
 
         // Append the new media
         const result = await this.client.graphql(variantAppendMediaMutation, {
@@ -282,18 +282,18 @@ class ProductImageHandler {
         }, 'productVariantAppendMedia');
 
         if (result.productVariantAppendMedia.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to update variant image:`, 2, result.productVariantAppendMedia.userErrors);
+          logger.error(`Failed to update variant image:`, 2, result.productVariantAppendMedia.userErrors);
           return false;
         } else {
-          LoggingUtils.success(`Successfully updated variant image`, 2);
+          logger.success(`Successfully updated variant image`, 2);
           return true;
         }
       } catch (error) {
-        LoggingUtils.error(`Error updating variant image: ${error.message}`, 2);
+        logger.error(`Error updating variant image: ${error.message}`, 2);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would update variant image`, 2);
+      logger.info(`[DRY RUN] Would update variant image`, 2);
       return true;
     }
   }

@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * Product Base Handler
  *
@@ -7,8 +8,7 @@
  * - Product deletion
  * - Fetching products by ID or handle
  */
-const consola = require('consola');
-const LoggingUtils = require('./LoggingUtils');
+;
 
 class ProductBaseHandler {
   constructor(client, options = {}) {
@@ -42,23 +42,23 @@ class ProductBaseHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Creating base product "${productInput.title}"`, 2, 'main');
+        logger.info(`Creating base product "${productInput.title}"`, 2, 'main');
         const result = await this.client.graphql(mutation, { input: productInput }, 'CreateProduct');
 
         if (result.productCreate.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to create product "${productInput.title}"`, 2, result.productCreate.userErrors);
+          logger.error(`Failed to create product "${productInput.title}"`, 2, result.productCreate.userErrors);
           return null;
         }
 
         const newProduct = result.productCreate.product;
-        LoggingUtils.success(`Base product created successfully`, 2);
+        logger.success(`Base product created successfully`, 2);
         return newProduct;
       } catch (error) {
-        LoggingUtils.error(`Error creating product "${productInput.title}": ${error.message}`, 2);
+        logger.error(`Error creating product "${productInput.title}": ${error.message}`, 2);
         return null;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would create product "${productInput.title}"`, 2, 'main');
+      logger.info(`[DRY RUN] Would create product "${productInput.title}"`, 2, 'main');
       return { id: "dry-run-id", title: productInput.title, handle: productInput.handle };
     }
   }
@@ -94,7 +94,7 @@ class ProductBaseHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Updating base product data`, 2, 'main');
+        logger.info(`Updating base product data`, 2, 'main');
         const result = await this.client.graphql(
           mutation,
           { productUpdateInput: updateInput },
@@ -102,19 +102,19 @@ class ProductBaseHandler {
         );
 
         if (result.productUpdate.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to update product "${productInput.title}"`, 2, result.productUpdate.userErrors);
+          logger.error(`Failed to update product "${productInput.title}"`, 2, result.productUpdate.userErrors);
           return null;
         }
 
         const updatedProduct = result.productUpdate.product;
-        LoggingUtils.success(`Base product data updated successfully`, 3);
+        logger.success(`Base product data updated successfully`, 3);
         return updatedProduct;
       } catch (error) {
-        LoggingUtils.error(`Error updating product: ${error.message}`, 2);
+        logger.error(`Error updating product: ${error.message}`, 2);
         return null;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would update product "${productInput.title}"`, 2, 'main');
+      logger.info(`[DRY RUN] Would update product "${productInput.title}"`, 2, 'main');
       return { id: productId, title: productInput.title, handle: productInput.handle };
     }
   }
@@ -127,7 +127,7 @@ class ProductBaseHandler {
    */
   async deleteProduct(productId, logPrefix = '') {
     if (!productId) {
-      LoggingUtils.error(`Cannot delete product: No product ID provided`, 2);
+      logger.error(`Cannot delete product: No product ID provided`, 2);
       return false;
     }
 
@@ -145,7 +145,7 @@ class ProductBaseHandler {
 
     if (this.options.notADrill) {
       try {
-        LoggingUtils.info(`Deleting product with ID: ${productId}`, 2, 'main');
+        logger.info(`Deleting product with ID: ${productId}`, 2, 'main');
         const result = await this.client.graphql(mutation, {
           input: {
             id: productId
@@ -153,18 +153,18 @@ class ProductBaseHandler {
         }, 'ProductDelete');
 
         if (result.productDelete.userErrors.length > 0) {
-          LoggingUtils.error(`Failed to delete product`, 2, result.productDelete.userErrors);
+          logger.error(`Failed to delete product`, 2, result.productDelete.userErrors);
           return false;
         }
 
-        LoggingUtils.success(`Product deleted successfully`, 2);
+        logger.success(`Product deleted successfully`, 2);
         return true;
       } catch (error) {
-        LoggingUtils.error(`Error deleting product: ${error.message}`, 2);
+        logger.error(`Error deleting product: ${error.message}`, 2);
         return false;
       }
     } else {
-      LoggingUtils.info(`[DRY RUN] Would delete product with ID: ${productId}`, 2, 'main');
+      logger.info(`[DRY RUN] Would delete product with ID: ${productId}`, 2, 'main');
       return true;
     }
   }
@@ -192,7 +192,7 @@ class ProductBaseHandler {
       const response = await this.client.graphql(query, { handle }, 'GetProductByHandle');
       return response.productByHandle;
     } catch (error) {
-      LoggingUtils.error(`Error fetching product by handle: ${error.message}`, 1);
+      logger.error(`Error fetching product by handle: ${error.message}`, 1);
       return null;
     }
   }

@@ -1,0 +1,18 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Product Sync Architecture
+
+## Core Strategy
+
+The [ProductSyncStrategy](mdc:strategies/ProductSyncStrategy.js) orchestrates product syncing between Shopify stores. It delegates specialized tasks to utility classes:
+
+## Utility Classes
+
+- **[ProductBatchProcessor](mdc:utils/ProductBatchProcessor.js)**: Handles fetching products in batches with pagination
+- **[ProductOperationHandler](mdc:utils/ProductOperationHandler.js)**: Manages product creation and updating
+- **[ProductMetafieldProcessor](mdc:utils/ProductMetafieldProcessor.js)**: Processes and syncs product metafields
+- **[MetafieldFilterUtils](mdc:utils/MetafieldFilterUtils.js)**: Filters metafields by namespace and key
+- **[SyncResultTracker](mdc:utils/SyncResultTracker.js)**: Tracks operation results and formats reports

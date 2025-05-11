@@ -1,3 +1,4 @@
+const logger = require("./logger");
 // Import strategy classes
 const MetaobjectSyncStrategy = require('../strategies/MetaobjectSyncStrategy');
 const ProductMetafieldSyncStrategy = require('../strategies/ProductMetafieldSyncStrategy');

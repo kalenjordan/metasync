@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 /**
  * GraphQL query to fetch products with their variants, images, metafields, and publications
  */

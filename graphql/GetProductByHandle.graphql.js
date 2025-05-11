@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 /**
  * GraphQL query to fetch a product by its handle with all details
  */

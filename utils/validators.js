@@ -1,3 +1,4 @@
+const logger = require("./logger");
 /**
  * This module provides validation utilities for the MetaSync application.
  * The isProductionShop function has been removed as it's been replaced by

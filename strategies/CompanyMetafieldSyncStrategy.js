@@ -1,4 +1,5 @@
-const consola = require("consola");
+const logger = require("../utils/logger");
+;
 const BaseMetafieldSyncStrategy = require("./BaseMetafieldSyncStrategy");
 
 class CompanyMetafieldSyncStrategy extends BaseMetafieldSyncStrategy {

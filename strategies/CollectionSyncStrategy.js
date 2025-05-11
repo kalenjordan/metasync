@@ -1,4 +1,5 @@
-const consola = require('consola');
+const logger = require("../utils/logger");
+;
 const { GetCollections, GetCollectionByHandle, CreateCollection, UpdateCollection } = require('../graphql');
 
 class CollectionSyncStrategy {
@@ -39,7 +40,7 @@ class CollectionSyncStrategy {
 
       return collections;
     } catch (error) {
-      consola.error(`Error fetching collections: ${error.message}`);
+      logger.error(`Error fetching collections: ${error.message}`);
       return [];
     }
   }
@@ -62,7 +63,7 @@ class CollectionSyncStrategy {
 
       return 'custom';
     } catch (error) {
-      consola.warn(`Error determining collection type: ${error.message}`);
+      logger.warn(`Error determining collection type: ${error.message}`);
       return 'custom';  // Default to custom if we can't determine
     }
   }
@@ -76,7 +77,7 @@ class CollectionSyncStrategy {
       );
       return response.collectionByHandle;
     } catch (error) {
-      consola.error(`Error fetching collection with handle "${handle}": ${error.message}`);
+      logger.error(`Error fetching collection with handle "${handle}": ${error.message}`);
       return null;
     }
   }
@@ -95,17 +96,17 @@ class CollectionSyncStrategy {
         );
 
         if (result.collectionCreate.userErrors.length > 0) {
-          consola.error(`Failed to create collection "${collection.title}":`, result.collectionCreate.userErrors);
+          logger.error(`Failed to create collection "${collection.title}":`, result.collectionCreate.userErrors);
           return null;
         }
 
         return result.collectionCreate.collection;
       } catch (error) {
-        consola.error(`Error creating collection "${collection.title}": ${error.message}`);
+        logger.error(`Error creating collection "${collection.title}": ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would create collection "${collection.title}"`);
+      logger.info(`[DRY RUN] Would create collection "${collection.title}"`);
       return { id: "dry-run-id", title: collection.title, handle: collection.handle };
     }
   }
@@ -125,17 +126,17 @@ class CollectionSyncStrategy {
         );
 
         if (result.collectionUpdate.userErrors.length > 0) {
-          consola.error(`Failed to update collection "${collection.title}":`, result.collectionUpdate.userErrors);
+          logger.error(`Failed to update collection "${collection.title}":`, result.collectionUpdate.userErrors);
           return null;
         }
 
         return result.collectionUpdate.collection;
       } catch (error) {
-        consola.error(`Error updating collection "${collection.title}": ${error.message}`);
+        logger.error(`Error updating collection "${collection.title}": ${error.message}`);
         return null;
       }
     } else {
-      consola.info(`[DRY RUN] Would update collection "${collection.title}"`);
+      logger.info(`[DRY RUN] Would update collection "${collection.title}"`);
       return { id: existingCollection.id, title: collection.title, handle: collection.handle };
     }
   }
@@ -174,12 +175,12 @@ class CollectionSyncStrategy {
   // --- Sync Orchestration Method ---
 
   async sync() {
-    consola.start(`Syncing collections...`);
+    logger.info(`Syncing collections...`);
 
     // Fetch collections from source and target shops
     const limit = this.options.limit || 250;
     let sourceCollections = await this.fetchCollections(this.sourceClient, limit);
-    consola.info(`Found ${sourceCollections.length} collection(s) in source shop`);
+    logger.info(`Found ${sourceCollections.length} collection(s) in source shop`);
 
     // If skipAutomated is set, fetch only custom collections
     if (this.options.skipAutomated) {
@@ -191,11 +192,11 @@ class CollectionSyncStrategy {
       );
 
       sourceCollections = response.collections.edges.map(edge => edge.node);
-      consola.info(`Filtered to ${sourceCollections.length} manual/custom collection(s)`);
+      logger.info(`Filtered to ${sourceCollections.length} manual/custom collection(s)`);
     }
 
     const targetCollections = await this.fetchCollections(this.targetClient);
-    consola.info(`Found ${targetCollections.length} collection(s) in target shop`);
+    logger.info(`Found ${targetCollections.length} collection(s) in target shop`);
 
     // Create map of target collections by handle for easy lookup
     const targetCollectionMap = targetCollections.reduce((map, collection) => {
@@ -211,18 +212,18 @@ class CollectionSyncStrategy {
     // Process each source collection
     for (const collection of sourceCollections) {
       if (processedCount >= this.options.limit) {
-        consola.info(`Reached processing limit (${this.options.limit}). Stopping collection sync.`);
+        logger.info(`Reached processing limit (${this.options.limit}). Stopping collection sync.`);
         break;
       }
 
       if (collection.handle && targetCollectionMap[collection.handle]) {
         // Update existing collection
-        consola.info(`Updating collection: ${collection.title}`);
+        logger.info(`Updating collection: ${collection.title}`);
         const updated = await this.updateCollection(this.targetClient, collection, targetCollectionMap[collection.handle]);
         updated ? results.updated++ : results.failed++;
       } else {
         // Create new collection
-        consola.info(`Creating collection: ${collection.title}`);
+        logger.info(`Creating collection: ${collection.title}`);
         const created = await this.createCollection(this.targetClient, collection);
         created ? results.created++ : results.failed++;
       }
@@ -230,7 +231,7 @@ class CollectionSyncStrategy {
       processedCount++;
     }
 
-    consola.success(`Finished syncing collections.`);
+    logger.success(`Finished syncing collections.`);
     return { definitionResults: results, dataResults: null };
   }
 }

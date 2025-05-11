@@ -1,4 +1,5 @@
-const consola = require("consola");
+const logger = require("../utils/logger");
+;
 
 class BaseMetafieldSyncStrategy {
   // ownerType will be 'PRODUCT', 'COMPANY', etc.
@@ -17,7 +18,7 @@ class BaseMetafieldSyncStrategy {
   // --- Metafield Definition Methods ---
 
   async fetchMetafieldDefinitions(client, namespace = null, key = null) {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     let definitionKey = null;
     if (key) {
@@ -30,12 +31,12 @@ class BaseMetafieldSyncStrategy {
         // If namespace wasn't provided but is in the key, extract it
         if (!namespace) {
           namespace = parts[0];
-          LoggingUtils.info(`Using namespace "${namespace}" from the provided key`);
+          logger.info(`Using namespace "${namespace}" from the provided key`);
         }
       } else {
         // Key doesn't include namespace, use as-is
         definitionKey = key;
-        LoggingUtils.info(`Using key "${definitionKey}" with namespace "${namespace}"`);
+        logger.info(`Using key "${definitionKey}" with namespace "${namespace}"`);
       }
     }
 
@@ -51,7 +52,7 @@ class BaseMetafieldSyncStrategy {
     if (definitionKey !== null) variables.key = definitionKey;
 
     if (this.options.debug) {
-      LoggingUtils.debug(`Fetching metafield definitions with: namespace=${namespace}, key=${definitionKey}`);
+      logger.debug(`Fetching metafield definitions with: namespace=${namespace}, key=${definitionKey}`);
     }
 
     const operationName = `Fetch${this.ownerType}MetafieldDefinitions`;
@@ -59,13 +60,13 @@ class BaseMetafieldSyncStrategy {
       const response = await client.graphql(query, variables, operationName);
       return response.metafieldDefinitions.nodes;
     } catch (error) {
-      LoggingUtils.error(`Error fetching ${this.resourceName} definitions: ${error.message}`);
+      logger.error(`Error fetching ${this.resourceName} definitions: ${error.message}`);
       return [];
     }
   }
 
   async createMetafieldDefinition(client, definition) {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     const input = {
       ownerType: this.ownerType,
@@ -98,7 +99,7 @@ class BaseMetafieldSyncStrategy {
           if (pinnedLimitError && input.pin) {
             // If pinned limit reached and we tried to create a pinned definition,
             // retry with pin: false
-            LoggingUtils.warn(
+            logger.warn(
               `Pinned limit reached for ${this.resourceName} definition ${input.namespace}.${input.key}. Retrying as unpinned.`
             );
 
@@ -113,7 +114,7 @@ class BaseMetafieldSyncStrategy {
               );
 
               if (unpinnedResult.metafieldDefinitionCreate.userErrors.length > 0) {
-                LoggingUtils.error(
+                logger.error(
                   `Failed to create unpinned ${this.resourceName} definition ${input.namespace}.${input.key}:`,
                   0,
                   unpinnedResult.metafieldDefinitionCreate.userErrors
@@ -123,14 +124,14 @@ class BaseMetafieldSyncStrategy {
 
               return unpinnedResult.metafieldDefinitionCreate.createdDefinition;
             } catch (retryError) {
-              LoggingUtils.error(
+              logger.error(
                 `Error creating unpinned ${this.resourceName} definition ${input.namespace}.${input.key}: ${retryError.message}`
               );
               return null;
             }
           } else {
             // Handle other errors
-            LoggingUtils.error(
+            logger.error(
               `Failed to create ${this.resourceName} definition ${input.namespace}.${input.key}:`,
               0,
               result.metafieldDefinitionCreate.userErrors
@@ -140,17 +141,17 @@ class BaseMetafieldSyncStrategy {
         }
         return result.metafieldDefinitionCreate.createdDefinition;
       } catch (error) {
-        LoggingUtils.error(`Error creating ${this.resourceName} definition ${input.namespace}.${input.key}: ${error.message}`);
+        logger.error(`Error creating ${this.resourceName} definition ${input.namespace}.${input.key}: ${error.message}`);
         return null;
       }
     } else {
-      LoggingUtils.dryRun(`Would create ${this.resourceName} definition ${input.namespace}.${input.key}`);
+      logger.dryRun(`Would create ${this.resourceName} definition ${input.namespace}.${input.key}`);
       return { id: "dry-run-id", namespace: input.namespace, key: input.key };
     }
   }
 
   async updateMetafieldDefinition(client, definition, existingDefinition) {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     const input = {
       name: definition.name,
@@ -183,7 +184,7 @@ class BaseMetafieldSyncStrategy {
           if (pinnedLimitError && input.pin) {
             // If pinned limit reached and we tried to update to a pinned definition,
             // retry with pin: false
-            LoggingUtils.warn(
+            logger.warn(
               `Pinned limit reached for ${this.resourceName} definition ${input.namespace}.${input.key}. Retrying as unpinned.`
             );
 
@@ -198,7 +199,7 @@ class BaseMetafieldSyncStrategy {
               );
 
               if (unpinnedResult.metafieldDefinitionUpdate.userErrors.length > 0) {
-                LoggingUtils.error(
+                logger.error(
                   `Failed to update unpinned ${this.resourceName} definition ${input.namespace}.${input.key}:`,
                   0,
                   unpinnedResult.metafieldDefinitionUpdate.userErrors
@@ -208,14 +209,14 @@ class BaseMetafieldSyncStrategy {
 
               return unpinnedResult.metafieldDefinitionUpdate.updatedDefinition;
             } catch (retryError) {
-              LoggingUtils.error(
+              logger.error(
                 `Error updating unpinned ${this.resourceName} definition ${input.namespace}.${input.key}: ${retryError.message}`
               );
               return null;
             }
           } else {
             // Handle other errors
-            LoggingUtils.error(
+            logger.error(
               `Failed to update ${this.resourceName} definition ${definition.namespace}.${definition.key}:`,
               0,
               result.metafieldDefinitionUpdate.userErrors
@@ -225,21 +226,21 @@ class BaseMetafieldSyncStrategy {
         }
         return result.metafieldDefinitionUpdate.updatedDefinition;
       } catch (error) {
-        LoggingUtils.error(`Error updating ${this.resourceName} definition ${definition.namespace}.${definition.key}: ${error.message}`);
+        logger.error(`Error updating ${this.resourceName} definition ${definition.namespace}.${definition.key}: ${error.message}`);
         return null;
       }
     } else {
-      LoggingUtils.dryRun(`Would update ${this.resourceName} definition ${definition.namespace}.${definition.key}`);
+      logger.dryRun(`Would update ${this.resourceName} definition ${definition.namespace}.${definition.key}`);
       return { id: existingDefinition.id, namespace: definition.namespace, key: definition.key };
     }
   }
 
   async deleteMetafieldDefinition(client, definition) {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     const definitionId = definition.id;
     if (!definitionId) {
-      LoggingUtils.error(`Cannot delete ${this.resourceName} definition ${definition.namespace}.${definition.key}: missing ID`);
+      logger.error(`Cannot delete ${this.resourceName} definition ${definition.namespace}.${definition.key}: missing ID`);
       return null;
     }
 
@@ -257,7 +258,7 @@ class BaseMetafieldSyncStrategy {
       try {
         const result = await client.graphql(mutation, { id: definitionId }, operationName);
         if (result.metafieldDefinitionDelete.userErrors.length > 0) {
-          LoggingUtils.error(
+          logger.error(
             `Failed to delete ${this.resourceName} definition ${definition.namespace}.${definition.key}:`,
             0,
             result.metafieldDefinitionDelete.userErrors
@@ -266,17 +267,17 @@ class BaseMetafieldSyncStrategy {
         }
         return result.metafieldDefinitionDelete.deletedDefinitionId;
       } catch (error) {
-        LoggingUtils.error(`Error deleting ${this.resourceName} definition ${definition.namespace}.${definition.key}: ${error.message}`);
+        logger.error(`Error deleting ${this.resourceName} definition ${definition.namespace}.${definition.key}: ${error.message}`);
         return null;
       }
     } else {
-      LoggingUtils.dryRun(`Would delete ${this.resourceName} definition ${definition.namespace}.${definition.key}`);
+      logger.dryRun(`Would delete ${this.resourceName} definition ${definition.namespace}.${definition.key}`);
       return definition.id || "dry-run-id";
     }
   }
 
   async getMetaobjectDefinitionTypeById(client, definitionId) {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     const query = `#graphql
       query GetMetaobjectDefinitionType($id: ID!) {
@@ -290,17 +291,17 @@ class BaseMetafieldSyncStrategy {
       if (response.metaobjectDefinition) {
         return response.metaobjectDefinition.type;
       } else {
-        LoggingUtils.warn(`Metaobject definition with ID ${definitionId} not found.`);
+        logger.warn(`Metaobject definition with ID ${definitionId} not found.`);
         return null;
       }
     } catch (error) {
-      LoggingUtils.error(`Error fetching metaobject definition type for ID ${definitionId}: ${error.message}`);
+      logger.error(`Error fetching metaobject definition type for ID ${definitionId}: ${error.message}`);
       return null;
     }
   }
 
   async getMetaobjectDefinitionIdByType(client, definitionType) {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     const query = `#graphql
       query GetMetaobjectDefinitionId($type: String!) {
@@ -314,11 +315,11 @@ class BaseMetafieldSyncStrategy {
       if (response.metaobjectDefinitionByType) {
         return response.metaobjectDefinitionByType.id;
       } else {
-        LoggingUtils.warn(`Metaobject definition with type ${definitionType} not found in target store.`);
+        logger.warn(`Metaobject definition with type ${definitionType} not found in target store.`);
         return null;
       }
     } catch (error) {
-      LoggingUtils.error(`Error fetching metaobject definition ID for type ${definitionType}: ${error.message}`);
+      logger.error(`Error fetching metaobject definition ID for type ${definitionType}: ${error.message}`);
       return null;
     }
   }
@@ -326,27 +327,27 @@ class BaseMetafieldSyncStrategy {
   // --- Sync Orchestration Methods ---
 
   async syncDefinitionsOnly() {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     // Handle deletion mode separately
     if (this.options.delete) {
-      LoggingUtils.info(`Delete mode enabled. Fetching ${this.resourceName} definitions from target...`);
+      logger.info(`Delete mode enabled. Fetching ${this.resourceName} definitions from target...`);
 
       const targetDefinitions = await this.fetchMetafieldDefinitions(this.targetClient, this.options.namespace, this.options.key);
 
       if (targetDefinitions.length === 0) {
-        LoggingUtils.info(`No ${this.resourceName} definitions found in target to delete.`);
+        logger.info(`No ${this.resourceName} definitions found in target to delete.`);
         return { results: { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 }, definitionKeys: [] };
       }
 
-      LoggingUtils.info(`Found ${targetDefinitions.length} definition(s) to delete in target.`);
+      logger.info(`Found ${targetDefinitions.length} definition(s) to delete in target.`);
 
       // Log each definition to be deleted
-      LoggingUtils.indent();
+      logger.indent();
       targetDefinitions.forEach(def => {
-        LoggingUtils.info(`${def.namespace}.${def.key} (${def.name || 'unnamed'}): ${def.type.name}`, 0, 'main');
+        logger.info(`${def.namespace}.${def.key} (${def.name || 'unnamed'}): ${def.type.name}`, 0, 'main');
       });
-      LoggingUtils.unindent();
+      logger.unindent();
 
       const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
       let processedCount = 0;
@@ -354,17 +355,17 @@ class BaseMetafieldSyncStrategy {
       // Delete all target definitions
       for (const definition of targetDefinitions) {
         if (processedCount >= this.options.limit) {
-          LoggingUtils.info(`Reached processing limit (${this.options.limit}). Stopping ${this.resourceName} definition deletion.`);
+          logger.info(`Reached processing limit (${this.options.limit}). Stopping ${this.resourceName} definition deletion.`);
           break;
         }
 
         const definitionFullKey = `${definition.namespace}.${definition.key}`;
-        LoggingUtils.info(`Deleting ${this.resourceName} definition: ${definitionFullKey}`);
+        logger.info(`Deleting ${this.resourceName} definition: ${definitionFullKey}`);
 
         // Indent the dry run message to appear under the delete message
-        LoggingUtils.indent();
+        logger.indent();
         const deleted = await this.deleteMetafieldDefinition(this.targetClient, definition);
-        LoggingUtils.unindent();
+        logger.unindent();
 
         if (deleted) {
           results.deleted++;
@@ -375,44 +376,44 @@ class BaseMetafieldSyncStrategy {
         processedCount++;
       }
 
-      LoggingUtils.success(`Deleted ${results.deleted} definition(s) from target.`);
+      logger.success(`Deleted ${results.deleted} definition(s) from target.`);
       return { results, definitionKeys: [] };
     }
 
     // Regular sync mode below (non-delete mode)
     const sourceDefinitions = await this.fetchMetafieldDefinitions(this.sourceClient, this.options.namespace, this.options.key);
     if (sourceDefinitions.length === 0) {
-      LoggingUtils.warn(
+      logger.warn(
         this.options.key
           ? `No ${this.resourceName} definitions found in source for key: ${this.options.key}`
           : `No ${this.resourceName} definitions found in source for namespace: ${this.options.namespace}`
       );
       return { results: { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 }, definitionKeys: [] };
     }
-    LoggingUtils.info(
+    logger.info(
       `Found ${sourceDefinitions.length} definition(s) in source ${
         this.options.key ? `for key ${this.options.key}` : this.options.namespace ? `for namespace ${this.options.namespace}` : ""
       }`
     );
 
     // Log each definition with its type
-    LoggingUtils.indent();
+    logger.indent();
     sourceDefinitions.forEach(def => {
-      LoggingUtils.info(`${def.namespace}.${def.key} (${def.name || 'unnamed'}): ${def.type.name}`, 0, 'main');
+      logger.info(`${def.namespace}.${def.key} (${def.name || 'unnamed'}): ${def.type.name}`, 0, 'main');
 
       // Log validation rules if present
       if (def.validations && def.validations.length > 0) {
-        LoggingUtils.indent();
+        logger.indent();
         def.validations.forEach(validation => {
-          LoggingUtils.info(`Validation: ${validation.name} = ${validation.value}`, 0, 'sub');
+          logger.info(`Validation: ${validation.name} = ${validation.value}`, 0, 'sub');
         });
-        LoggingUtils.unindent();
+        logger.unindent();
       }
     });
-    LoggingUtils.unindent();
+    logger.unindent();
 
     const targetDefinitions = await this.fetchMetafieldDefinitions(this.targetClient, this.options.namespace);
-    LoggingUtils.info(`Found ${targetDefinitions.length} definition(s) in target (for namespace: ${this.options.namespace || "all"})`);
+    logger.info(`Found ${targetDefinitions.length} definition(s) in target (for namespace: ${this.options.namespace || "all"})`);
     const targetDefinitionMap = targetDefinitions.reduce((map, def) => {
       map[`${def.namespace}.${def.key}`] = def;
       return map;
@@ -424,7 +425,7 @@ class BaseMetafieldSyncStrategy {
 
     for (const definition of sourceDefinitions) {
       if (processedCount >= this.options.limit) {
-        LoggingUtils.info(`Reached processing limit (${this.options.limit}). Stopping ${this.resourceName} definition sync.`);
+        logger.info(`Reached processing limit (${this.options.limit}). Stopping ${this.resourceName} definition sync.`);
         break;
       }
       const definitionFullKey = `${definition.namespace}.${definition.key}`;
@@ -434,7 +435,7 @@ class BaseMetafieldSyncStrategy {
       let definitionToSync = { ...definition }; // Work on a copy
       let resolutionError = false;
       if ((definition.type.name === 'metaobject_reference' || definition.type.name === 'list.metaobject_reference') && definition.validations?.length > 0) {
-        LoggingUtils.debug(`Resolving metaobject references for ${definitionFullKey}`);
+        logger.debug(`Resolving metaobject references for ${definitionFullKey}`);
         const resolvedValidations = [];
         for (const validation of definition.validations) {
           // Assuming the validation 'value' holds the GID for relevant rules
@@ -444,7 +445,7 @@ class BaseMetafieldSyncStrategy {
             const sourceMoDefType = await this.getMetaobjectDefinitionTypeById(this.sourceClient, sourceMoDefId);
 
             if (!sourceMoDefType) {
-              LoggingUtils.error(`Failed to find type for source Metaobject Definition ID ${sourceMoDefId} referenced by ${definitionFullKey}. Skipping definition.`);
+              logger.error(`Failed to find type for source Metaobject Definition ID ${sourceMoDefId} referenced by ${definitionFullKey}. Skipping definition.`);
               resolutionError = true;
               break; // Stop processing validations for this definition
             }
@@ -452,12 +453,12 @@ class BaseMetafieldSyncStrategy {
             const targetMoDefId = await this.getMetaobjectDefinitionIdByType(this.targetClient, sourceMoDefType);
 
             if (!targetMoDefId) {
-              LoggingUtils.error(`Failed to find target Metaobject Definition for type ${sourceMoDefType} (referenced by ${definitionFullKey}). Ensure it exists in the target store. Skipping definition.`);
+              logger.error(`Failed to find target Metaobject Definition for type ${sourceMoDefType} (referenced by ${definitionFullKey}). Ensure it exists in the target store. Skipping definition.`);
               resolutionError = true;
               break; // Stop processing validations for this definition
             }
 
-            LoggingUtils.debug(`  Mapping validation ref: ${sourceMoDefId} (type: ${sourceMoDefType}) -> ${targetMoDefId}`);
+            logger.debug(`  Mapping validation ref: ${sourceMoDefId} (type: ${sourceMoDefType}) -> ${targetMoDefId}`);
             resolvedValidations.push({ ...validation, value: targetMoDefId });
           } else {
             resolvedValidations.push(validation); // Keep non-reference validations as is
@@ -479,20 +480,20 @@ class BaseMetafieldSyncStrategy {
       const targetDefinition = targetDefinitionMap[definitionFullKey];
 
       if (targetDefinition) {
-        LoggingUtils.info(`Updating ${this.resourceName} definition: ${definitionFullKey}`);
+        logger.info(`Updating ${this.resourceName} definition: ${definitionFullKey}`);
         // Indent the dry run message to appear under the update message
-        LoggingUtils.indent();
+        logger.indent();
         // Pass the potentially modified definitionToSync
         const updated = await this.updateMetafieldDefinition(this.targetClient, definitionToSync, targetDefinition);
-        LoggingUtils.unindent();
+        logger.unindent();
         updated ? results.updated++ : results.failed++;
       } else {
-        LoggingUtils.info(`Creating ${this.resourceName} definition: ${definitionFullKey}`);
+        logger.info(`Creating ${this.resourceName} definition: ${definitionFullKey}`);
         // Indent the dry run message to appear under the create message
-        LoggingUtils.indent();
+        logger.indent();
         // Pass the potentially modified definitionToSync
         const created = await this.createMetafieldDefinition(this.targetClient, definitionToSync);
-        LoggingUtils.unindent();
+        logger.unindent();
         created ? results.created++ : results.failed++;
       }
       processedCount++;
@@ -502,12 +503,12 @@ class BaseMetafieldSyncStrategy {
   }
 
   async listAvailableDefinitions() {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
-    LoggingUtils.info(`Fetching all available ${this.resourceName} definitions...`);
+    logger.info(`Fetching all available ${this.resourceName} definitions...`);
     const definitions = await this.fetchMetafieldDefinitions(this.sourceClient);
     if (definitions.length === 0) {
-      LoggingUtils.warn(`No ${this.resourceName} definitions found in source shop.`);
+      logger.warn(`No ${this.resourceName} definitions found in source shop.`);
       return;
     }
 
@@ -520,32 +521,32 @@ class BaseMetafieldSyncStrategy {
       namespaceGroups[def.namespace].push(def);
     });
 
-    LoggingUtils.info(`Available ${this.resourceName} namespaces/keys:`);
+    logger.info(`Available ${this.resourceName} namespaces/keys:`);
 
     // Reset indentation
-    LoggingUtils.resetIndent();
+    logger.resetIndent();
 
     // Display namespaces and their keys with indentation
     Object.keys(namespaceGroups).sort().forEach(namespace => {
-      LoggingUtils.info(`${namespace}:`, 0, 'main');
-      LoggingUtils.indent();
+      logger.info(`${namespace}:`, 0, 'main');
+      logger.indent();
       namespaceGroups[namespace].forEach(def => {
-        LoggingUtils.info(`${def.key} (${def.name || "No name"})`, 0, 'sub');
+        logger.info(`${def.key} (${def.name || "No name"})`, 0, 'sub');
       });
-      LoggingUtils.unindent();
+      logger.unindent();
     });
 
-    LoggingUtils.info(`\nPlease run the command again with --namespace <namespace> to specify which ${this.resourceName} namespace to sync.`);
-    LoggingUtils.info(`Or use --namespace all to sync all namespaces at once.`);
+    logger.info(`\nPlease run the command again with --namespace <namespace> to specify which ${this.resourceName} namespace to sync.`);
+    logger.info(`Or use --namespace all to sync all namespaces at once.`);
   }
 
   async sync() {
-    const LoggingUtils = require('../utils/LoggingUtils');
+    const logger = require('../utils/logger');
 
     // Handle listing if namespace is missing (relevant for metafield types)
     if (!this.options.namespace) {
-      LoggingUtils.error(`Error: --namespace is required for ${this.resourceName} definitions sync.`);
-      LoggingUtils.info(`Try running the command with --namespace <namespace> or --namespace all.`);
+      logger.error(`Error: --namespace is required for ${this.resourceName} definitions sync.`);
+      logger.info(`Try running the command with --namespace <namespace> or --namespace all.`);
       await this.listAvailableDefinitions();
       return { definitionResults: null, dataResults: null };
     }
@@ -557,25 +558,25 @@ class BaseMetafieldSyncStrategy {
     if (this.options.delete) {
       // Handle the special "all" namespace case in delete mode
       if (this.options.namespace.toLowerCase() === 'all') {
-        LoggingUtils.info(`Delete mode: Deleting all ${this.resourceName} namespaces...`);
+        logger.info(`Delete mode: Deleting all ${this.resourceName} namespaces...`);
         const definitions = await this.fetchMetafieldDefinitions(this.targetClient);
         if (definitions.length === 0) {
-          LoggingUtils.warn(`No ${this.resourceName} definitions found in target shop.`);
+          logger.warn(`No ${this.resourceName} definitions found in target shop.`);
           return { definitionResults, dataResults };
         }
 
         // Get unique namespaces
         const namespaces = [...new Set(definitions.map(def => def.namespace))];
-        LoggingUtils.info(`Found ${namespaces.length} namespaces to delete: ${namespaces.join(', ')}`);
+        logger.info(`Found ${namespaces.length} namespaces to delete: ${namespaces.join(', ')}`);
 
         // Preserve current indentation level when running multiple namespaces
-        const currentIndent = LoggingUtils.indentLevel;
+        const currentIndent = logger.indentLevel;
 
         // Delete each namespace separately
         for (const namespace of namespaces) {
           // Create a subsection for each namespace, indented under the resource type
-          LoggingUtils.info(`NAMESPACE: ${namespace}`, 0, 'main');
-          LoggingUtils.indent();
+          logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
+          logger.indent();
 
           // Temporarily set the namespace option
           const originalNamespace = this.options.namespace;
@@ -591,27 +592,27 @@ class BaseMetafieldSyncStrategy {
           definitionResults.deleted += defSync.results.deleted;
           definitionResults.failed += defSync.results.failed;
 
-          LoggingUtils.success(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}.`);
-          LoggingUtils.unindent();
+          logger.success(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}.`);
+          logger.unindent();
         }
 
         // Restore original indentation level
-        LoggingUtils.indentLevel = currentIndent;
+        logger.indentLevel = currentIndent;
 
         return { definitionResults, dataResults };
       }
       // Handle the comma-separated namespaces case in delete mode
       else if (this.options.namespaces && Array.isArray(this.options.namespaces)) {
-        LoggingUtils.info(`Delete mode: Deleting multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}...`);
+        logger.info(`Delete mode: Deleting multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}...`);
 
         // Preserve current indentation level when running multiple namespaces
-        const currentIndent = LoggingUtils.indentLevel;
+        const currentIndent = logger.indentLevel;
 
         // Delete each namespace separately
         for (const namespace of this.options.namespaces) {
           // Create a subsection for each namespace, indented under the resource type
-          LoggingUtils.info(`NAMESPACE: ${namespace}`, 0, 'main');
-          LoggingUtils.indent();
+          logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
+          logger.indent();
 
           // Temporarily set the namespace option
           const originalNamespace = this.options.namespace;
@@ -627,46 +628,46 @@ class BaseMetafieldSyncStrategy {
           definitionResults.deleted += defSync.results.deleted;
           definitionResults.failed += defSync.results.failed;
 
-          LoggingUtils.success(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}.`);
-          LoggingUtils.unindent();
+          logger.success(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}.`);
+          logger.unindent();
         }
 
         // Restore original indentation level
-        LoggingUtils.indentLevel = currentIndent;
+        logger.indentLevel = currentIndent;
 
         return { definitionResults, dataResults };
       }
 
       // Single namespace delete mode
-      LoggingUtils.info(`Delete mode: Deleting ${this.resourceName} definitions for namespace: ${this.options.namespace}...`);
+      logger.info(`Delete mode: Deleting ${this.resourceName} definitions for namespace: ${this.options.namespace}...`);
       const defSync = await this.syncDefinitionsOnly();
       definitionResults = defSync.results;
-      LoggingUtils.success(`Finished deleting ${this.resourceName} definitions.`);
+      logger.success(`Finished deleting ${this.resourceName} definitions.`);
       return { definitionResults, dataResults };
     }
 
     // Regular sync mode (non-delete) below
     // Handle the special "all" namespace case
     if (this.options.namespace.toLowerCase() === 'all') {
-      LoggingUtils.info(`Syncing all ${this.resourceName} namespaces...`);
+      logger.info(`Syncing all ${this.resourceName} namespaces...`);
       const definitions = await this.fetchMetafieldDefinitions(this.sourceClient);
       if (definitions.length === 0) {
-        LoggingUtils.warn(`No ${this.resourceName} definitions found in source shop.`);
+        logger.warn(`No ${this.resourceName} definitions found in source shop.`);
         return { definitionResults, dataResults };
       }
 
       // Get unique namespaces
       const namespaces = [...new Set(definitions.map(def => def.namespace))];
-      LoggingUtils.info(`Found ${namespaces.length} namespaces to sync: ${namespaces.join(', ')}`);
+      logger.info(`Found ${namespaces.length} namespaces to sync: ${namespaces.join(', ')}`);
 
       // Preserve current indentation level when running multiple namespaces
-      const currentIndent = LoggingUtils.indentLevel;
+      const currentIndent = logger.indentLevel;
 
       // Sync each namespace separately
       for (const namespace of namespaces) {
         // Create a subsection for each namespace, indented under the resource type
-        LoggingUtils.info(`NAMESPACE: ${namespace}`, 0, 'main');
-        LoggingUtils.indent();
+        logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
+        logger.indent();
 
         // Temporarily set the namespace option
         const originalNamespace = this.options.namespace;
@@ -685,27 +686,27 @@ class BaseMetafieldSyncStrategy {
         definitionResults.failed += defSync.results.failed;
         definitionResults.deleted += defSync.results.deleted;
 
-        LoggingUtils.success(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}.`);
-        LoggingUtils.unindent();
+        logger.success(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}.`);
+        logger.unindent();
       }
 
       // Restore original indentation level
-      LoggingUtils.indentLevel = currentIndent;
+      logger.indentLevel = currentIndent;
 
       return { definitionResults, dataResults };
     }
     // Handle the comma-separated namespaces case
     else if (this.options.namespaces && Array.isArray(this.options.namespaces)) {
-      LoggingUtils.info(`Syncing multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}...`);
+      logger.info(`Syncing multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}...`);
 
       // Preserve current indentation level when running multiple namespaces
-      const currentIndent = LoggingUtils.indentLevel;
+      const currentIndent = logger.indentLevel;
 
       // Sync each namespace separately
       for (const namespace of this.options.namespaces) {
         // Create a subsection for each namespace, indented under the resource type
-        LoggingUtils.info(`NAMESPACE: ${namespace}`, 0, 'main');
-        LoggingUtils.indent();
+        logger.info(`NAMESPACE: ${namespace}`, 0, 'main');
+        logger.indent();
 
         // Temporarily set the namespace option
         const originalNamespace = this.options.namespace;
@@ -724,25 +725,25 @@ class BaseMetafieldSyncStrategy {
         definitionResults.failed += defSync.results.failed;
         definitionResults.deleted += defSync.results.deleted;
 
-        LoggingUtils.success(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}.`);
-        LoggingUtils.unindent();
+        logger.success(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}.`);
+        logger.unindent();
       }
 
       // Restore original indentation level
-      LoggingUtils.indentLevel = currentIndent;
+      logger.indentLevel = currentIndent;
 
       return { definitionResults, dataResults };
     }
 
     // Only definition sync is supported for metafields
     if (!this.options.dataOnly) {
-      LoggingUtils.info(`Syncing ${this.resourceName} definitions...`);
+      logger.info(`Syncing ${this.resourceName} definitions...`);
       const defSync = await this.syncDefinitionsOnly();
       definitionResults = defSync.results;
-      LoggingUtils.success(`Finished syncing ${this.resourceName} definitions.`);
+      logger.success(`Finished syncing ${this.resourceName} definitions.`);
     } else {
       // This case should ideally be caught by run.js validation
-      LoggingUtils.error(`Data sync (--data-only) is not supported for ${this.resourceName}s.`);
+      logger.error(`Data sync (--data-only) is not supported for ${this.resourceName}s.`);
       return { definitionResults: null, dataResults: null };
     }
 

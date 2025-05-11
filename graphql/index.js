@@ -1,3 +1,4 @@
+const logger = require("../utils/logger");
 /**
  * GraphQL queries index file
  *

@@ -1,9 +1,9 @@
+const logger = require("./logger");
 /**
  * Metafield Filter Utilities
  *
  * Provides utilities for filtering metafields based on namespace and key constraints.
  */
-const LoggingUtils = require('./LoggingUtils');
 
 class MetafieldFilterUtils {
   /**
@@ -23,11 +23,11 @@ class MetafieldFilterUtils {
 
     // Special case: if namespace is 'all', don't filter by namespace
     if (options.namespace && options.namespace.toLowerCase() === 'all') {
-      LoggingUtils.info(`Using special namespace 'all' - including all namespaces`, 4);
+      logger.info(`Using special namespace 'all' - including all namespaces`, 4);
 
       // Only filter by key if provided
       if (options.key) {
-        LoggingUtils.info(`Filtering metafields by key: ${options.key}`, 4);
+        logger.info(`Filtering metafields by key: ${options.key}`, 4);
 
         const filteredByKey = metafields.filter(metafield => {
           // Handle case where key includes namespace (namespace.key format)
@@ -40,7 +40,7 @@ class MetafieldFilterUtils {
           }
         });
 
-        LoggingUtils.info(`Filtered from ${metafields.length} to ${filteredByKey.length} metafields`, 4);
+        logger.info(`Filtered from ${metafields.length} to ${filteredByKey.length} metafields`, 4);
         return filteredByKey;
       }
 
@@ -59,7 +59,7 @@ class MetafieldFilterUtils {
       logMessage += `key: ${options.key}`;
     }
 
-    LoggingUtils.info(`Filtering metafields by ${logMessage}`, 4);
+    logger.info(`Filtering metafields by ${logMessage}`, 4);
 
     const filteredMetafields = metafields.filter(metafield => {
       // Filter by namespace if provided
@@ -90,7 +90,7 @@ class MetafieldFilterUtils {
       return true;
     });
 
-    LoggingUtils.info(`Filtered from ${metafields.length} to ${filteredMetafields.length} metafields`, 4);
+    logger.info(`Filtered from ${metafields.length} to ${filteredMetafields.length} metafields`, 4);
     return filteredMetafields;
   }
 }

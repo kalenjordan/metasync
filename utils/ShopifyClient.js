@@ -1,7 +1,6 @@
 const Shopify = require('shopify-api-node');
-const consola = require('consola');
 const chalk = require('chalk');
-const LoggingUtils = require('./LoggingUtils');
+const logger = require('./logger');
 
 class ShopifyClient {
   /**
@@ -29,20 +28,19 @@ class ShopifyClient {
 
     // Forward event listeners if debug is needed for them elsewhere
     if (this.debug) {
-      // Use consola for these too, tagged
-      const eventLogger = consola.withTag(`Events[${this.shopName}]`);
+      // Use logger for these events
       this.client.on('callLimits', limits => {
         this.rateLimits.restRemaining = limits.remaining;
         this.rateLimits.restTotal = limits.current;
         this.rateLimits.lastUpdated = new Date();
-        eventLogger.info('REST Call limits:', limits);
+        logger.info(`REST Call limits for [${this.shopName}]: ${JSON.stringify(limits)}`);
       });
-      
+
       this.client.on('callGraphqlLimits', limits => {
         this.rateLimits.graphqlRemaining = limits.remaining;
         this.rateLimits.graphqlTotal = limits.current;
         this.rateLimits.lastUpdated = new Date();
-        eventLogger.info('GraphQL limits:', limits);
+        logger.info(`GraphQL limits for [${this.shopName}]: ${JSON.stringify(limits)}`);
       });
     }
   }
@@ -56,27 +54,27 @@ class ShopifyClient {
    * @throws {Error} - Enhanced error with operation context
    */
   async graphql(queryOrMutation, variables = undefined, operationName = 'GraphQL Operation') {
-    const logger = consola.withTag(`GraphQL[${this.shopName} ${operationName}]`);
     this.operationCounter++;
     const operationId = `${this.shopName}-${operationName}-${this.operationCounter}`;
+    const logPrefix = `GraphQL[${this.shopName} ${operationName}]`;
 
     try {
       // Debug logging for the request
       if (this.debug) {
-        logger.info(`Starting operation: ${chalk.bold(operationId)}`);
-        logger.info(queryOrMutation);
-        logger.info(JSON.stringify(variables, null, 2));
+        logger.info(`${logPrefix}: Starting operation: ${chalk.bold(operationId)}`);
+        logger.debug(queryOrMutation);
+        logger.debug(JSON.stringify(variables, null, 2));
       }
 
       // Execute the GraphQL request
       const result = await this.client.graphql(queryOrMutation, variables);
-      
+
       // Debug logging for the response
       if (this.debug) {
-        logger.info(`Operation ${chalk.bold(operationId)} completed successfully`);
-        logger.info('Response:', result);
+        logger.info(`${logPrefix}: Operation ${chalk.bold(operationId)} completed successfully`);
+        logger.debug(`Response: ${JSON.stringify(result, null, 2)}`);
       }
-      
+
       // Check for GraphQL errors in the response
       if (result.errors) {
         const errorMessages = result.errors.map(e => e.message).join(', ');
@@ -86,20 +84,20 @@ class ShopifyClient {
           errors: result.errors,
           variables
         };
-        
-        logger.error(`GraphQL errors in operation ${operationId}: ${errorMessages}`);
+
+        logger.error(`${logPrefix}: GraphQL errors in operation ${operationId}: ${errorMessages}`);
         if (this.debug) {
-          logger.error('Error details:', errorDetails);
+          logger.error(`Error details: ${JSON.stringify(errorDetails, null, 2)}`);
         }
-        
+
         // We still return the result so caller can handle these errors
         // as some operations might continue with partial data
         return result;
       }
-      
+
       // Return the successful result
       return result;
-      
+
     } catch (error) {
       // Handle network errors and other exceptions
       // Format a detailed error with context about the operation
@@ -108,35 +106,33 @@ class ShopifyClient {
       enhancedError.operationName = operationName;
       enhancedError.operationId = operationId;
       enhancedError.shopName = this.shopName;
-      
+
       // Only include variables in debug mode to avoid leaking sensitive data in production logs
       if (this.debug) {
         enhancedError.variables = variables;
         enhancedError.query = queryOrMutation;
       }
-      
+
       // Check if this is a rate limit error
       if (error.message && error.message.includes('Throttled')) {
-        logger.warn(`Rate limit exceeded for shop ${this.shopName}. Consider implementing backoff strategy.`);
+        logger.warn(`${logPrefix}: Rate limit exceeded for shop ${this.shopName}. Consider implementing backoff strategy.`);
         enhancedError.isRateLimit = true;
       }
-      
+
       // Log the error
-      logger.error(`GraphQL operation ${chalk.bold(operationId)} failed: ${error.message}`);
-      
+      logger.error(`${logPrefix}: GraphQL operation ${chalk.bold(operationId)} failed: ${error.message}`);
+
       if (this.debug) {
-        logger.error('Error stack:', error.stack);
-        
+        logger.debug(`Error stack: ${error.stack}`);
+
         // Log rate limit information if available
         if (this.rateLimits.lastUpdated) {
-          logger.info('Current rate limits:', {
-            graphql: `${this.rateLimits.graphqlRemaining}/${this.rateLimits.graphqlTotal}`,
-            rest: `${this.rateLimits.restRemaining}/${this.rateLimits.restTotal}`,
-            lastUpdated: this.rateLimits.lastUpdated
-          });
+          logger.info(`Current rate limits: graphql: ${this.rateLimits.graphqlRemaining}/${this.rateLimits.graphqlTotal}, ` +
+                     `rest: ${this.rateLimits.restRemaining}/${this.rateLimits.restTotal}, ` +
+                     `lastUpdated: ${this.rateLimits.lastUpdated}`);
         }
       }
-      
+
       throw enhancedError;
     }
   }
@@ -154,28 +150,28 @@ class ShopifyClient {
     }
 
     const operationId = `${this.shopName}-REST-${resource}-${method}-${++this.operationCounter}`;
-    const logger = consola.withTag(`REST[${this.shopName} ${resource}.${method}]`);
+    const logPrefix = `REST[${this.shopName} ${resource}.${method}]`;
 
     try {
       // Debug logging for the request
       if (this.debug) {
-        logger.info(`Starting REST operation: ${chalk.bold(operationId)}`);
+        logger.info(`${logPrefix}: Starting REST operation: ${chalk.bold(operationId)}`);
         if (params) {
-          logger.info('Params:', JSON.stringify(params, null, 2));
+          logger.debug(`Params: ${JSON.stringify(params, null, 2)}`);
         }
       }
 
       // Execute the REST request
       const result = await this.client[resource][method](params);
-      
+
       // Debug logging for the response
       if (this.debug) {
-        logger.info(`REST operation ${chalk.bold(operationId)} completed successfully`);
-        logger.info('Response:', result);
+        logger.info(`${logPrefix}: REST operation ${chalk.bold(operationId)} completed successfully`);
+        logger.debug(`Response: ${JSON.stringify(result, null, 2)}`);
       }
-      
+
       return result;
-      
+
     } catch (error) {
       // Create enhanced error with context
       const enhancedError = new Error(`Shopify REST error in operation ${operationId} (${resource}.${method}): ${error.message}`);
@@ -184,38 +180,36 @@ class ShopifyClient {
       enhancedError.method = method;
       enhancedError.operationId = operationId;
       enhancedError.shopName = this.shopName;
-      
+
       if (this.debug) {
         enhancedError.params = params;
       }
-      
+
       // Check for rate limiting
       if (error.statusCode === 429) {
-        logger.warn(`REST rate limit exceeded for shop ${this.shopName}. Consider implementing backoff strategy.`);
+        logger.warn(`${logPrefix}: REST rate limit exceeded for shop ${this.shopName}. Consider implementing backoff strategy.`);
         enhancedError.isRateLimit = true;
       }
-      
+
       // Log error with appropriate context
-      logger.error(`REST operation ${chalk.bold(operationId)} failed: ${error.message}`);
-      
+      logger.error(`${logPrefix}: REST operation ${chalk.bold(operationId)} failed: ${error.message}`);
+
       if (this.debug) {
-        logger.error('Error stack:', error.stack);
-        
+        logger.debug(`Error stack: ${error.stack}`);
+
         // Log HTTP details if available
         if (error.statusCode) {
           logger.error(`HTTP Status: ${error.statusCode}`);
         }
-        
+
         // Log rate limit information if available
         if (this.rateLimits.lastUpdated) {
-          logger.info('Current rate limits:', {
-            graphql: `${this.rateLimits.graphqlRemaining}/${this.rateLimits.graphqlTotal}`,
-            rest: `${this.rateLimits.restRemaining}/${this.rateLimits.restTotal}`,
-            lastUpdated: this.rateLimits.lastUpdated
-          });
+          logger.info(`Current rate limits: graphql: ${this.rateLimits.graphqlRemaining}/${this.rateLimits.graphqlTotal}, ` +
+                     `rest: ${this.rateLimits.restRemaining}/${this.rateLimits.restTotal}, ` +
+                     `lastUpdated: ${this.rateLimits.lastUpdated}`);
         }
       }
-      
+
       throw enhancedError;
     }
   }
@@ -239,14 +233,14 @@ class ShopifyClient {
    */
   isNearingRateLimit(threshold = 80) {
     if (!this.rateLimits.lastUpdated) return false;
-    
+
     // Check if we're below the threshold percentage of our total limit
-    const graphqlPercentUsed = this.rateLimits.graphqlRemaining ? 
+    const graphqlPercentUsed = this.rateLimits.graphqlRemaining ?
       100 - (this.rateLimits.graphqlRemaining / this.rateLimits.graphqlTotal * 100) : 0;
-      
+
     const restPercentUsed = this.rateLimits.restRemaining ?
       100 - (this.rateLimits.restRemaining / this.rateLimits.restTotal * 100) : 0;
-      
+
     return graphqlPercentUsed > threshold || restPercentUsed > threshold;
   }
 }
