@@ -108,17 +108,17 @@ COMMON OPTIONS:
   --limit <number>       Limit the number of items to process (default: 3)
 
 COMMANDS:
-  product               Sync product data
-  metaobject            Sync metaobject data
-  page                  Sync page data
-  collection            Sync collection data
-  customer              Sync customer data
-  order                 Sync order data
-  variant               Sync variant data
+  products              Sync product data
+  metaobjects           Sync metaobject data
+  pages                 Sync page data
+  collections           Sync collection data
+  customers             Sync customer data
+  orders                Sync order data
+  variants              Sync variant data
 
 Examples:
-  metasync data product --handle my-product --source shopA --target shopB
-  metasync data metaobject --type territory --source shopA --target shopB
+  metasync data products --handle my-product --source shopA --target shopB
+  metasync data metaobjects --type territory --source shopA --target shopB
   `;
 
   // Configure help for the different contexts
@@ -180,14 +180,17 @@ Examples:
   }
 
   // Define resources and their options for data commands
-  const resources = ["product", "metaobject", "page", "collection", "customer", "order", "variant"];
-  resources.forEach(resource => {
+  const resourceSingular = ["product", "metaobject", "page", "collection", "customer", "order", "variant"];
+  const resourcePlural = ["products", "metaobjects", "pages", "collections", "customers", "orders", "variants"];
+
+  resourcePlural.forEach((pluralResource, index) => {
+    const singularResource = resourceSingular[index];
     const cmd = dataCommand
-      .command(resource)
-      .description(`Sync ${resource} data`);
+      .command(pluralResource)
+      .description(`Sync ${singularResource} data`);
 
     // Add resource-specific options
-    if (resource === "product") {
+    if (pluralResource === "products") {
       cmd.option("--handle <handle>", "Product handle to sync")
          .option("--id <id>", "Product ID to sync")
          .option("--namespace <namespace>", "Sync only metafields with this namespace")
@@ -197,7 +200,7 @@ Examples:
          .option("--start-cursor <cursor>", "Pagination cursor to start from (for resuming interrupted syncs)");
 
       const productHelpText = `
-Example: metasync data product --handle my-product --source shopA --target shopB
+Example: metasync data products --handle my-product --source shopA --target shopB
 
 Options:
   --handle <handle>       Product handle to sync
@@ -209,19 +212,19 @@ Options:
   --start-cursor <cursor> Pagination cursor for resuming interrupted syncs
       `;
       customizeHelp(cmd, productHelpText);
-    } else if (resource === "metaobject") {
+    } else if (pluralResource === "metaobjects") {
       cmd.option("--type <type>", "Metaobject definition type to sync (required)")
          .option("--handle <handle>", "Metaobject handle to sync");
 
       const metaobjectHelpText = `
-Example: metasync data metaobject --type territory --source shopA --target shopB
+Example: metasync data metaobjects --type territory --source shopA --target shopB
 
 Options:
   --type <type>           Metaobject definition type to sync (required)
   --handle <handle>       Metaobject handle to sync
       `;
       customizeHelp(cmd, metaobjectHelpText);
-    } else if (resource === "page") {
+    } else if (pluralResource === "pages") {
       cmd.option("--handle <handle>", "Page handle to sync")
          .option("--id <id>", "Page ID to sync");
 
@@ -231,13 +234,13 @@ Options:
   --id <id>               Page ID to sync
       `;
       customizeHelp(cmd, pageHelpText);
-    } else if (resource === "collection") {
+    } else if (pluralResource === "collections") {
       cmd.option("--handle <handle>", "Collection handle to sync")
          .option("--id <id>", "Collection ID to sync")
          .option("--skip-automated", "Skip automated (smart) collections", false);
 
       const collectionHelpText = `
-Example: metasync data collection --handle my-collection --source shopA --target shopB
+Example: metasync data collections --handle my-collection --source shopA --target shopB
 
 Options:
   --handle <handle>       Collection handle to sync
@@ -248,9 +251,9 @@ Options:
     } else {
       // Generic help for other resource types
       const genericHelpText = `
-Usage: metasync data ${resource} [options]
+Usage: metasync data ${pluralResource} [options]
 
-Sync ${resource} data
+Sync ${singularResource} data
       `;
       customizeHelp(cmd, genericHelpText);
     }
@@ -259,13 +262,14 @@ Sync ${resource} data
     cmd.action((cmdOptions) => {
       // Merge command options with main options
       Object.assign(mergedOptions, cmdOptions);
-      mergedOptions.resource = resource;
+      // Map plural resource back to singular for backwards compatibility
+      mergedOptions.resource = singularResource;
 
       // Set command type
       mergedOptions.command = "data";
 
       // Map type to key for metaobjects (for backwards compatibility)
-      if (resource === "metaobject" && cmdOptions.type) {
+      if (singularResource === "metaobject" && cmdOptions.type) {
         mergedOptions.key = cmdOptions.type;
       }
     });
@@ -295,7 +299,7 @@ Sync ${resource} data
     consola.warn(`Note: Command structure has changed. Try using one of these commands instead:`);
     consola.info(`  metasync definitions metafields --resource <resource> --namespace <namespace>`);
     consola.info(`  metasync definitions metaobject --type <type>`);
-    consola.info(`  metasync data product|metaobject|page [options]`);
+    consola.info(`  metasync data products|metaobjects|pages [options]`);
   }
 
   return mergedOptions;
