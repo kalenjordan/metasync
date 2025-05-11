@@ -15,7 +15,6 @@
  *
  */
 const consola = require('consola');
-const chalk = require('chalk');
 
 // Import utility classes
 const MetafieldHandler = require('../utils/MetafieldHandler');
@@ -25,14 +24,10 @@ const ProductBaseHandler = require('../utils/ProductBaseHandler');
 const LoggingUtils = require('../utils/LoggingUtils');
 const ProductVariantHandler = require('../utils/ProductVariantHandler');
 const MetafieldReferenceHandler = require('../utils/MetafieldReferenceHandler');
-
-// Import GraphQL queries
-const {
-  GetProducts,
-  GetProductByHandle,
-  GetCollectionByHandle,
-  GetCollectionById
-} = require('../graphql');
+const ProductBatchProcessor = require('../utils/ProductBatchProcessor');
+const SyncResultTracker = require('../utils/SyncResultTracker');
+const ProductMetafieldProcessor = require('../utils/ProductMetafieldProcessor');
+const ProductOperationHandler = require('../utils/ProductOperationHandler');
 
 class ProductSyncStrategy {
   constructor(sourceClient, targetClient, options) {
@@ -62,531 +57,26 @@ class ProductSyncStrategy {
     // Initialize the reference handler
     this.referenceHandler = new MetafieldReferenceHandler(sourceClient, targetClient, options, {
       variantHandler: this.variantHandler,
-      // We could add collection handlers and other handlers as needed
-    });
-  }
-
-  // --- Product Methods ---
-
-  async fetchProducts(client, limit = 50, options = {}) {
-    // If fetching by handle, use the getProductByHandle method
-    if (options.handle) {
-      const product = await this.getProductByHandle(client, options.handle);
-      return product ? [product] : [];
-    }
-
-    // For pagination, we'll use a batch size of 25
-    const batchSize = this.options.batchSize || 25;
-    let hasNextPage = true;
-    // Initialize cursor from options if provided
-    let cursor = this.options.startCursor || null;
-    let fetchedCount = 0;
-
-    if (cursor) {
-      consola.info(`Starting pagination from cursor: ${chalk.blue(cursor)}`);
-    }
-
-    // Return an async generator function
-    return {
-      // Method to fetch the next batch
-      fetchNextBatch: async function() {
-        if (!hasNextPage || fetchedCount >= limit) {
-          return { products: [], done: true };
-        }
-
-        try {
-          // Calculate how many products to fetch in this batch
-          const fetchCount = Math.min(batchSize, limit - fetchedCount);
-
-          // Filter out archived products using the query parameter
-          const variables = {
-            first: fetchCount,
-            query: "status:ACTIVE", // Only fetch active products
-            after: cursor
-          };
-
-          const response = await client.graphql(GetProducts, variables, 'GetProducts');
-
-          // Process products
-          const batchProducts = response.products.edges.map(edge => {
-            const product = edge.node;
-
-            // Process images
-            product.images = product.images.edges.map(imgEdge => imgEdge.node);
-
-            // Process variants and their metafields
-            product.variants = product.variants.edges.map(varEdge => {
-              const variant = varEdge.node;
-
-              // Process variant metafields
-              if (variant.metafields && variant.metafields.edges) {
-                variant.metafields = variant.metafields.edges.map(metaEdge => metaEdge.node);
-              } else {
-                variant.metafields = [];
-              }
-
-              // variant.image is already properly structured as a direct object
-              return variant;
-            });
-
-            // Process metafields
-            product.metafields = product.metafields.edges.map(metaEdge => metaEdge.node);
-
-            // Process publications
-            if (product.publications && product.publications.edges) {
-              product.publications = product.publications.edges.map(pubEdge => pubEdge.node);
-            } else {
-              product.publications = [];
-            }
-
-            return product;
-          });
-
-          // Update pagination info for next iteration
-          hasNextPage = response.products.pageInfo.hasNextPage;
-          cursor = response.products.pageInfo.endCursor;
-          fetchedCount += batchProducts.length;
-
-          // Log the current cursor in gray for reference
-          consola.debug(`Current pagination cursor: ${cursor}`);
-
-          return {
-            products: batchProducts,
-            done: !hasNextPage || fetchedCount > limit,
-            fetchedCount,
-            totalCount: fetchedCount,
-            cursor: cursor
-          };
-        } catch (error) {
-          consola.error(`Error fetching products: ${error.message}`);
-          return { products: [], done: true, error: error.message };
-        }
-      }
-    };
-  }
-
-  async getProductByHandle(client, handle) {
-    try {
-      const response = await client.graphql(GetProductByHandle, { handle }, 'GetProductByHandle');
-
-      if (!response.productByHandle) {
-        return null;
-      }
-
-      const product = response.productByHandle;
-
-      // Process images
-      product.images = product.images.edges.map(imgEdge => imgEdge.node);
-
-      // Process variants and their metafields
-      product.variants = product.variants.edges.map(varEdge => {
-        const variant = varEdge.node;
-
-        // Process variant metafields
-        if (variant.metafields && variant.metafields.edges) {
-          variant.metafields = variant.metafields.edges.map(metaEdge => metaEdge.node);
-        } else {
-          variant.metafields = [];
-        }
-
-        // variant.image is already properly structured as a direct object
-
-        return variant;
-      });
-
-      // Process metafields
-      product.metafields = product.metafields.edges.map(metaEdge => metaEdge.node);
-
-      // Process publications
-      if (product.publications && product.publications.edges) {
-        product.publications = product.publications.edges.map(pubEdge => pubEdge.node);
-      } else {
-        product.publications = [];
-      }
-
-      return product;
-    } catch (error) {
-      consola.error(`Error fetching product by handle: ${error.message}`);
-      return null;
-    }
-  }
-
-  async getCollectionByHandle(client, handle) {
-    try {
-      const response = await client.graphql(GetCollectionByHandle, { handle }, 'GetCollectionByHandle');
-      return response.collectionByHandle;
-    } catch (error) {
-      LoggingUtils.error(`Error fetching collection by handle: ${error.message}`, 4);
-      return null;
-    }
-  }
-
-  /**
-   * Gets a collection by its ID
-   * @param {Object} client - Shopify client
-   * @param {String} id - Collection ID
-   * @returns {Promise<Object>} Collection object with handle
-   */
-  async getCollectionById(client, id) {
-    try {
-      const response = await client.graphql(GetCollectionById, { id }, 'GetCollectionById');
-      return response.collection;
-    } catch (error) {
-      LoggingUtils.error(`Could not find collection for ID: ${id}`, 4);
-      return null;
-    }
-  }
-
-  /**
-   * Filter metafields based on namespace and key options
-   * @param {Array} metafields - Array of metafields to filter
-   * @returns {Array} - Filtered metafields
-   */
-  filterMetafields(metafields) {
-    if (!this.options.namespace && !this.options.namespaces && !this.options.key) {
-      return metafields;
-    }
-
-    // Special case: if namespace is 'all', don't filter by namespace
-    if (this.options.namespace && this.options.namespace.toLowerCase() === 'all') {
-      LoggingUtils.info(`Using special namespace 'all' - including all namespaces`, 4);
-
-      // Only filter by key if provided
-      if (this.options.key) {
-        LoggingUtils.info(`Filtering metafields by key: ${this.options.key}`, 4);
-
-        const filteredByKey = metafields.filter(metafield => {
-          // Handle case where key includes namespace (namespace.key format)
-          if (this.options.key.includes('.')) {
-            const [keyNamespace, keyName] = this.options.key.split('.');
-            return metafield.namespace === keyNamespace && metafield.key === keyName;
-          } else {
-            // Key without namespace
-            return metafield.key === this.options.key;
-          }
-        });
-
-        LoggingUtils.info(`Filtered from ${metafields.length} to ${filteredByKey.length} metafields`, 4);
-        return filteredByKey;
-      }
-
-      return metafields; // Return all metafields when namespace is 'all' and no key filter
-    }
-
-    let logMessage = '';
-
-    if (this.options.namespace) {
-      logMessage += `namespace: ${this.options.namespace} `;
-    } else if (this.options.namespaces) {
-      logMessage += `namespaces: ${this.options.namespaces.join(', ')} `;
-    }
-
-    if (this.options.key) {
-      logMessage += `key: ${this.options.key}`;
-    }
-
-    LoggingUtils.info(`Filtering metafields by ${logMessage}`, 4);
-
-    const filteredMetafields = metafields.filter(metafield => {
-      // Filter by namespace if provided
-      if (this.options.namespace && metafield.namespace !== this.options.namespace) {
-        // Single namespace doesn't match
-        return false;
-      }
-
-      // Filter by namespaces array if provided
-      if (this.options.namespaces && Array.isArray(this.options.namespaces) &&
-          !this.options.namespaces.includes(metafield.namespace)) {
-        // Metafield namespace is not in the provided namespaces array
-        return false;
-      }
-
-      // Filter by key if provided
-      if (this.options.key) {
-        // Handle case where key includes namespace (namespace.key format)
-        if (this.options.key.includes('.')) {
-          const [keyNamespace, keyName] = this.options.key.split('.');
-          return metafield.namespace === keyNamespace && metafield.key === keyName;
-        } else {
-          // Key without namespace
-          return metafield.key === this.options.key;
-        }
-      }
-
-      return true;
     });
 
-    LoggingUtils.info(`Filtered from ${metafields.length} to ${filteredMetafields.length} metafields`, 4);
-    return filteredMetafields;
-  }
+    // Initialize new utility classes
+    this.batchProcessor = new ProductBatchProcessor(sourceClient, options);
+    this.metafieldProcessor = new ProductMetafieldProcessor(
+      this.metafieldHandler,
+      this.referenceHandler,
+      options
+    );
+    this.productOperationHandler = new ProductOperationHandler(
+      targetClient,
+      this.productHandler,
+      this.variantHandler,
+      this.imageHandler,
+      this.metafieldProcessor,
+      this.publicationHandler,
+      options
+    );
 
-  /**
-   * Process and transform metafields for a product
-   * @param {String} productId - The product ID
-   * @param {Array} metafields - Raw metafields to process
-   * @returns {Promise<Object>} - Stats about the metafield processing
-   */
-  async processProductMetafields(productId, metafields) {
-    if (!metafields || metafields.length === 0) {
-      return { processed: 0, transformed: 0, blanked: 0, errors: 0, warnings: 0 };
-    }
-
-    // Filter metafields based on namespace/key options
-    const filteredMetafields = this.filterMetafields(metafields);
-
-    // Transform reference metafields using the dedicated handler
-    const { transformedMetafields, stats } = await this.referenceHandler.transformReferences(filteredMetafields);
-
-    // Log the number of metafields before and after transformation
-    LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ` +
-      `${stats.transformed} transformed, ${stats.blanked} blanked due to errors, ${stats.warnings} warnings`, 4);
-
-    // Print each transformed metafield for debugging
-    if (this.debug) {
-      transformedMetafields.forEach(metafield => {
-        // Skip logging blanked metafields
-        if (metafield._blanked) {
-          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [BLANKED]`, 6);
-          return;
-        }
-
-        // Mark unsupported types differently
-        if (metafield._unsupportedType) {
-          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [UNSUPPORTED TYPE]`, 6);
-          return;
-        }
-
-        const valuePreview = typeof metafield.value === 'string' ?
-          `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
-          String(metafield.value);
-        LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 6);
-      });
-    }
-
-    await this.metafieldHandler.syncMetafields(productId, transformedMetafields);
-    return stats;
-  }
-
-  async createProduct(client, product) {
-    // Step 1: First create the product with basic info (without variants)
-    const productInput = {
-      title: product.title,
-      handle: product.handle,
-      descriptionHtml: product.descriptionHtml,
-      vendor: product.vendor,
-      productType: product.productType,
-      status: product.status || 'ACTIVE',
-      tags: product.tags,
-      // Format productOptions correctly with OptionValueCreateInput objects
-      productOptions: product.options.map(option => ({
-        name: option.name,
-        values: option.values.map(value => ({
-          name: value
-        }))
-      }))
-    };
-
-    if (this.options.notADrill) {
-      try {
-        // Create the product using the productHandler
-        const newProduct = await this.productHandler.createProduct(productInput);
-        if (!newProduct) return null;
-
-        // Initialize the results object to use throughout the method
-        const results = {
-          created: 1,
-          updated: 0,
-          skipped: 0,
-          failed: 0,
-          deleted: 0,
-          metafields: {
-            processed: 0,
-            transformed: 0,
-            blanked: 0,
-            errors: 0,
-            warnings: 0,
-            unsupportedTypes: []
-          }
-        };
-
-        // Step 2: Now create variants using productVariantsBulkCreate
-        if (newProduct.id && product.variants && product.variants.length > 0) {
-          await this.updateProductVariants(client, newProduct.id, product.variants);
-        }
-
-        // Step 3: Upload images if any
-        if (newProduct.id && product.images && product.images.length > 0) {
-          await this.imageHandler.syncProductImages(newProduct.id, product.images);
-        }
-
-        // Step 4: Process and create metafields
-        const metafieldStats = await this.processProductMetafields(newProduct.id, product.metafields);
-        results.metafields.processed = metafieldStats.processed;
-        results.metafields.transformed = metafieldStats.transformed;
-        results.metafields.blanked = metafieldStats.blanked;
-        results.metafields.errors = metafieldStats.errors;
-        results.metafields.warnings = metafieldStats.warnings;
-        results.metafields.unsupportedTypes = metafieldStats.unsupportedTypes || [];
-
-        // Step 5: Sync publication status if any
-        if (newProduct.id && product.publications && product.publications.length > 0) {
-          await this.publicationHandler.syncProductPublications(newProduct.id, product.publications);
-        }
-
-        return {
-          id: newProduct.id,
-          title: newProduct.title,
-          handle: newProduct.handle,
-          results
-        };
-      } catch (error) {
-        LoggingUtils.error(`Error creating product "${product.title}": ${error.message}`, 3);
-        return null;
-      }
-    } else {
-      LoggingUtils.info(`[DRY RUN] Would create product "${product.title}"`, 3, 'main');
-      LoggingUtils.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`, 4);
-      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
-
-      if (product.publications && product.publications.length > 0) {
-        const publishedChannels = product.publications
-          .filter(pub => pub.isPublished)
-          .map(pub => pub.channel.handle);
-        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
-      }
-
-      return {
-        id: "dry-run-id",
-        title: product.title,
-        handle: product.handle,
-        results: {
-          created: 1,
-          updated: 0,
-          skipped: 0,
-          failed: 0,
-          deleted: 0,
-          metafields: {
-            processed: 0,
-            transformed: 0,
-            blanked: 0,
-            errors: 0,
-            warnings: 0,
-            unsupportedTypes: []
-          }
-        }
-      };
-    }
-  }
-
-  async updateProduct(client, product, existingProduct) {
-    // Prepare input with the correct ProductUpdateInput structure
-    const productUpdateInput = {
-      title: product.title,
-      descriptionHtml: product.descriptionHtml,
-      vendor: product.vendor,
-      productType: product.productType,
-      status: product.status || 'ACTIVE',
-      tags: product.tags
-      // Don't include options or variants in update as they need special handling
-    };
-
-    if (this.options.notADrill) {
-      try {
-        // Update the product using the productHandler
-        const updatedProduct = await this.productHandler.updateProduct(existingProduct.id, productUpdateInput);
-        if (!updatedProduct) return null;
-
-        // Initialize the results object to use throughout the method
-        const results = {
-          created: 0,
-          updated: 1,
-          skipped: 0,
-          failed: 0,
-          deleted: 0,
-          metafields: {
-            processed: 0,
-            transformed: 0,
-            blanked: 0,
-            errors: 0,
-            warnings: 0,
-            unsupportedTypes: []
-          }
-        };
-
-        // Step 1: Update variants separately using productVariantsBulkUpdate
-        if (updatedProduct.id && product.variants && product.variants.length > 0) {
-          await this.updateProductVariants(client, updatedProduct.id, product.variants);
-        } else {
-          LoggingUtils.info(`No variants to update for "${product.title}"`, 4);
-        }
-
-        // Step 2: Sync images
-        if (updatedProduct.id && product.images && product.images.length > 0) {
-          await this.imageHandler.syncProductImages(updatedProduct.id, product.images);
-        }
-
-        // Step 3: Process and update metafields
-        const metafieldStats = await this.processProductMetafields(updatedProduct.id, product.metafields);
-        results.metafields.processed = metafieldStats.processed;
-        results.metafields.transformed = metafieldStats.transformed;
-        results.metafields.blanked = metafieldStats.blanked;
-        results.metafields.errors = metafieldStats.errors;
-        results.metafields.warnings = metafieldStats.warnings;
-        results.metafields.unsupportedTypes = metafieldStats.unsupportedTypes || [];
-
-        // Step 4: Sync publication status
-        if (updatedProduct.id && product.publications && product.publications.length > 0) {
-          await this.publicationHandler.syncProductPublications(updatedProduct.id, product.publications);
-        }
-
-        return {
-          id: updatedProduct.id,
-          title: updatedProduct.title,
-          handle: updatedProduct.handle,
-          results
-        };
-      } catch (error) {
-        LoggingUtils.error(`Error updating product "${product.title}": ${error.message}`, 3);
-        return null;
-      }
-    } else {
-      LoggingUtils.info(`[DRY RUN] Would update product "${product.title}"`, 2, 'main');
-      LoggingUtils.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 3);
-      LoggingUtils.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
-
-      if (product.publications && product.publications.length > 0) {
-        const publishedChannels = product.publications
-          .filter(pub => pub.isPublished)
-          .map(pub => pub.channel.handle);
-        LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
-      }
-
-      return {
-        id: existingProduct.id,
-        title: product.title,
-        handle: product.handle,
-        results: {
-          created: 0,
-          updated: 1,
-          skipped: 0,
-          failed: 0,
-          deleted: 0,
-          metafields: {
-            processed: 0,
-            transformed: 0,
-            blanked: 0,
-            errors: 0,
-            warnings: 0,
-            unsupportedTypes: []
-          }
-        }
-      };
-    }
-  }
-
-  // Variant handling is now delegated to the VariantHandler class
-  async updateProductVariants(client, productId, sourceVariants) {
-    return await this.variantHandler.updateProductVariants(productId, sourceVariants);
+    this.resultTracker = new SyncResultTracker();
   }
 
   // --- Sync Orchestration Methods ---
@@ -608,217 +98,58 @@ class ProductSyncStrategy {
       options.handle = this.options.handle;
     }
 
-    const productsIterator = await this.fetchProducts(this.sourceClient, this.options.limit, options);
+    // Get the products iterator
+    const productsIterator = await this.batchProcessor.fetchProducts(this.sourceClient, this.options.limit, options);
 
     // If we're dealing with a single product by handle, the result is already an array
     if (Array.isArray(productsIterator)) {
-      consola.info(`Found ${productsIterator.length} product(s) in source shop`);
-
-      // Process the returned products directly (for single product by handle case)
-      const sourceProducts = productsIterator;
-      let processedCount = 0;
-      const results = {
-        created: 0,
-        updated: 0,
-        skipped: 0,
-        failed: 0,
-        deleted: 0,
-        metafields: {
-          processed: 0,
-          transformed: 0,
-          blanked: 0,
-          errors: 0,
-          warnings: 0,
-          unsupportedTypes: []
-        }
-      };
-
-      for (let i = 0; i < sourceProducts.length; i++) {
-        const product = sourceProducts[i];
-        // Add newline before each product for better readability
-        console.log('');
-
-        // Calculate the progress numbers - this is a single product operation
-        const productNumInBatch = i + 1;
-        const totalProcessed = processedCount + 1;
-
-        // Check if product exists in target shop by handle
-        const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
-
-        // If force recreate is enabled and the product exists, delete it first
-        if (this.forceRecreate && targetProduct) {
-          LoggingUtils.logProductAction(`Force recreating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'force-recreate');
-          const deleted = await this.productHandler.deleteProduct(targetProduct.id);
-          if (deleted) {
-            LoggingUtils.success('Successfully deleted existing product', 1);
-            results.deleted++;
-            // Now create the product instead of updating
-            LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create');
-            const createResult = await this.createProduct(this.targetClient, product);
-
-            if (createResult) {
-              LoggingUtils.success('Product created successfully', 1);
-              results.created++;
-
-              // Add the metafield stats from the result
-              if (createResult.results && createResult.results.metafields) {
-                results.metafields.processed += createResult.results.metafields.processed;
-                results.metafields.transformed += createResult.results.metafields.transformed;
-                results.metafields.blanked += createResult.results.metafields.blanked;
-                results.metafields.errors += createResult.results.metafields.errors;
-                results.metafields.warnings += createResult.results.metafields.warnings;
-
-                // Merge unsupported types arrays, avoiding duplicates
-                if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
-                  createResult.results.metafields.unsupportedTypes.forEach(type => {
-                    if (!results.metafields.unsupportedTypes.includes(type)) {
-                      results.metafields.unsupportedTypes.push(type);
-                    }
-                  });
-                }
-              }
-            } else {
-              LoggingUtils.error('Failed to create product', 1);
-              results.failed++;
-            }
-          } else {
-            LoggingUtils.error('Failed to delete existing product', 1);
-            LoggingUtils.info('Attempting to update instead', 1);
-            const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
-            if (updateResult) {
-              LoggingUtils.success('Product updated successfully', 1);
-              results.updated++;
-
-              // Add the metafield stats from the result
-              if (updateResult.results && updateResult.results.metafields) {
-                results.metafields.processed += updateResult.results.metafields.processed;
-                results.metafields.transformed += updateResult.results.metafields.transformed;
-                results.metafields.blanked += updateResult.results.metafields.blanked;
-                results.metafields.errors += updateResult.results.metafields.errors;
-                results.metafields.warnings += updateResult.results.metafields.warnings;
-
-                // Merge unsupported types arrays, avoiding duplicates
-                if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
-                  updateResult.results.metafields.unsupportedTypes.forEach(type => {
-                    if (!results.metafields.unsupportedTypes.includes(type)) {
-                      results.metafields.unsupportedTypes.push(type);
-                    }
-                  });
-                }
-              }
-            } else {
-              LoggingUtils.error('Failed to update product', 1);
-              results.failed++;
-            }
-          }
-        } else if (targetProduct) {
-          // Update existing product
-          LoggingUtils.logProductAction(`Updating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'update');
-          const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
-
-          // Log result with proper indentation
-          if (updateResult) {
-            LoggingUtils.success('Product updated successfully', 1);
-            results.updated++;
-
-            // Add the metafield stats from the result
-            if (updateResult.results && updateResult.results.metafields) {
-              results.metafields.processed += updateResult.results.metafields.processed;
-              results.metafields.transformed += updateResult.results.metafields.transformed;
-              results.metafields.blanked += updateResult.results.metafields.blanked;
-              results.metafields.errors += updateResult.results.metafields.errors;
-              results.metafields.warnings += updateResult.results.metafields.warnings;
-
-              // Merge unsupported types arrays, avoiding duplicates
-              if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
-                updateResult.results.metafields.unsupportedTypes.forEach(type => {
-                  if (!results.metafields.unsupportedTypes.includes(type)) {
-                    results.metafields.unsupportedTypes.push(type);
-                  }
-                });
-              }
-            }
-          } else {
-            LoggingUtils.error('Failed to update product', 1);
-            results.failed++;
-          }
-        } else {
-          // Create new product
-          LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create');
-          const createResult = await this.createProduct(this.targetClient, product);
-
-          // Log result with proper indentation
-          if (createResult) {
-            LoggingUtils.success('Product created successfully', 1);
-            results.created++;
-
-            // Add the metafield stats from the result
-            if (createResult.results && createResult.results.metafields) {
-              results.metafields.processed += createResult.results.metafields.processed;
-              results.metafields.transformed += createResult.results.metafields.transformed;
-              results.metafields.blanked += createResult.results.metafields.blanked;
-              results.metafields.errors += createResult.results.metafields.errors;
-              results.metafields.warnings += createResult.results.metafields.warnings;
-
-              // Merge unsupported types arrays, avoiding duplicates
-              if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
-                createResult.results.metafields.unsupportedTypes.forEach(type => {
-                  if (!results.metafields.unsupportedTypes.includes(type)) {
-                    results.metafields.unsupportedTypes.push(type);
-                  }
-                });
-              }
-            }
-          } else {
-            LoggingUtils.error('Failed to create product', 1);
-            results.failed++;
-          }
-        }
-
-        processedCount++;
-      }
-
-      // Add a newline before summary
-      console.log('');
-      LoggingUtils.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`, 0);
-
-      // Add metafield stats to the summary if any were processed
-      if (results.metafields.processed > 0) {
-        LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors, ${results.metafields.warnings} warnings`, 0);
-      }
-
-      return {
-        definitionResults: results,
-        dataResults: null,
-        metafieldResults: {
-          processed: results.metafields.processed,
-          transformed: results.metafields.transformed,
-          blanked: results.metafields.blanked,
-          errors: results.metafields.errors,
-          warnings: results.metafields.warnings,
-          unsupportedTypes: results.metafields.unsupportedTypes
-        }
-      };
+      await this.processSingleProduct(productsIterator);
+    } else {
+      await this.processBatchedProducts(productsIterator);
     }
 
-    // For batch processing of multiple products
+    // Remove the log summary call to avoid duplication with the CLI output
+    // The CLI will use the results from formatForStrategyResult to display the summary
+
+    // Return results for the CLI to display
+    return this.resultTracker.formatForStrategyResult();
+  }
+
+  /**
+   * Process a single product by handle
+   * @param {Array} sourceProducts - The source product(s) to process
+   */
+  async processSingleProduct(sourceProducts) {
+    consola.info(`Found ${sourceProducts.length} product(s) in source shop`);
+
+    let processedCount = 0;
+
+    for (let i = 0; i < sourceProducts.length; i++) {
+      const product = sourceProducts[i];
+      // Add newline before each product for better readability
+      console.log('');
+
+      // Calculate the progress numbers - this is a single product operation
+      const productNumInBatch = i + 1;
+      const totalProcessed = processedCount + 1;
+
+      // Check if product exists in target shop by handle
+      const targetProduct = await this.batchProcessor.getProductByHandle(this.targetClient, product.handle);
+
+      // Process the product based on whether it exists and forceRecreate option
+      await this.processProduct(product, targetProduct, productNumInBatch, sourceProducts.length, totalProcessed);
+
+      processedCount++;
+    }
+  }
+
+  /**
+   * Process batches of products
+   * @param {Object} productsIterator - The batch iterator
+   */
+  async processBatchedProducts(productsIterator) {
     let processedCount = 0;
     let batchNumber = 1;
-    const results = {
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      failed: 0,
-      deleted: 0,
-      metafields: {
-        processed: 0,
-        transformed: 0,
-        blanked: 0,
-        errors: 0,
-        warnings: 0,
-        unsupportedTypes: []
-      }
-    };
 
     // Process products in batches
     consola.info(`Started fetching products in batches of ${this.options.batchSize || 25}`);
@@ -828,18 +159,7 @@ class ProductSyncStrategy {
 
     if (batchResult.products.length === 0) {
       consola.info(`No products found in source shop`);
-      return {
-        definitionResults: results,
-        dataResults: null,
-        metafieldResults: {
-          processed: 0,
-          transformed: 0,
-          blanked: 0,
-          errors: 0,
-          warnings: 0,
-          unsupportedTypes: []
-        }
-      };
+      return;
     }
 
     do {
@@ -865,139 +185,10 @@ class ProductSyncStrategy {
         const totalProcessed = processedCount + 1;
 
         // Check if product exists in target shop by handle
-        const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
+        const targetProduct = await this.batchProcessor.getProductByHandle(this.targetClient, product.handle);
 
-        // Process similar to single product case, but with updated batch logic
-        // For brevity, I'll just add the metafield tracking code to one of the cases
-        if (this.forceRecreate && targetProduct) {
-          // Force recreate logic...
-          LoggingUtils.logProductAction(`Force recreating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'force-recreate', 1);
-          const deleted = await this.productHandler.deleteProduct(targetProduct.id);
-          if (deleted) {
-            LoggingUtils.success('Successfully deleted existing product', 2);
-            results.deleted++;
-            // Now create the product instead of updating
-            LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create', 1);
-            const createResult = await this.createProduct(this.targetClient, product);
-
-            if (createResult) {
-              LoggingUtils.success('Product created successfully', 2);
-              results.created++;
-
-              // Add the metafield stats from the result
-              if (createResult.results && createResult.results.metafields) {
-                results.metafields.processed += createResult.results.metafields.processed;
-                results.metafields.transformed += createResult.results.metafields.transformed;
-                results.metafields.blanked += createResult.results.metafields.blanked;
-                results.metafields.errors += createResult.results.metafields.errors;
-                results.metafields.warnings += createResult.results.metafields.warnings;
-
-                // Merge unsupported types arrays, avoiding duplicates
-                if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
-                  createResult.results.metafields.unsupportedTypes.forEach(type => {
-                    if (!results.metafields.unsupportedTypes.includes(type)) {
-                      results.metafields.unsupportedTypes.push(type);
-                    }
-                  });
-                }
-              }
-            } else {
-              LoggingUtils.error('Failed to create product', 2);
-              results.failed++;
-            }
-          } else {
-            LoggingUtils.error('Failed to delete existing product', 2);
-            LoggingUtils.info('Attempting to update instead', 2);
-            const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
-            if (updateResult) {
-              LoggingUtils.success('Product updated successfully', 2);
-              results.updated++;
-
-              // Add the metafield stats from the result
-              if (updateResult.results && updateResult.results.metafields) {
-                results.metafields.processed += updateResult.results.metafields.processed;
-                results.metafields.transformed += updateResult.results.metafields.transformed;
-                results.metafields.blanked += updateResult.results.metafields.blanked;
-                results.metafields.errors += updateResult.results.metafields.errors;
-                results.metafields.warnings += updateResult.results.metafields.warnings;
-
-                // Merge unsupported types arrays, avoiding duplicates
-                if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
-                  updateResult.results.metafields.unsupportedTypes.forEach(type => {
-                    if (!results.metafields.unsupportedTypes.includes(type)) {
-                      results.metafields.unsupportedTypes.push(type);
-                    }
-                  });
-                }
-              }
-            } else {
-              LoggingUtils.error('Failed to update product', 2);
-              results.failed++;
-            }
-          }
-        } else if (targetProduct) {
-          // Update existing product
-          LoggingUtils.logProductAction(`Updating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'update', 1);
-          const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
-
-          // Log result with proper indentation
-          if (updateResult) {
-            LoggingUtils.success('Product updated successfully', 2);
-            results.updated++;
-
-            // Add the metafield stats from the result
-            if (updateResult.results && updateResult.results.metafields) {
-              results.metafields.processed += updateResult.results.metafields.processed;
-              results.metafields.transformed += updateResult.results.metafields.transformed;
-              results.metafields.blanked += updateResult.results.metafields.blanked;
-              results.metafields.errors += updateResult.results.metafields.errors;
-              results.metafields.warnings += updateResult.results.metafields.warnings;
-
-              // Merge unsupported types arrays, avoiding duplicates
-              if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
-                updateResult.results.metafields.unsupportedTypes.forEach(type => {
-                  if (!results.metafields.unsupportedTypes.includes(type)) {
-                    results.metafields.unsupportedTypes.push(type);
-                  }
-                });
-              }
-            }
-          } else {
-            LoggingUtils.error('Failed to update product', 2);
-            results.failed++;
-          }
-        } else {
-          // Create new product
-          LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create', 1);
-          const createResult = await this.createProduct(this.targetClient, product);
-
-          // Log result with proper indentation
-          if (createResult) {
-            LoggingUtils.success('Product created successfully', 2);
-            results.created++;
-
-            // Add the metafield stats from the result
-            if (createResult.results && createResult.results.metafields) {
-              results.metafields.processed += createResult.results.metafields.processed;
-              results.metafields.transformed += createResult.results.metafields.transformed;
-              results.metafields.blanked += createResult.results.metafields.blanked;
-              results.metafields.errors += createResult.results.metafields.errors;
-              results.metafields.warnings += createResult.results.metafields.warnings;
-
-              // Merge unsupported types arrays, avoiding duplicates
-              if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
-                createResult.results.metafields.unsupportedTypes.forEach(type => {
-                  if (!results.metafields.unsupportedTypes.includes(type)) {
-                    results.metafields.unsupportedTypes.push(type);
-                  }
-                });
-              }
-            }
-          } else {
-            LoggingUtils.error('Failed to create product', 2);
-            results.failed++;
-          }
-        }
+        // Process the product based on whether it exists and forceRecreate option
+        await this.processProduct(product, targetProduct, productNumInBatch, sourceProducts.length, totalProcessed);
 
         processedCount++;
       }
@@ -1014,28 +205,104 @@ class ProductSyncStrategy {
       batchResult = await productsIterator.fetchNextBatch();
 
     } while (batchResult.products.length > 0 && !batchResult.done);
+  }
 
-    // Add a newline before summary
-    console.log('');
-    LoggingUtils.success(`Finished syncing products. Results: ${results.created} created, ${results.updated} updated, ${results.deleted} force deleted, ${results.failed} failed`, 0);
+  /**
+   * Process a single product (create, update, or recreate)
+   * @param {Object} product - The source product to process
+   * @param {Object} targetProduct - The existing target product (if any)
+   * @param {Number} productNumInBatch - Product number in current batch
+   * @param {Number} batchSize - Size of current batch
+   * @param {Number} totalProcessed - Total number of products processed so far
+   */
+  async processProduct(product, targetProduct, productNumInBatch, batchSize, totalProcessed) {
+    // If force recreate is enabled and the product exists, delete it first
+    if (this.forceRecreate && targetProduct) {
+      LoggingUtils.logProductAction(
+        `Force recreating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
+        product.title,
+        product.handle,
+        'force-recreate',
+        1
+      );
 
-    // Add metafield stats to the summary if any were processed
-    if (results.metafields.processed > 0) {
-      LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors, ${results.metafields.warnings} warnings`, 0);
-    }
+      const deleted = await this.productHandler.deleteProduct(targetProduct.id);
 
-    return {
-      definitionResults: results,
-      dataResults: null,
-      metafieldResults: {
-        processed: results.metafields.processed,
-        transformed: results.metafields.transformed,
-        blanked: results.metafields.blanked,
-        errors: results.metafields.errors,
-        warnings: results.metafields.warnings,
-        unsupportedTypes: results.metafields.unsupportedTypes
+      if (deleted) {
+        LoggingUtils.success('Successfully deleted existing product', 2);
+        this.resultTracker.trackDeletion();
+
+        // Now create the product instead of updating
+        LoggingUtils.logProductAction(
+          `Creating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
+          product.title,
+          product.handle,
+          'create',
+          1
+        );
+
+        const createResult = await this.productOperationHandler.createProduct(product);
+
+        if (createResult) {
+          LoggingUtils.success('Product created successfully', 2);
+          this.resultTracker.trackCreation(createResult);
+        } else {
+          LoggingUtils.error('Failed to create product', 2);
+          this.resultTracker.trackFailure();
+        }
+      } else {
+        LoggingUtils.error('Failed to delete existing product', 2);
+        LoggingUtils.info('Attempting to update instead', 2);
+
+        const updateResult = await this.productOperationHandler.updateProduct(product, targetProduct);
+
+        if (updateResult) {
+          LoggingUtils.success('Product updated successfully', 2);
+          this.resultTracker.trackUpdate(updateResult);
+        } else {
+          LoggingUtils.error('Failed to update product', 2);
+          this.resultTracker.trackFailure();
+        }
       }
-    };
+    } else if (targetProduct) {
+      // Update existing product
+      LoggingUtils.logProductAction(
+        `Updating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
+        product.title,
+        product.handle,
+        'update',
+        1
+      );
+
+      const updateResult = await this.productOperationHandler.updateProduct(product, targetProduct);
+
+      if (updateResult) {
+        LoggingUtils.success('Product updated successfully', 2);
+        this.resultTracker.trackUpdate(updateResult);
+      } else {
+        LoggingUtils.error('Failed to update product', 2);
+        this.resultTracker.trackFailure();
+      }
+    } else {
+      // Create new product
+      LoggingUtils.logProductAction(
+        `Creating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
+        product.title,
+        product.handle,
+        'create',
+        1
+      );
+
+      const createResult = await this.productOperationHandler.createProduct(product);
+
+      if (createResult) {
+        LoggingUtils.success('Product created successfully', 2);
+        this.resultTracker.trackCreation(createResult);
+      } else {
+        LoggingUtils.error('Failed to create product', 2);
+        this.resultTracker.trackFailure();
+      }
+    }
   }
 }
 
