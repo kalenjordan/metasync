@@ -1,15 +1,9 @@
 /**
- * Checks if a shop name is a production shop
- * @param {string} shopName - The shop name to check
- * @returns {boolean} - true if it's a production shop, false otherwise
+ * This module provides validation utilities for the MetaSync application.
+ * The isProductionShop function has been removed as it's been replaced by
+ * the "protected" flag in shop configuration.
  */
-function isProductionShop(shopName) {
-  if (!shopName) return false;
-
-  const lowerName = shopName.toLowerCase();
-  return lowerName.includes('production') || lowerName.includes('prod');
-}
 
 module.exports = {
-  isProductionShop
+  // Add new validator functions here as needed
 };

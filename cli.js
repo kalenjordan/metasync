@@ -9,7 +9,6 @@ const ShopifyClient = require('./utils/ShopifyClient');
 const { SHOPIFY_API_VERSION } = require('./constants');
 const commandSetup = require('./utils/commandSetup');
 const shopConfig = require('./utils/shopConfig');
-const validators = require('./utils/validators');
 
 // Import strategies
 const strategyLoader = require('./utils/strategyLoader');
@@ -39,9 +38,7 @@ class MetaSyncCli {
     let targetShopName = this.options.target || sourceShopName;
 
     // Safety check to prevent accidentally syncing to production
-    if (validators.isProductionShop(targetShopName)) {
-      throw new Error(`Cannot use "${targetShopName}" as target - shops with "production" or "prod" in the name are protected for safety.`);
-    }
+    // Production protection is now handled through the "protected" field in shop config
 
     let targetShopConfig = shopConfig.getShopConfig(targetShopName);
 
@@ -459,12 +456,6 @@ async function main() {
 
   if (!shopConfig.getShopConfig(options.source)) {
     consola.error("Error: Source shop not found in .shops.json");
-    process.exit(1);
-  }
-
-  // Additional safety check for target name containing 'prod'
-  if (options.target && validators.isProductionShop(options.target)) {
-    consola.error(`Error: Cannot use "${options.target}" as target - shops with "production" or "prod" in the name are protected for safety.`);
     process.exit(1);
   }
 
