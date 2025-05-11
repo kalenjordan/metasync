@@ -29,7 +29,10 @@ class ProductVariantHandler {
    * @returns {Promise<boolean>} - Success status
    */
   async updateProductVariants(productId, sourceVariants, logPrefix = '') {
-    logger.info(`Preparing to update variants for product ID: ${productId}`, 2, 'main');
+    logger.info(`Preparing to update variants for product ID: ${productId}`, 'main');
+
+    // Indent all variant operations
+    logger.indent();
 
     // First, fetch current variants from the target product to get their IDs
     const targetVariantsQuery = `#graphql
@@ -94,11 +97,12 @@ class ProductVariantHandler {
       targetVariants = response.product.variants.edges.map(edge => edge.node);
       targetImages = response.product.images.edges.map(edge => edge.node);
 
-      logger.info(`Found ${targetVariants.length} existing variants in target product`, 3);
-      logger.info(`Found ${targetImages.length} existing images in target product`, 3);
+      logger.info(`Found ${targetVariants.length} existing variants in target product`);
+      logger.info(`Found ${targetImages.length} existing images in target product`);
 
     } catch (error) {
-      logger.error(`Error fetching target product variants: ${error.message}`, 3);
+      logger.error(`Error fetching target product variants: ${error.message}`);
+      logger.unindent(); // Unindent before returning on error
       return false;
     }
 
@@ -146,7 +150,7 @@ class ProductVariantHandler {
 
     // Upload new variant images if needed
     if (variantImagesToUpload.length > 0 && this.imageHandler && this.options.notADrill) {
-      logger.info(`Uploading ${variantImagesToUpload.length} variant images`, 3);
+      logger.info(`Uploading ${variantImagesToUpload.length} variant images`);
       await this.imageHandler.syncProductImages(productId, variantImagesToUpload);
 
       // Refresh image IDs after upload
@@ -176,9 +180,9 @@ class ProductVariantHandler {
           imageIdMap[filename] = img.id;
         });
 
-        logger.success(`Successfully refreshed image IDs after upload`, 3);
+        logger.success(`Successfully refreshed image IDs after upload`);
       } catch (error) {
-        logger.error(`Error refreshing images: ${error.message}`, 3);
+        logger.error(`Error refreshing images: ${error.message}`);
       }
     }
 
@@ -312,198 +316,225 @@ class ProductVariantHandler {
       }
     }
 
-    // Results tracking
+    // Handle creating/updating variants - perform these operations in two phases
     let updateSuccess = true;
     let createSuccess = true;
 
-    // STEP 1: Update existing variants
+    // Update existing variants if any
     if (variantsToUpdate.length > 0) {
-      logger.info(`Updating ${variantsToUpdate.length} existing variants for product ID: ${productId}`, 3);
-
-      const updateVariantsMutation = `#graphql
-        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-            productVariants {
-              id
-              title
-              inventoryItem {
-                sku
-              }
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }
-      `;
-
-      if (this.options.notADrill) {
-        try {
-          const result = await this.client.graphql(updateVariantsMutation, {
-            productId,
-            variants: variantsToUpdate
-          }, 'ProductVariantsBulkUpdate');
-
-          if (result.productVariantsBulkUpdate.userErrors.length > 0) {
-            logger.error(`Failed to update variants:`, 4, result.productVariantsBulkUpdate.userErrors);
-            updateSuccess = false;
-          } else {
-            logger.success(`Successfully updated ${result.productVariantsBulkUpdate.productVariants.length} variants`, 4);
-
-            // Update the variant images separately since imageId isn't supported in bulk updates
-            if (imageUpdates.length > 0) {
-              logger.info(`Updating images for ${imageUpdates.length} variants`, 4);
-
-              for (const update of imageUpdates) {
-                if (this.imageHandler) {
-                  await this.updateVariantImage(update.variantId, update.imageId, productId);
-                } else {
-                  logger.info(`Would update image for variant ${update.variantId}`, 4);
-                }
-              }
-            }
-
-            // Now update metafields for each variant
-            for (const metafieldUpdate of metafieldUpdates) {
-              if (this.metafieldHandler) {
-                logger.info(`Syncing ${metafieldUpdate.metafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`, 3);
-                await this.metafieldHandler.syncMetafields(
-                  metafieldUpdate.targetVariantId,
-                  metafieldUpdate.metafields
-                );
-              } else {
-                logger.info(`Would update ${metafieldUpdate.metafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`, 4);
-              }
-            }
-          }
-        } catch (error) {
-          logger.error(`Error updating variants: ${error.message}`, 3);
-          updateSuccess = false;
-        }
-      } else {
-        logger.info(`[DRY RUN] Would update ${variantsToUpdate.length} variants for product ID: ${productId}`, 3);
-
-        if (imageUpdates.length > 0) {
-          logger.info(`[DRY RUN] Would update images for ${imageUpdates.length} variants`, 4);
-        }
-
-        // Log metafield updates
-        for (const metafieldUpdate of metafieldUpdates) {
-          logger.info(`[DRY RUN] Would update ${metafieldUpdate.metafields.length} metafields for variant ID: ${metafieldUpdate.targetVariantId}`, 4);
-        }
-      }
+      updateSuccess = await this._updateExistingVariants(productId, variantsToUpdate, metafieldUpdates, imageUpdates);
     } else {
-      logger.info(`No existing variants to update`, 3);
+      logger.info(`No existing variants to update`);
     }
 
-    // STEP 2: Create new variants that don't exist in target
+    // Create new variants if any
     if (variantsToCreate.length > 0) {
-      logger.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`, 3);
-
-      // Remove the sourceMetafields, sourceImage, and sourceOptions from the input as they're not part of the API
-      const createInputs = variantsToCreate.map(({ sourceMetafields, sourceImage, sourceOptions, ...rest }) => rest);
-
-      const createVariantsMutation = `#graphql
-        mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-          productVariantsBulkCreate(productId: $productId, variants: $variants) {
-            productVariants {
-              id
-              title
-              inventoryItem {
-                sku
-              }
-              selectedOptions {
-                name
-                value
-              }
-            }
-            userErrors {
-              field
-              message
-            }
-          }
-        }
-      `;
-
-      if (this.options.notADrill) {
-        try {
-          const result = await this.client.graphql(createVariantsMutation, {
-            productId,
-            variants: createInputs
-          }, 'ProductVariantsBulkCreate');
-
-          if (result.productVariantsBulkCreate.userErrors.length > 0) {
-            logger.error(`Failed to create new variants:`, 3, result.productVariantsBulkCreate.userErrors);
-            createSuccess = false;
-          } else {
-            logger.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} new variants`, 3);
-
-            // Now handle metafields and images for each created variant
-            for (let i = 0; i < result.productVariantsBulkCreate.productVariants.length; i++) {
-              const createdVariant = result.productVariantsBulkCreate.productVariants[i];
-              const sourceData = variantsToCreate[i];
-
-              // For matching multiple created variants to source variants when SKUs aren't available
-              // Match by option values to ensure we're processing the right variant
-              const matchingVariantIndex = this.findMatchingVariantIndex(
-                result.productVariantsBulkCreate.productVariants,
-                sourceData.sourceOptions
-              );
-
-              const targetVariant = matchingVariantIndex !== -1
-                ? result.productVariantsBulkCreate.productVariants[matchingVariantIndex]
-                : createdVariant;
-
-              // Handle metafields
-              if (sourceData.sourceMetafields && sourceData.sourceMetafields.length > 0 && this.metafieldHandler) {
-                logger.info(`Syncing ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
-                await this.metafieldHandler.syncMetafields(
-                  targetVariant.id,
-                  sourceData.sourceMetafields
-                );
-              } else if (sourceData.sourceMetafields && sourceData.sourceMetafields.length > 0) {
-                logger.info(`Would sync ${sourceData.sourceMetafields.length} metafields for new variant ${targetVariant.id}`, 4);
-              }
-
-              // Handle image
-              if (sourceData.sourceImage && sourceData.sourceImage.src) {
-                const sourceFilename = sourceData.sourceImage.src.split('/').pop().split('?')[0];
-                if (imageIdMap[sourceFilename]) {
-                  if (this.imageHandler) {
-                    await this.updateVariantImage(targetVariant.id, imageIdMap[sourceFilename], productId);
-                  } else {
-                    logger.info(`Would assign image to new variant ${targetVariant.id}`, 4);
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          logger.error(`Error creating new variants: ${error.message}`, 3);
-          createSuccess = false;
-        }
-      } else {
-        logger.info(`[DRY RUN] Would create ${variantsToCreate.length} new variants for product ID: ${productId}`, 3);
-
-        // Log variant image and metafield creation info
-        for (let i = 0; i < variantsToCreate.length; i++) {
-          if (variantsToCreate[i].sourceImage) {
-            logger.info(`[DRY RUN] New variant #${i + 1} would have an image assigned`, 4);
-          }
-
-          const sourceMetafields = variantsToCreate[i].sourceMetafields;
-          if (sourceMetafields && sourceMetafields.length > 0) {
-            logger.info(`[DRY RUN] Would create ${sourceMetafields.length} metafields for new variant #${i + 1}`, 4);
-          }
-        }
-      }
+      createSuccess = await this._createNewVariants(productId, variantsToCreate);
     } else {
-      logger.info(`No new variants to create`, 3);
+      logger.info(`No new variants to create`);
     }
+
+    // Unindent after all operations
+    logger.unindent();
 
     // Return overall success status
     return updateSuccess && createSuccess;
+  }
+
+  /**
+   * Update existing variants in bulk
+   * @private
+   */
+  async _updateExistingVariants(productId, variantsToUpdate, metafieldUpdates, imageUpdates) {
+    logger.info(`Updating ${variantsToUpdate.length} existing variants for product ID: ${productId}`);
+
+    // Indent for variant update operations
+    logger.indent();
+
+    const updateMutation = `#graphql
+      mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    if (this.options.notADrill) {
+      try {
+        const result = await this.client.graphql(
+          updateMutation,
+          {
+            productId,
+            variants: variantsToUpdate.map(v => ({
+              id: v.id,
+              price: v.price,
+              compareAtPrice: v.compareAtPrice,
+              barcode: v.barcode,
+              taxable: v.taxable,
+              inventoryPolicy: v.inventoryPolicy,
+              inventoryItem: v.inventoryItem
+            }))
+          },
+          'ProductVariantsBulkUpdate'
+        );
+
+        if (result.productVariantsBulkUpdate.userErrors.length > 0) {
+          logger.error(`Failed to update variants:`, result.productVariantsBulkUpdate.userErrors);
+          logger.unindent();
+          return false;
+        }
+
+        logger.success(`Successfully updated ${result.productVariantsBulkUpdate.productVariants.length} variants`);
+
+        // Handle variant image updates
+        if (imageUpdates.length > 0) {
+          logger.info(`Updating images for ${imageUpdates.length} variants`);
+
+          // Indent for image operations
+          logger.indent();
+
+          for (const update of imageUpdates) {
+            if (this.options.notADrill) {
+              await this.updateVariantImage(update.variantId, update.imageId, productId);
+            } else {
+              logger.info(`Would update image for variant ${update.variantId}`);
+            }
+          }
+
+          // Unindent after image operations
+          logger.unindent();
+        }
+
+        // Sync metafields for each variant
+        for (const metafieldUpdate of metafieldUpdates) {
+          if (metafieldUpdate.sourceMetafields.length > 0) {
+            logger.info(`Syncing ${metafieldUpdate.sourceMetafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`);
+
+            if (this.options.notADrill) {
+              await this.metafieldHandler.syncMetafields(
+                metafieldUpdate.targetVariantId,
+                metafieldUpdate.sourceMetafields
+              );
+            } else {
+              logger.info(`Would update ${metafieldUpdate.sourceMetafields.length} metafields for variant ${metafieldUpdate.targetVariantId}`);
+            }
+          }
+        }
+
+        // Unindent after all variant operations
+        logger.unindent();
+        return true;
+      } catch (error) {
+        logger.error(`Error updating variants: ${error.message}`);
+        logger.unindent();
+        return false;
+      }
+    } else {
+      logger.info(`[DRY RUN] Would update ${variantsToUpdate.length} variants for product ID: ${productId}`);
+
+      // Indent for dry run details
+      logger.indent();
+
+      if (imageUpdates.length > 0) {
+        logger.info(`[DRY RUN] Would update images for ${imageUpdates.length} variants`);
+      }
+
+      for (const metafieldUpdate of metafieldUpdates) {
+        if (metafieldUpdate.sourceMetafields.length > 0) {
+          logger.info(`[DRY RUN] Would update ${metafieldUpdate.sourceMetafields.length} metafields for variant ID: ${metafieldUpdate.targetVariantId}`);
+        }
+      }
+
+      // Unindent after dry run details
+      logger.unindent();
+
+      // Unindent after variant operations
+      logger.unindent();
+
+      return true;
+    }
+  }
+
+  /**
+   * Create new variants in bulk
+   * @private
+   */
+  async _createNewVariants(productId, variantsToCreate) {
+    logger.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`);
+
+    // Indent for variant creation operations
+    logger.indent();
+
+    // Remove the sourceMetafields, sourceImage, and sourceOptions from the input as they're not part of the API
+    const createInputs = variantsToCreate.map(({ sourceMetafields, sourceImage, sourceOptions, ...rest }) => rest);
+
+    const createVariantsMutation = `#graphql
+      mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkCreate(productId: $productId, variants: $variants) {
+          productVariants {
+            id
+            title
+            inventoryItem {
+              sku
+            }
+            selectedOptions {
+              name
+              value
+            }
+          }
+          userErrors {
+            field
+            message
+            code
+          }
+        }
+      }
+    `;
+
+    if (this.options.notADrill) {
+      try {
+        const result = await this.client.graphql(createVariantsMutation, {
+          productId,
+          variants: createInputs
+        }, 'ProductVariantsBulkCreate');
+
+        if (result.productVariantsBulkCreate.userErrors.length > 0) {
+          // Filter out "variant already exists" errors which we handle specially
+          const nonExistingVariantErrors = result.productVariantsBulkCreate.userErrors.filter(
+            err => err.code !== 'VARIANT_ALREADY_EXISTS'
+          );
+
+          if (nonExistingVariantErrors.length > 0) {
+            logger.error(`Failed to create new variants:`, 3, nonExistingVariantErrors);
+
+            // Log created variants even if there were some errors
+            if (result.productVariantsBulkCreate.productVariants.length > 0) {
+              logger.info(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants despite errors`, 2);
+            }
+
+            // Return false if no variants were created
+            if (result.productVariantsBulkCreate.productVariants.length === 0) {
+              return false;
+            }
+          }
+        }
+
+        logger.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants`, 1);
+        return true;
+      } catch (error) {
+        logger.error(`Error creating new variants: ${error.message}`, 3);
+        return false;
+      }
+    } else {
+      logger.info(`[DRY RUN] Would create ${createInputs.length} new variants for product`, 2);
+      return true;
+    }
   }
 
   /**

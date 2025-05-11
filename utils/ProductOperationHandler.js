@@ -33,27 +33,22 @@ class ProductOperationHandler {
    * @returns {Promise<Object>} - Created product result
    */
   async createProduct(product) {
-    // Step 1: First create the product with basic info (without variants)
+    // Prepare input with the correct ProductInput structure
     const productInput = {
       title: product.title,
-      handle: product.handle,
       descriptionHtml: product.descriptionHtml,
       vendor: product.vendor,
       productType: product.productType,
+      handle: product.handle,
       status: product.status || 'ACTIVE',
       tags: product.tags,
-      // Format productOptions correctly with OptionValueCreateInput objects
-      productOptions: product.options.map(option => ({
-        name: option.name,
-        values: option.values.map(value => ({
-          name: value
-        }))
-      }))
+      options: product.options.map(opt => opt.name)
+      // Don't include variants directly as we'll use productVariantsBulkCreate for better control
     };
 
     if (this.notADrill) {
       try {
-        // Create the product using the productHandler
+        // Create the product using the productHandler and extract results
         const newProduct = await this.productHandler.createProduct(productInput);
         if (!newProduct) return null;
 
@@ -105,20 +100,26 @@ class ProductOperationHandler {
           results
         };
       } catch (error) {
-        logger.error(`Error creating product "${product.title}": ${error.message}`, 3);
+        logger.error(`Error creating product "${product.title}": ${error.message}`);
         return null;
       }
     } else {
-      logger.info(`[DRY RUN] Would create product "${product.title}"`, 3, 'main');
-      logger.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`, 4);
-      logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
+      logger.info(`[DRY RUN] Would create product "${product.title}"`, 'main');
+
+      // Indent dry run details
+      logger.indent();
+      logger.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`);
+      logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
 
       if (product.publications && product.publications.length > 0) {
         const publishedChannels = product.publications
           .filter(pub => pub.isPublished)
           .map(pub => pub.channel.handle);
-        logger.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
+        logger.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`);
       }
+
+      // Unindent after dry run details
+      logger.unindent();
 
       return {
         id: "dry-run-id",
@@ -188,7 +189,7 @@ class ProductOperationHandler {
         if (updatedProduct.id && product.variants && product.variants.length > 0) {
           await this.variantHandler.updateProductVariants(updatedProduct.id, product.variants);
         } else {
-          logger.info(`No variants to update for "${product.title}"`, 4);
+          logger.info(`No variants to update for "${product.title}"`);
         }
 
         // Step 2: Sync images
@@ -217,20 +218,26 @@ class ProductOperationHandler {
           results
         };
       } catch (error) {
-        logger.error(`Error updating product "${product.title}": ${error.message}`, 3);
+        logger.error(`Error updating product "${product.title}": ${error.message}`);
         return null;
       }
     } else {
-      logger.info(`[DRY RUN] Would update product "${product.title}"`, 2, 'main');
-      logger.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`, 3);
-      logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`, 4);
+      logger.info(`[DRY RUN] Would update product "${product.title}"`, 'main');
+
+      // Indent dry run details
+      logger.indent();
+      logger.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`);
+      logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
 
       if (product.publications && product.publications.length > 0) {
         const publishedChannels = product.publications
           .filter(pub => pub.isPublished)
           .map(pub => pub.channel.handle);
-        logger.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
+        logger.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`);
       }
+
+      // Unindent after dry run details
+      logger.unindent();
 
       return {
         id: existingProduct.id,

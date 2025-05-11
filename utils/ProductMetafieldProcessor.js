@@ -34,28 +34,34 @@ class ProductMetafieldProcessor {
 
     // Log the number of metafields before and after transformation
     logger.info(`Processing metafields: ${filteredMetafields.length} filtered, ` +
-      `${stats.transformed} transformed, ${stats.blanked} blanked due to errors, ${stats.warnings} warnings`, 4);
+      `${stats.transformed} transformed, ${stats.blanked} blanked due to errors, ${stats.warnings} warnings`);
 
     // Print each transformed metafield for debugging
     if (this.debug) {
+      // Increase indentation for debug details
+      logger.indent();
+
       transformedMetafields.forEach(metafield => {
         // Skip logging blanked metafields
         if (metafield._blanked) {
-          logger.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [BLANKED]`, 6);
+          logger.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [BLANKED]`);
           return;
         }
 
         // Mark unsupported types differently
         if (metafield._unsupportedType) {
-          logger.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [UNSUPPORTED TYPE]`, 6);
+          logger.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [UNSUPPORTED TYPE]`);
           return;
         }
 
         const valuePreview = typeof metafield.value === 'string' ?
           `${metafield.value.substring(0, 30)}${metafield.value.length > 30 ? '...' : ''}` :
           String(metafield.value);
-        logger.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`, 6);
+        logger.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): ${valuePreview}`);
       });
+
+      // Reset indentation after debug details
+      logger.unindent();
     }
 
     await this.metafieldHandler.syncMetafields(productId, transformedMetafields);

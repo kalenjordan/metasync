@@ -26,8 +26,11 @@ class MetafieldHandler {
   async syncMetafields(ownerId, metafields, logPrefix = '') {
     if (!metafields || metafields.length === 0) return true;
 
-    // Log how many metafields we're syncing
-    logger.info(`Syncing ${metafields.length} metafields for ID: ${ownerId}`, 2, 'main');
+    // Log how many metafields we're syncing - use main log type for bullet point
+    logger.info(`Syncing ${metafields.length} metafields for ID: ${ownerId}`, 'main');
+
+    // Increase indentation for all metafield processing
+    logger.indent();
 
     // Split metafields into batches of 25 (Shopify limit per metafieldsSet mutation)
     const metafieldBatches = [];
@@ -38,7 +41,7 @@ class MetafieldHandler {
       metafieldBatches.push(metafields.slice(i, i + BATCH_SIZE));
     }
 
-    logger.info(`Processing ${metafieldBatches.length} batches of metafields (max ${BATCH_SIZE} per batch)`, 3);
+    logger.info(`Processing ${metafieldBatches.length} batches of metafields (max ${BATCH_SIZE} per batch)`);
 
     let successCount = 0;
     let failedCount = 0;
@@ -46,7 +49,8 @@ class MetafieldHandler {
     // Process each batch
     for (let batchIndex = 0; batchIndex < metafieldBatches.length; batchIndex++) {
       const metafieldBatch = metafieldBatches[batchIndex];
-      logger.info(`Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`, 4);
+      logger.indent();
+      logger.info(`Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`);
 
       // Prepare metafields inputs for this batch
       const metafieldsInput = metafieldBatch.map(metafield => ({
@@ -92,49 +96,59 @@ class MetafieldHandler {
               };
             };
 
-            // Handle the errors with our generic handler
+            // Handle the errors with our generic handler (update to use new signature without indentation level)
             ErrorHandler.handleGraphQLUserErrors(
               result.metafieldsSet.userErrors,
               metafieldBatch,
               getMetafieldDetails,
-              `batch ${batchIndex + 1}/${metafieldBatches.length}`,
-              5
+              `batch ${batchIndex + 1}/${metafieldBatches.length}`
             );
 
             failedCount += metafieldBatch.length;
           } else {
             const metafieldCount = result.metafieldsSet.metafields.length;
-            logger.success(`Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`, 4);
+            logger.success(`Successfully set ${metafieldCount} metafields in batch ${batchIndex + 1}`);
             successCount += metafieldCount;
 
             // Log individual metafields if debug is enabled
             if (this.debug) {
+              logger.indent();
               result.metafieldsSet.metafields.forEach(metafield => {
                 logger.debug(`Set metafield ${metafield.namespace}.${metafield.key}`);
               });
+              logger.unindent();
             }
           }
         } catch (error) {
-          logger.error(`Error setting metafields in batch ${batchIndex + 1}: ${error.message}`, 5);
+          logger.error(`Error setting metafields in batch ${batchIndex + 1}: ${error.message}`);
           failedCount += metafieldBatch.length;
         }
       } else {
-        logger.info(`[DRY RUN] Would set ${metafieldBatch.length} metafields in batch ${batchIndex + 1}`, 5);
+        logger.info(`[DRY RUN] Would set ${metafieldBatch.length} metafields in batch ${batchIndex + 1}`);
 
         // Log individual metafields if debug is enabled
         if (this.debug) {
+          logger.indent();
           metafieldBatch.forEach(metafield => {
             logger.debug(`[DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
           });
+          logger.unindent();
         }
       }
+
+      // Unindent after batch processing
+      logger.unindent();
     }
 
     // Return success status
     if (this.options.notADrill) {
-      logger.info(`Metafields sync complete: ${successCount} successful, ${failedCount} failed`, 4);
+      logger.info(`Metafields sync complete: ${successCount} successful, ${failedCount} failed`);
+      // Unindent after all metafield processing
+      logger.unindent();
       return failedCount === 0;
     } else {
+      // Unindent after all metafield processing
+      logger.unindent();
       return true;
     }
   }

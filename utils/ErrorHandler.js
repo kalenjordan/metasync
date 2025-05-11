@@ -12,14 +12,16 @@ class ErrorHandler {
    * @param {Array} items - The corresponding data items that caused the errors
    * @param {Function} getItemDetails - Function to extract details from an item given its index
    * @param {string} batchInfo - Additional context about the current batch
-   * @param {number} indentLevel - Indentation level for log messages
    * @returns {number} - Number of errors handled
    */
-  static handleGraphQLUserErrors(userErrors, items, getItemDetails, batchInfo = '', indentLevel = 4) {
+  static handleGraphQLUserErrors(userErrors, items, getItemDetails, batchInfo = '') {
     if (!userErrors || userErrors.length === 0) return 0;
 
     // Log the overall error message
-    logger.error(`Failed to process ${batchInfo}:`, indentLevel);
+    logger.error(`Failed to process ${batchInfo}:`);
+
+    // Increase indentation for all error details
+    logger.indent();
 
     // Handle each user error
     userErrors.forEach(err => {
@@ -34,12 +36,15 @@ class ErrorHandler {
             // Extract item details using the provided function
             const details = getItemDetails(items[itemIndex], itemIndex, err.field);
             if (details) {
-              // Log detailed error with item information - add +1 to indentation level
-              logger.error(`${details.itemName}: ${err.message}`, indentLevel + 1);
+              // Log detailed error with item information
+              logger.error(`${details.itemName}: ${err.message}`);
 
-              // Log value preview if available - add +1 to indentation level
+              // Log value preview if available
               if (details.valuePreview) {
-                logger.error(`Value: ${details.valuePreview}`, indentLevel + 1);
+                // Indent one more level for value preview
+                logger.indent();
+                logger.error(`Value: ${details.valuePreview}`);
+                logger.unindent();
               }
               return;
             }
@@ -47,12 +52,15 @@ class ErrorHandler {
         }
 
         // Fallback for errors without proper field path or when details extraction fails
-        logger.error(`Error: ${err.message}`, indentLevel + 1);
+        logger.error(`Error: ${err.message}`);
       } catch (error) {
         // Ensure error handling doesn't break if something goes wrong
-        logger.error(`Error: ${err.message}`, indentLevel + 1);
+        logger.error(`Error: ${err.message}`);
       }
     });
+
+    // Reset indentation after error handling
+    logger.unindent();
 
     return userErrors.length;
   }

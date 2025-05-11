@@ -26,7 +26,7 @@ class ProductPublicationHandler {
    */
   async syncProductPublications(productId, sourcePublications, logPrefix = '') {
     if (!sourcePublications || sourcePublications.length === 0) {
-      logger.info(`No publication channels to sync`, 2);
+      logger.info(`No publication channels to sync`);
       return true;
     }
 
@@ -59,7 +59,7 @@ class ProductPublicationHandler {
     const publicationsToProcess = validPublications;
 
     if (publicationsToProcess.length === 0) {
-      logger.info(`No valid publication channels to sync after filtering`, 2);
+      logger.info(`No valid publication channels to sync after filtering`);
       return true;
     }
 
@@ -74,7 +74,10 @@ class ProductPublicationHandler {
       );
     }
 
-    logger.info(`Syncing product publication to ${publicationsToProcess.length} channels`, 2, 'main');
+    logger.info(`Syncing product publication to ${publicationsToProcess.length} channels`);
+
+    // Increase indentation for publication operations
+    logger.indent();
 
     // First, get available channels and publications in the target store
     const getPublicationsQuery = `#graphql
@@ -117,7 +120,8 @@ class ProductPublicationHandler {
         }
       }
     } catch (error) {
-      logger.error(`Error fetching target store publications: ${error.message}`, 2);
+      logger.error(`Error fetching target store publications: ${error.message}`);
+      logger.unindent();
       return false;
     }
 
@@ -154,7 +158,7 @@ class ProductPublicationHandler {
         }
       }
     } catch (error) {
-      logger.warn(`Unable to fetch current publications: ${error.message}`, 2);
+      logger.warn(`Unable to fetch current publications: ${error.message}`);
       // Continue anyway since we can still try to publish
     }
 
@@ -201,7 +205,7 @@ class ProductPublicationHandler {
             }
           }
         } else {
-          logger.warn(`Found channel ${sourceChannelHandle} but no associated publication in target store`, 2);
+          logger.warn(`Found channel ${sourceChannelHandle} but no associated publication in target store`);
           skippedChannels.push(sourceChannelHandle);
         }
       } else {
@@ -215,13 +219,14 @@ class ProductPublicationHandler {
         logger.debug(`${logPrefix}  - Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`);
       } else if (skippedChannels.length > 1 || skippedChannels[0] !== 'online_store') {
         // Only warn about non-standard channels being skipped
-        logger.warn(`Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`, 2);
+        logger.warn(`Skipping ${skippedChannels.length} channels that don't exist in target store: ${skippedChannels.join(', ')}`);
       }
     }
 
     // If no publications to create, we're done
     if (publicationsToCreate.length === 0) {
-      logger.info(`No new publication channels to add`, 3);
+      logger.info(`No new publication channels to add`);
+      logger.unindent();
       return true;
     }
 
@@ -239,7 +244,7 @@ class ProductPublicationHandler {
 
     if (this.options.notADrill) {
       try {
-        logger.info(`Publishing product to ${publicationsToCreate.length} channels`, 3);
+        logger.info(`Publishing product to ${publicationsToCreate.length} channels`);
 
         const input = publicationsToCreate.map(pub => ({
           publicationId: pub.publicationId,
@@ -250,24 +255,29 @@ class ProductPublicationHandler {
         const result = await this.client.graphql(publishMutation, {
           id: productId,
           input
-        }, 'publishablePublish');
+        }, 'PublishablePublish');
 
         if (result.publishablePublish.userErrors.length > 0) {
-          logger.error(`Failed to publish product:`, 3, result.publishablePublish.userErrors);
+          logger.error(`Failed to publish product:`, result.publishablePublish.userErrors);
+          logger.unindent();
           return false;
-        } else {
-          logger.success(`Successfully published product to ${publicationsToCreate.length} channels`, 3);
-          return true;
         }
+
+        logger.success(`Successfully published product to ${publicationsToCreate.length} channels`);
+
+        // Unindent before returning
+        logger.unindent();
+        return true;
       } catch (error) {
-        logger.error(`Error publishing product: ${error.message}`, 3);
+        logger.error(`Error publishing product: ${error.message}`);
+        logger.unindent();
         return false;
       }
     } else {
-      logger.info(`[DRY RUN] Would publish product to ${publicationsToCreate.length} channels`, 3);
-      for (const pub of publicationsToCreate) {
-        logger.info(`[DRY RUN] Channel: ${pub.channelHandle}`, 4);
-      }
+      logger.info(`[DRY RUN] Would publish product to ${publicationsToCreate.length} channels: ${publicationsToCreate.map(p => p.channelHandle).join(', ')}`);
+
+      // Unindent before returning
+      logger.unindent();
       return true;
     }
   }

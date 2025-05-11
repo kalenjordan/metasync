@@ -222,47 +222,51 @@ class ProductSyncStrategy {
         `Force recreating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
         product.title,
         product.handle,
-        'force-recreate',
-        1
+        'force-recreate'
       );
 
       const deleted = await this.productHandler.deleteProduct(targetProduct.id);
 
       if (deleted) {
-        logger.success('Successfully deleted existing product', 2);
+        logger.success('Successfully deleted existing product');
         this.resultTracker.trackDeletion();
 
         // Now create the product instead of updating
+        logger.endProductAction(); // End the previous action
+
         logger.logProductAction(
           `Creating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
           product.title,
           product.handle,
-          'create',
-          1
+          'create'
         );
 
         const createResult = await this.productOperationHandler.createProduct(product);
 
         if (createResult) {
-          logger.success('Product created successfully', 2);
+          logger.success('Product created successfully');
           this.resultTracker.trackCreation(createResult);
         } else {
-          logger.error('Failed to create product', 2);
+          logger.error('Failed to create product');
           this.resultTracker.trackFailure();
         }
+
+        logger.endProductAction(); // End product action
       } else {
-        logger.error('Failed to delete existing product', 2);
-        logger.info('Attempting to update instead', 2);
+        logger.error('Failed to delete existing product');
+        logger.info('Attempting to update instead');
 
         const updateResult = await this.productOperationHandler.updateProduct(product, targetProduct);
 
         if (updateResult) {
-          logger.success('Product updated successfully', 2);
+          logger.success('Product updated successfully');
           this.resultTracker.trackUpdate(updateResult);
         } else {
-          logger.error('Failed to update product', 2);
+          logger.error('Failed to update product');
           this.resultTracker.trackFailure();
         }
+
+        logger.endProductAction(); // End product action
       }
     } else if (targetProduct) {
       // Update existing product
@@ -270,38 +274,40 @@ class ProductSyncStrategy {
         `Updating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
         product.title,
         product.handle,
-        'update',
-        1
+        'update'
       );
 
       const updateResult = await this.productOperationHandler.updateProduct(product, targetProduct);
 
       if (updateResult) {
-        logger.success('Product updated successfully', 2);
+        logger.success('Product updated successfully');
         this.resultTracker.trackUpdate(updateResult);
       } else {
-        logger.error('Failed to update product', 2);
+        logger.error('Failed to update product');
         this.resultTracker.trackFailure();
       }
+
+      logger.endProductAction(); // End product action
     } else {
       // Create new product
       logger.logProductAction(
         `Creating product (${productNumInBatch}/${batchSize}, total: ${totalProcessed})`,
         product.title,
         product.handle,
-        'create',
-        1
+        'create'
       );
 
       const createResult = await this.productOperationHandler.createProduct(product);
 
       if (createResult) {
-        logger.success('Product created successfully', 2);
+        logger.success('Product created successfully');
         this.resultTracker.trackCreation(createResult);
       } else {
-        logger.error('Failed to create product', 2);
+        logger.error('Failed to create product');
         this.resultTracker.trackFailure();
       }
+
+      logger.endProductAction(); // End product action
     }
   }
 }

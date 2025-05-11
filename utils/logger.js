@@ -38,22 +38,21 @@ function resetIndent() {
 
 /**
  * Get the current indentation string
- * @param {number} extraLevels - Additional levels to add temporarily (default: 0)
  * @returns {string} Indentation string
  */
-function getIndent(extraLevels = 0) {
-  return '  '.repeat(indentLevel + extraLevels);
+function getIndent() {
+  return '  '.repeat(indentLevel);
 }
 
 /**
  * Create a formatted log for a main product action
+ * This function also automatically indents after logging to create visual hierarchy
  * @param {string} message - Log message
  * @param {string} title - Product title
  * @param {string} handle - Product handle
  * @param {string} type - Type of action (update, create, delete, etc.)
- * @param {number} extraIndent - Extra indentation levels (default: 0)
  */
-function logProductAction(message, title, handle, type = 'update', extraIndent = 0) {
+function logProductAction(message, title, handle, type = 'update') {
   let color = chalk.cyan; // Default cyan for update
 
   if (type === 'create') {
@@ -64,19 +63,30 @@ function logProductAction(message, title, handle, type = 'update', extraIndent =
     color = chalk.red; // Red
   }
 
-  const indent = getIndent(extraIndent);
+  const indent = getIndent();
   // Use a cleaner format that separates the title from the handle
   console.log(`${indent}${color.bold(`◆ ${message}`)}`);
   console.log(`${indent}  ${chalk.bold(title)} ${chalk.dim(`(${handle})`)}`);
+
+  // Automatically indent to create visual hierarchy for operations on this product
+  indentLevel++;
+}
+
+/**
+ * End the product action section and unindent
+ * This should be called after all operations for a product are completed
+ */
+function endProductAction() {
+  // Unindent to return to the previous level
+  unindent();
 }
 
 /**
  * Format a success message with proper indentation and symbol
  * @param {string} message - Log message
- * @param {number} extraIndent - Extra indentation levels (default: 0)
  */
-function success(message, extraIndent = 0) {
-  const indent = getIndent(extraIndent);
+function success(message) {
+  const indent = getIndent();
   // Use green checkmark ✓ with consistent formatting
   console.log(`${indent}${chalk.green('✓')} ${message}`);
 }
@@ -84,11 +94,10 @@ function success(message, extraIndent = 0) {
 /**
  * Format an error message with proper indentation and symbol
  * @param {string} message - Log message
- * @param {number} extraIndent - Extra indentation levels (default: 0)
  * @param {Object} data - Additional error data to log
  */
-function error(message, extraIndent = 0, data = null) {
-  const indent = getIndent(extraIndent);
+function error(message, data = null) {
+  const indent = getIndent();
   if (data) {
     console.log(`${indent}${chalk.red('✖')} ${message}`, data);
   } else {
@@ -99,27 +108,32 @@ function error(message, extraIndent = 0, data = null) {
 /**
  * Format a warning message with proper indentation and symbol
  * @param {string} message - Log message
- * @param {number} extraIndent - Extra indentation levels (default: 0)
  */
-function warn(message, extraIndent = 0) {
-  const indent = getIndent(extraIndent);
+function warn(message) {
+  const indent = getIndent();
   console.log(`${indent}${chalk.yellow('⚠')} ${message}`);
 }
 
 /**
  * Format an info message with proper indentation and symbol
+ * Symbol is automatically determined based on indentation level
  * @param {string} message - Log message
- * @param {number} extraIndent - Extra indentation levels (default: 0)
- * @param {string} type - Type of info (main, sub, detail)
  */
-function info(message, extraIndent = 0, type = 'detail') {
-  const indent = getIndent(extraIndent);
-  let symbol = '-'; // Default for detail
+function info(message) {
+  const indent = getIndent();
 
-  if (type === 'main') {
-    symbol = '•'; // Main operation
-  } else if (type === 'sub') {
-    symbol = '◦'; // Sub-operation
+  // Determine symbol based on indentation level:
+  // Level 1: • (bullet)
+  // Level 2: - (dash)
+  // Level 3+: further dashes
+  let symbol = '-'; // Default dash
+
+  if (indentLevel === 1) {
+    symbol = '•'; // Main operation - bullet point
+  } else if (indentLevel >= 3) {
+    symbol = '-'; // Sub-operation - dash
+  } else {
+    symbol = '-'; // Detail - dash
   }
 
   console.log(`${indent}${symbol} ${message}`);
@@ -128,20 +142,18 @@ function info(message, extraIndent = 0, type = 'detail') {
 /**
  * Format a subdued message with proper indentation (for less important info like cursor data)
  * @param {string} message - Log message
- * @param {number} extraIndent - Extra indentation levels (default: 0)
  */
-function subdued(message, extraIndent = 0) {
-  const indent = getIndent(extraIndent);
+function subdued(message) {
+  const indent = getIndent();
   console.log(`${indent}${chalk.gray(message)}`);
 }
 
 /**
  * Format a dry run message with proper indentation
  * @param {string} message - Log message
- * @param {number} extraIndent - Extra indentation levels (default: 0)
  */
-function dryRun(message, extraIndent = 0) {
-  const indent = getIndent(extraIndent);
+function dryRun(message) {
+  const indent = getIndent();
   // Use dimmed text with a muted blue color for dry run messages
   console.log(`${indent}${chalk.dim(' > [DRY RUN] ' + message)}`);
 }
@@ -158,10 +170,9 @@ function section(title) {
  * Log a debug message with proper indentation
  * Only visible when debug mode is enabled
  * @param {string} message - Debug message
- * @param {number} extraIndent - Extra indentation levels (default: 0)
  */
-function debug(message, extraIndent = 0) {
-  const indent = getIndent(extraIndent);
+function debug(message) {
+  const indent = getIndent();
   console.log(`${indent}${chalk.dim.blue('[DEBUG]')} ${message}`);
 }
 
@@ -171,6 +182,7 @@ module.exports = {
   resetIndent,
   getIndent,
   logProductAction,
+  endProductAction,
   success,
   error,
   warn,
