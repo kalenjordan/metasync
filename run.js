@@ -311,11 +311,17 @@ class MetaSyncCli {
 
     // Display metafield stats if available
     if (metafieldResults && metafieldResults.processed > 0) {
-      consola.info(`Metafield References: ${metafieldResults.processed} processed, ${metafieldResults.transformed} transformed, ${metafieldResults.blanked} blanked due to errors`);
+      consola.info(`Metafield References: ${metafieldResults.processed} processed, ${metafieldResults.transformed} transformed, ${metafieldResults.blanked} blanked due to errors, ${metafieldResults.warnings || 0} warnings`);
 
       // If there were errors, highlight them
       if (metafieldResults.errors > 0) {
         consola.warn(`Found ${metafieldResults.errors} metafield reference errors. Check log for details.`);
+      }
+
+      // If there were unsupported reference types, list them
+      if (metafieldResults.warnings > 0 && metafieldResults.unsupportedTypes && metafieldResults.unsupportedTypes.length > 0) {
+        consola.warn(`Encountered ${metafieldResults.unsupportedTypes.length} unsupported reference types: ${metafieldResults.unsupportedTypes.join(', ')}`);
+        consola.info(`These reference types were preserved in their original form. For proper syncing, consider adding support for these types.`);
       }
     }
   }

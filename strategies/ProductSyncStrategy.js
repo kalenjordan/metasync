@@ -282,7 +282,7 @@ class ProductSyncStrategy {
    */
   async processProductMetafields(productId, metafields) {
     if (!metafields || metafields.length === 0) {
-      return { processed: 0, transformed: 0, blanked: 0, errors: 0 };
+      return { processed: 0, transformed: 0, blanked: 0, errors: 0, warnings: 0 };
     }
 
     // Filter metafields based on namespace/key options
@@ -293,7 +293,7 @@ class ProductSyncStrategy {
 
     // Log the number of metafields before and after transformation
     LoggingUtils.info(`Processing metafields: ${filteredMetafields.length} filtered, ` +
-      `${stats.transformed} transformed, ${stats.blanked} blanked due to errors`, 4);
+      `${stats.transformed} transformed, ${stats.blanked} blanked due to errors, ${stats.warnings} warnings`, 4);
 
     // Print each transformed metafield for debugging
     if (this.debug) {
@@ -301,6 +301,12 @@ class ProductSyncStrategy {
         // Skip logging blanked metafields
         if (metafield._blanked) {
           LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [BLANKED]`, 5);
+          return;
+        }
+
+        // Mark unsupported types differently
+        if (metafield._unsupportedType) {
+          LoggingUtils.info(`Metafield ${metafield.namespace}.${metafield.key} (${metafield.type}): [UNSUPPORTED TYPE]`, 5);
           return;
         }
 
@@ -340,6 +346,23 @@ class ProductSyncStrategy {
         const newProduct = await this.productHandler.createProduct(productInput);
         if (!newProduct) return null;
 
+        // Initialize the results object to use throughout the method
+        const results = {
+          created: 1,
+          updated: 0,
+          skipped: 0,
+          failed: 0,
+          deleted: 0,
+          metafields: {
+            processed: 0,
+            transformed: 0,
+            blanked: 0,
+            errors: 0,
+            warnings: 0,
+            unsupportedTypes: []
+          }
+        };
+
         // Step 2: Now create variants using productVariantsBulkCreate
         if (newProduct.id && product.variants && product.variants.length > 0) {
           await this.updateProductVariants(client, newProduct.id, product.variants);
@@ -351,16 +374,25 @@ class ProductSyncStrategy {
         }
 
         // Step 4: Process and create metafields
-        if (newProduct.id && product.metafields && product.metafields.length > 0) {
-          await this.processProductMetafields(newProduct.id, product.metafields);
-        }
+        const metafieldStats = await this.processProductMetafields(newProduct.id, product.metafields);
+        results.metafields.processed = metafieldStats.processed;
+        results.metafields.transformed = metafieldStats.transformed;
+        results.metafields.blanked = metafieldStats.blanked;
+        results.metafields.errors = metafieldStats.errors;
+        results.metafields.warnings = metafieldStats.warnings;
+        results.metafields.unsupportedTypes = metafieldStats.unsupportedTypes || [];
 
         // Step 5: Sync publication status if any
         if (newProduct.id && product.publications && product.publications.length > 0) {
           await this.publicationHandler.syncProductPublications(newProduct.id, product.publications);
         }
 
-        return newProduct;
+        return {
+          id: newProduct.id,
+          title: newProduct.title,
+          handle: newProduct.handle,
+          results
+        };
       } catch (error) {
         LoggingUtils.error(`Error creating product "${product.title}": ${error.message}`, 3);
         return null;
@@ -377,7 +409,26 @@ class ProductSyncStrategy {
         LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
       }
 
-      return { id: "dry-run-id", title: product.title, handle: product.handle };
+      return {
+        id: "dry-run-id",
+        title: product.title,
+        handle: product.handle,
+        results: {
+          created: 1,
+          updated: 0,
+          skipped: 0,
+          failed: 0,
+          deleted: 0,
+          metafields: {
+            processed: 0,
+            transformed: 0,
+            blanked: 0,
+            errors: 0,
+            warnings: 0,
+            unsupportedTypes: []
+          }
+        }
+      };
     }
   }
 
@@ -399,6 +450,23 @@ class ProductSyncStrategy {
         const updatedProduct = await this.productHandler.updateProduct(existingProduct.id, productUpdateInput);
         if (!updatedProduct) return null;
 
+        // Initialize the results object to use throughout the method
+        const results = {
+          created: 0,
+          updated: 1,
+          skipped: 0,
+          failed: 0,
+          deleted: 0,
+          metafields: {
+            processed: 0,
+            transformed: 0,
+            blanked: 0,
+            errors: 0,
+            warnings: 0,
+            unsupportedTypes: []
+          }
+        };
+
         // Step 1: Update variants separately using productVariantsBulkUpdate
         if (updatedProduct.id && product.variants && product.variants.length > 0) {
           await this.updateProductVariants(client, updatedProduct.id, product.variants);
@@ -412,16 +480,25 @@ class ProductSyncStrategy {
         }
 
         // Step 3: Process and update metafields
-        if (updatedProduct.id && product.metafields && product.metafields.length > 0) {
-          await this.processProductMetafields(updatedProduct.id, product.metafields);
-        }
+        const metafieldStats = await this.processProductMetafields(updatedProduct.id, product.metafields);
+        results.metafields.processed = metafieldStats.processed;
+        results.metafields.transformed = metafieldStats.transformed;
+        results.metafields.blanked = metafieldStats.blanked;
+        results.metafields.errors = metafieldStats.errors;
+        results.metafields.warnings = metafieldStats.warnings;
+        results.metafields.unsupportedTypes = metafieldStats.unsupportedTypes || [];
 
         // Step 4: Sync publication status
         if (updatedProduct.id && product.publications && product.publications.length > 0) {
           await this.publicationHandler.syncProductPublications(updatedProduct.id, product.publications);
         }
 
-        return updatedProduct;
+        return {
+          id: updatedProduct.id,
+          title: updatedProduct.title,
+          handle: updatedProduct.handle,
+          results
+        };
       } catch (error) {
         LoggingUtils.error(`Error updating product "${product.title}": ${error.message}`, 3);
         return null;
@@ -438,7 +515,26 @@ class ProductSyncStrategy {
         LoggingUtils.info(`[DRY RUN] Would publish to ${publishedChannels.length} channels: ${publishedChannels.join(', ')}`, 4);
       }
 
-      return { id: existingProduct.id, title: product.title, handle: product.handle };
+      return {
+        id: existingProduct.id,
+        title: product.title,
+        handle: product.handle,
+        results: {
+          created: 0,
+          updated: 1,
+          skipped: 0,
+          failed: 0,
+          deleted: 0,
+          metafields: {
+            processed: 0,
+            transformed: 0,
+            blanked: 0,
+            errors: 0,
+            warnings: 0,
+            unsupportedTypes: []
+          }
+        }
+      };
     }
   }
 
@@ -485,7 +581,9 @@ class ProductSyncStrategy {
           processed: 0,
           transformed: 0,
           blanked: 0,
-          errors: 0
+          errors: 0,
+          warnings: 0,
+          unsupportedTypes: []
         }
       };
 
@@ -510,19 +608,28 @@ class ProductSyncStrategy {
             results.deleted++;
             // Now create the product instead of updating
             LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create');
-            const created = await this.createProduct(this.targetClient, product);
+            const createResult = await this.createProduct(this.targetClient, product);
 
-            if (created) {
+            if (createResult) {
               LoggingUtils.success('Product created successfully', 1);
               results.created++;
 
-              // Track metafield stats from the creation process if metafields were processed
-              if (product.metafields && product.metafields.length > 0) {
-                const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
-                results.metafields.processed += metafieldStats.processed;
-                results.metafields.transformed += metafieldStats.transformed;
-                results.metafields.blanked += metafieldStats.blanked;
-                results.metafields.errors += metafieldStats.errors;
+              // Add the metafield stats from the result
+              if (createResult.results && createResult.results.metafields) {
+                results.metafields.processed += createResult.results.metafields.processed;
+                results.metafields.transformed += createResult.results.metafields.transformed;
+                results.metafields.blanked += createResult.results.metafields.blanked;
+                results.metafields.errors += createResult.results.metafields.errors;
+                results.metafields.warnings += createResult.results.metafields.warnings;
+
+                // Merge unsupported types arrays, avoiding duplicates
+                if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
+                  createResult.results.metafields.unsupportedTypes.forEach(type => {
+                    if (!results.metafields.unsupportedTypes.includes(type)) {
+                      results.metafields.unsupportedTypes.push(type);
+                    }
+                  });
+                }
               }
             } else {
               LoggingUtils.error('Failed to create product', 1);
@@ -531,18 +638,27 @@ class ProductSyncStrategy {
           } else {
             LoggingUtils.error('Failed to delete existing product', 1);
             LoggingUtils.info('Attempting to update instead', 1);
-            const updated = await this.updateProduct(this.targetClient, product, targetProduct);
-            if (updated) {
+            const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
+            if (updateResult) {
               LoggingUtils.success('Product updated successfully', 1);
               results.updated++;
 
-              // Track metafield stats from the update process if metafields were processed
-              if (product.metafields && product.metafields.length > 0) {
-                const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
-                results.metafields.processed += metafieldStats.processed;
-                results.metafields.transformed += metafieldStats.transformed;
-                results.metafields.blanked += metafieldStats.blanked;
-                results.metafields.errors += metafieldStats.errors;
+              // Add the metafield stats from the result
+              if (updateResult.results && updateResult.results.metafields) {
+                results.metafields.processed += updateResult.results.metafields.processed;
+                results.metafields.transformed += updateResult.results.metafields.transformed;
+                results.metafields.blanked += updateResult.results.metafields.blanked;
+                results.metafields.errors += updateResult.results.metafields.errors;
+                results.metafields.warnings += updateResult.results.metafields.warnings;
+
+                // Merge unsupported types arrays, avoiding duplicates
+                if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
+                  updateResult.results.metafields.unsupportedTypes.forEach(type => {
+                    if (!results.metafields.unsupportedTypes.includes(type)) {
+                      results.metafields.unsupportedTypes.push(type);
+                    }
+                  });
+                }
               }
             } else {
               LoggingUtils.error('Failed to update product', 1);
@@ -552,20 +668,29 @@ class ProductSyncStrategy {
         } else if (targetProduct) {
           // Update existing product
           LoggingUtils.logProductAction(`Updating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'update');
-          const updated = await this.updateProduct(this.targetClient, product, targetProduct);
+          const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
 
           // Log result with proper indentation
-          if (updated) {
+          if (updateResult) {
             LoggingUtils.success('Product updated successfully', 1);
             results.updated++;
 
-            // Track metafield stats from the update process if metafields were processed
-            if (product.metafields && product.metafields.length > 0) {
-              const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
-              results.metafields.processed += metafieldStats.processed;
-              results.metafields.transformed += metafieldStats.transformed;
-              results.metafields.blanked += metafieldStats.blanked;
-              results.metafields.errors += metafieldStats.errors;
+            // Add the metafield stats from the result
+            if (updateResult.results && updateResult.results.metafields) {
+              results.metafields.processed += updateResult.results.metafields.processed;
+              results.metafields.transformed += updateResult.results.metafields.transformed;
+              results.metafields.blanked += updateResult.results.metafields.blanked;
+              results.metafields.errors += updateResult.results.metafields.errors;
+              results.metafields.warnings += updateResult.results.metafields.warnings;
+
+              // Merge unsupported types arrays, avoiding duplicates
+              if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
+                updateResult.results.metafields.unsupportedTypes.forEach(type => {
+                  if (!results.metafields.unsupportedTypes.includes(type)) {
+                    results.metafields.unsupportedTypes.push(type);
+                  }
+                });
+              }
             }
           } else {
             LoggingUtils.error('Failed to update product', 1);
@@ -574,20 +699,29 @@ class ProductSyncStrategy {
         } else {
           // Create new product
           LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create');
-          const created = await this.createProduct(this.targetClient, product);
+          const createResult = await this.createProduct(this.targetClient, product);
 
           // Log result with proper indentation
-          if (created) {
+          if (createResult) {
             LoggingUtils.success('Product created successfully', 1);
             results.created++;
 
-            // Track metafield stats from the creation process if metafields were processed
-            if (product.metafields && product.metafields.length > 0) {
-              const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
-              results.metafields.processed += metafieldStats.processed;
-              results.metafields.transformed += metafieldStats.transformed;
-              results.metafields.blanked += metafieldStats.blanked;
-              results.metafields.errors += metafieldStats.errors;
+            // Add the metafield stats from the result
+            if (createResult.results && createResult.results.metafields) {
+              results.metafields.processed += createResult.results.metafields.processed;
+              results.metafields.transformed += createResult.results.metafields.transformed;
+              results.metafields.blanked += createResult.results.metafields.blanked;
+              results.metafields.errors += createResult.results.metafields.errors;
+              results.metafields.warnings += createResult.results.metafields.warnings;
+
+              // Merge unsupported types arrays, avoiding duplicates
+              if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
+                createResult.results.metafields.unsupportedTypes.forEach(type => {
+                  if (!results.metafields.unsupportedTypes.includes(type)) {
+                    results.metafields.unsupportedTypes.push(type);
+                  }
+                });
+              }
             }
           } else {
             LoggingUtils.error('Failed to create product', 1);
@@ -604,7 +738,7 @@ class ProductSyncStrategy {
 
       // Add metafield stats to the summary if any were processed
       if (results.metafields.processed > 0) {
-        LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors`, 0);
+        LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors, ${results.metafields.warnings} warnings`, 0);
       }
 
       return {
@@ -614,7 +748,9 @@ class ProductSyncStrategy {
           processed: results.metafields.processed,
           transformed: results.metafields.transformed,
           blanked: results.metafields.blanked,
-          errors: results.metafields.errors
+          errors: results.metafields.errors,
+          warnings: results.metafields.warnings,
+          unsupportedTypes: results.metafields.unsupportedTypes
         }
       };
     }
@@ -632,7 +768,9 @@ class ProductSyncStrategy {
         processed: 0,
         transformed: 0,
         blanked: 0,
-        errors: 0
+        errors: 0,
+        warnings: 0,
+        unsupportedTypes: []
       }
     };
 
@@ -651,7 +789,9 @@ class ProductSyncStrategy {
           processed: 0,
           transformed: 0,
           blanked: 0,
-          errors: 0
+          errors: 0,
+          warnings: 0,
+          unsupportedTypes: []
         }
       };
     }
@@ -681,8 +821,10 @@ class ProductSyncStrategy {
         // Check if product exists in target shop by handle
         const targetProduct = await this.getProductByHandle(this.targetClient, product.handle);
 
-        // If force recreate is enabled and the product exists, delete it first
+        // Process similar to single product case, but with updated batch logic
+        // For brevity, I'll just add the metafield tracking code to one of the cases
         if (this.forceRecreate && targetProduct) {
+          // Force recreate logic...
           LoggingUtils.logProductAction(`Force recreating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'force-recreate', 1);
           const deleted = await this.productHandler.deleteProduct(targetProduct.id);
           if (deleted) {
@@ -690,19 +832,28 @@ class ProductSyncStrategy {
             results.deleted++;
             // Now create the product instead of updating
             LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create', 1);
-            const created = await this.createProduct(this.targetClient, product);
+            const createResult = await this.createProduct(this.targetClient, product);
 
-            if (created) {
+            if (createResult) {
               LoggingUtils.success('Product created successfully', 2);
               results.created++;
 
-              // Track metafield stats from the creation process if metafields were processed
-              if (product.metafields && product.metafields.length > 0) {
-                const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
-                results.metafields.processed += metafieldStats.processed;
-                results.metafields.transformed += metafieldStats.transformed;
-                results.metafields.blanked += metafieldStats.blanked;
-                results.metafields.errors += metafieldStats.errors;
+              // Add the metafield stats from the result
+              if (createResult.results && createResult.results.metafields) {
+                results.metafields.processed += createResult.results.metafields.processed;
+                results.metafields.transformed += createResult.results.metafields.transformed;
+                results.metafields.blanked += createResult.results.metafields.blanked;
+                results.metafields.errors += createResult.results.metafields.errors;
+                results.metafields.warnings += createResult.results.metafields.warnings;
+
+                // Merge unsupported types arrays, avoiding duplicates
+                if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
+                  createResult.results.metafields.unsupportedTypes.forEach(type => {
+                    if (!results.metafields.unsupportedTypes.includes(type)) {
+                      results.metafields.unsupportedTypes.push(type);
+                    }
+                  });
+                }
               }
             } else {
               LoggingUtils.error('Failed to create product', 2);
@@ -711,18 +862,27 @@ class ProductSyncStrategy {
           } else {
             LoggingUtils.error('Failed to delete existing product', 2);
             LoggingUtils.info('Attempting to update instead', 2);
-            const updated = await this.updateProduct(this.targetClient, product, targetProduct);
-            if (updated) {
+            const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
+            if (updateResult) {
               LoggingUtils.success('Product updated successfully', 2);
               results.updated++;
 
-              // Track metafield stats from the update process if metafields were processed
-              if (product.metafields && product.metafields.length > 0) {
-                const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
-                results.metafields.processed += metafieldStats.processed;
-                results.metafields.transformed += metafieldStats.transformed;
-                results.metafields.blanked += metafieldStats.blanked;
-                results.metafields.errors += metafieldStats.errors;
+              // Add the metafield stats from the result
+              if (updateResult.results && updateResult.results.metafields) {
+                results.metafields.processed += updateResult.results.metafields.processed;
+                results.metafields.transformed += updateResult.results.metafields.transformed;
+                results.metafields.blanked += updateResult.results.metafields.blanked;
+                results.metafields.errors += updateResult.results.metafields.errors;
+                results.metafields.warnings += updateResult.results.metafields.warnings;
+
+                // Merge unsupported types arrays, avoiding duplicates
+                if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
+                  updateResult.results.metafields.unsupportedTypes.forEach(type => {
+                    if (!results.metafields.unsupportedTypes.includes(type)) {
+                      results.metafields.unsupportedTypes.push(type);
+                    }
+                  });
+                }
               }
             } else {
               LoggingUtils.error('Failed to update product', 2);
@@ -732,20 +892,29 @@ class ProductSyncStrategy {
         } else if (targetProduct) {
           // Update existing product
           LoggingUtils.logProductAction(`Updating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'update', 1);
-          const updated = await this.updateProduct(this.targetClient, product, targetProduct);
+          const updateResult = await this.updateProduct(this.targetClient, product, targetProduct);
 
           // Log result with proper indentation
-          if (updated) {
+          if (updateResult) {
             LoggingUtils.success('Product updated successfully', 2);
             results.updated++;
 
-            // Track metafield stats from the update process if metafields were processed
-            if (product.metafields && product.metafields.length > 0) {
-              const metafieldStats = await this.processProductMetafields(updated.id, product.metafields);
-              results.metafields.processed += metafieldStats.processed;
-              results.metafields.transformed += metafieldStats.transformed;
-              results.metafields.blanked += metafieldStats.blanked;
-              results.metafields.errors += metafieldStats.errors;
+            // Add the metafield stats from the result
+            if (updateResult.results && updateResult.results.metafields) {
+              results.metafields.processed += updateResult.results.metafields.processed;
+              results.metafields.transformed += updateResult.results.metafields.transformed;
+              results.metafields.blanked += updateResult.results.metafields.blanked;
+              results.metafields.errors += updateResult.results.metafields.errors;
+              results.metafields.warnings += updateResult.results.metafields.warnings;
+
+              // Merge unsupported types arrays, avoiding duplicates
+              if (updateResult.results.metafields.unsupportedTypes && updateResult.results.metafields.unsupportedTypes.length > 0) {
+                updateResult.results.metafields.unsupportedTypes.forEach(type => {
+                  if (!results.metafields.unsupportedTypes.includes(type)) {
+                    results.metafields.unsupportedTypes.push(type);
+                  }
+                });
+              }
             }
           } else {
             LoggingUtils.error('Failed to update product', 2);
@@ -754,20 +923,29 @@ class ProductSyncStrategy {
         } else {
           // Create new product
           LoggingUtils.logProductAction(`Creating product (${productNumInBatch}/${sourceProducts.length}, total: ${totalProcessed})`, product.title, product.handle, 'create', 1);
-          const created = await this.createProduct(this.targetClient, product);
+          const createResult = await this.createProduct(this.targetClient, product);
 
           // Log result with proper indentation
-          if (created) {
+          if (createResult) {
             LoggingUtils.success('Product created successfully', 2);
             results.created++;
 
-            // Track metafield stats from the creation process if metafields were processed
-            if (product.metafields && product.metafields.length > 0) {
-              const metafieldStats = await this.processProductMetafields(created.id, product.metafields);
-              results.metafields.processed += metafieldStats.processed;
-              results.metafields.transformed += metafieldStats.transformed;
-              results.metafields.blanked += metafieldStats.blanked;
-              results.metafields.errors += metafieldStats.errors;
+            // Add the metafield stats from the result
+            if (createResult.results && createResult.results.metafields) {
+              results.metafields.processed += createResult.results.metafields.processed;
+              results.metafields.transformed += createResult.results.metafields.transformed;
+              results.metafields.blanked += createResult.results.metafields.blanked;
+              results.metafields.errors += createResult.results.metafields.errors;
+              results.metafields.warnings += createResult.results.metafields.warnings;
+
+              // Merge unsupported types arrays, avoiding duplicates
+              if (createResult.results.metafields.unsupportedTypes && createResult.results.metafields.unsupportedTypes.length > 0) {
+                createResult.results.metafields.unsupportedTypes.forEach(type => {
+                  if (!results.metafields.unsupportedTypes.includes(type)) {
+                    results.metafields.unsupportedTypes.push(type);
+                  }
+                });
+              }
             }
           } else {
             LoggingUtils.error('Failed to create product', 2);
@@ -797,7 +975,7 @@ class ProductSyncStrategy {
 
     // Add metafield stats to the summary if any were processed
     if (results.metafields.processed > 0) {
-      LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors`, 0);
+      LoggingUtils.info(`Metafield stats: ${results.metafields.processed} processed, ${results.metafields.transformed} transformed, ${results.metafields.blanked} blanked due to errors, ${results.metafields.warnings} warnings`, 0);
     }
 
     return {
@@ -807,7 +985,9 @@ class ProductSyncStrategy {
         processed: results.metafields.processed,
         transformed: results.metafields.transformed,
         blanked: results.metafields.blanked,
-        errors: results.metafields.errors
+        errors: results.metafields.errors,
+        warnings: results.metafields.warnings,
+        unsupportedTypes: results.metafields.unsupportedTypes
       }
     };
   }

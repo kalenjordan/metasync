@@ -32,7 +32,7 @@ class MetafieldReferenceHandler {
     if (!metafields || metafields.length === 0) {
       return {
         transformedMetafields: [],
-        stats: { processed: 0, transformed: 0, blanked: 0, errors: 0 }
+        stats: { processed: 0, transformed: 0, blanked: 0, errors: 0, warnings: 0 }
       };
     }
 
@@ -42,19 +42,21 @@ class MetafieldReferenceHandler {
       transformed: 0,
       blanked: 0,
       errors: 0,
+      warnings: 0,
+      unsupportedTypes: new Set(), // Track unique unsupported types
       byType: {
         regular: 0,
         references: {
           collection: 0,
           variant: 0,
           product: 0,
-          other: 0
+          unsupported: 0
         },
         lists: {
           collection: 0,
           variant: 0,
           product: 0,
-          other: 0
+          unsupported: 0
         }
       }
     };
@@ -83,6 +85,7 @@ class MetafieldReferenceHandler {
 
       try {
         let transformedMetafield = null;
+        let isUnsupportedType = false;
 
         // Transform based on reference type
         switch (refType) {
@@ -123,16 +126,24 @@ class MetafieldReferenceHandler {
             break;
 
           default:
-            // Unknown reference type, just pass it through
-            LoggingUtils.info(`Unsupported reference type: ${refType} for ${metafield.namespace}.${metafield.key}`, 4);
+            // Unknown/unsupported reference type - track as a warning
+            isUnsupportedType = true;
+            stats.unsupportedTypes.add(refType);
+            stats.warnings++;
+            if (isList) stats.byType.lists.unsupported++;
+            else stats.byType.references.unsupported++;
+
+            LoggingUtils.warn(`Unsupported reference type: ${refType} for ${metafield.namespace}.${metafield.key} - keeping original value`, 4);
             transformedMetafield = metafield;
-            if (isList) stats.byType.lists.other++;
-            else stats.byType.references.other++;
             stats.transformed++;
             break;
         }
 
         if (transformedMetafield) {
+          // Add flag for unsupported types for tracking
+          if (isUnsupportedType) {
+            transformedMetafield._unsupportedType = true;
+          }
           transformedMetafields.push(transformedMetafield);
         } else {
           stats.blanked++;
@@ -155,11 +166,18 @@ class MetafieldReferenceHandler {
     // Log transformation summary
     const refCount = Object.values(stats.byType.references).reduce((sum, val) => sum + val, 0);
     const listCount = Object.values(stats.byType.lists).reduce((sum, val) => sum + val, 0);
+    const unsupportedCount = stats.byType.references.unsupported + stats.byType.lists.unsupported;
 
     LoggingUtils.info(
       `Reference transformation complete: ${stats.byType.regular} regular, ` +
       `${refCount} single references, ${listCount} list references, ` +
-      `${stats.blanked} blanked due to errors`, 3);
+      `${stats.blanked} blanked due to errors, ${unsupportedCount} unsupported types`, 3);
+
+    // If we have unsupported types, log them
+    if (stats.unsupportedTypes.size > 0) {
+      LoggingUtils.warn(
+        `Found ${stats.unsupportedTypes.size} unsupported reference types: ${Array.from(stats.unsupportedTypes).join(', ')}`, 3);
+    }
 
     return {
       transformedMetafields,
@@ -167,7 +185,9 @@ class MetafieldReferenceHandler {
         processed: stats.processed,
         transformed: stats.transformed,
         blanked: stats.blanked,
-        errors: stats.errors
+        errors: stats.errors,
+        warnings: stats.warnings,
+        unsupportedTypes: Array.from(stats.unsupportedTypes)
       }
     };
   }
