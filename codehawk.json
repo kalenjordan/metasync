@@ -1,0 +1,4 @@
+{
+  "skipDirectories": ["/node_modules"],
+  "minimumThreshold": "4"
+}
