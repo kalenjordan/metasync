@@ -231,6 +231,7 @@ class MetaSyncCli {
     }
 
     // Use blank line and proper indentation with blank line after
+    logger.newline();
     logger.info(`Available metaobject definition types:`);
 
     // Increase indentation level before listing types
@@ -240,9 +241,6 @@ class MetaSyncCli {
       // Using 'main' type for info to get the bullet point
       logger.info(`${def.type} (${def.name || "No name"})`, 0, 'main');
     });
-
-    // Add a blank line after the list
-    logger.info(``);
 
     // Reset indentation after the list
     logger.unindent();
