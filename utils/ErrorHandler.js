@@ -34,12 +34,12 @@ class ErrorHandler {
             // Extract item details using the provided function
             const details = getItemDetails(items[itemIndex], itemIndex, err.field);
             if (details) {
-              // Log detailed error with item information
-              LoggingUtils.error(`  - ${details.itemName}: ${err.message}`, indentLevel);
+              // Log detailed error with item information - add +1 to indentation level
+              LoggingUtils.error(`${details.itemName}: ${err.message}`, indentLevel + 1);
 
-              // Log value preview if available
+              // Log value preview if available - add +1 to indentation level
               if (details.valuePreview) {
-                LoggingUtils.error(`    Value: ${details.valuePreview}`, indentLevel);
+                LoggingUtils.error(`Value: ${details.valuePreview}`, indentLevel + 1);
               }
               return;
             }
@@ -47,10 +47,10 @@ class ErrorHandler {
         }
 
         // Fallback for errors without proper field path or when details extraction fails
-        LoggingUtils.error(`  - Error: ${err.message}`, indentLevel);
+        LoggingUtils.error(`Error: ${err.message}`, indentLevel + 1);
       } catch (error) {
         // Ensure error handling doesn't break if something goes wrong
-        LoggingUtils.error(`  - Error: ${err.message}`, indentLevel);
+        LoggingUtils.error(`Error: ${err.message}`, indentLevel + 1);
       }
     });
 
