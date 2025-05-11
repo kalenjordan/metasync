@@ -206,6 +206,18 @@ class BaseMetafieldSyncStrategy {
       }`
     );
 
+    // Log each definition with its type
+    sourceDefinitions.forEach(def => {
+      consola.info(`  • ${def.namespace}.${def.key} (${def.name || 'unnamed'}): ${def.type.name}`);
+
+      // Log validation rules if present
+      if (def.validations && def.validations.length > 0) {
+        def.validations.forEach(validation => {
+          consola.info(`    - Validation: ${validation.name} = ${validation.value}`);
+        });
+      }
+    });
+
     const targetDefinitions = await this.fetchMetafieldDefinitions(this.targetClient, this.options.namespace);
     consola.info(`Found ${targetDefinitions.length} definition(s) in target (for namespace: ${this.options.namespace || "all"})`);
     const targetDefinitionMap = targetDefinitions.reduce((map, def) => {
@@ -290,7 +302,7 @@ class BaseMetafieldSyncStrategy {
   }
 
   async listAvailableDefinitions() {
-    consola.info(`Fetching all available ${this.resourceName} definitions... (Triggered because --namespace was not specified)`);
+    consola.info(`Fetching all available ${this.resourceName} definitions...`);
     const definitions = await this.fetchMetafieldDefinitions(this.sourceClient);
     if (definitions.length === 0) {
       consola.warn(`No ${this.resourceName} definitions found in source shop.`);
@@ -317,17 +329,62 @@ class BaseMetafieldSyncStrategy {
     });
 
     consola.info(`\nPlease run the command again with --namespace <namespace> to specify which ${this.resourceName} namespace to sync.`);
+    consola.info(`Or use --namespace all to sync all namespaces at once.`);
   }
 
   async sync() {
     // Handle listing if namespace is missing (relevant for metafield types)
     if (!this.options.namespace) {
+      consola.error(`Error: --namespace is required for ${this.resourceName} definitions sync.`);
+      consola.info(`Try running the command with --namespace <namespace> or --namespace all.`);
       await this.listAvailableDefinitions();
       return { definitionResults: null, dataResults: null };
     }
 
     let definitionResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let dataResults = null; // Data sync not supported for metafields
+
+    // Handle the special "all" namespace case
+    if (this.options.namespace.toLowerCase() === 'all') {
+      consola.info(`Syncing all ${this.resourceName} namespaces...`);
+      const definitions = await this.fetchMetafieldDefinitions(this.sourceClient);
+      if (definitions.length === 0) {
+        consola.warn(`No ${this.resourceName} definitions found in source shop.`);
+        return { definitionResults, dataResults };
+      }
+
+      // Get unique namespaces
+      const namespaces = [...new Set(definitions.map(def => def.namespace))];
+      consola.info(`Found ${namespaces.length} namespaces to sync: ${namespaces.join(', ')}`);
+
+      // Sync each namespace separately
+      for (const namespace of namespaces) {
+        consola.start(`Syncing ${this.resourceName} definitions for namespace: ${namespace}...`);
+        // Temporarily set the namespace option
+        const originalNamespace = this.options.namespace;
+        this.options.namespace = namespace;
+
+        // Add a visual separator for readability
+        consola.log('\n' + '─'.repeat(80) + '\n');
+        consola.info(`NAMESPACE: ${namespace}`);
+
+        // Run the sync for this namespace
+        const defSync = await this.syncDefinitionsOnly();
+
+        // Restore the original "all" value
+        this.options.namespace = originalNamespace;
+
+        // Combine results
+        definitionResults.created += defSync.results.created;
+        definitionResults.updated += defSync.results.updated;
+        definitionResults.skipped += defSync.results.skipped;
+        definitionResults.failed += defSync.results.failed;
+
+        consola.success(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}.`);
+      }
+
+      return { definitionResults, dataResults };
+    }
 
     // Only definition sync is supported for metafields
     if (!this.options.dataOnly) {

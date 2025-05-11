@@ -47,6 +47,7 @@ Metasync - A CLI tool for synchronizing Shopify resources
 
 USAGE:
   metasync definitions metafields --resource <resource> --namespace <namespace> [options]
+  metasync definitions metafields --resource all --namespace <namespace> [options]
   metasync definitions metaobject --type <type> [options]
   metasync data <resource> [options]
 
@@ -64,6 +65,9 @@ COMMANDS:
 
 Examples:
   metasync definitions metafields --resource product --namespace custom --source shopA --target shopB
+  metasync definitions metafields --resource all --namespace custom --source shopA --target shopB
+  metasync definitions metafields --resource product --namespace all --source shopA --target shopB
+  metasync definitions metafields --resource all --namespace all --source shopA --target shopB
   metasync definitions metaobject --type territory --source shopA --target shopB
   metasync data product --handle my-product --source shopA --target shopB --live
 `;
@@ -74,6 +78,7 @@ Metasync - Definitions Command
 
 USAGE:
   metasync definitions metafields --resource <resource> --namespace <namespace> [options]
+  metasync definitions metafields --resource all --namespace <namespace> [options]
   metasync definitions metaobject --type <type> [options]
 
 COMMON OPTIONS:
@@ -90,6 +95,9 @@ COMMANDS:
 
 Examples:
   metasync definitions metafields --resource product --namespace custom
+  metasync definitions metafields --resource all --namespace custom
+  metasync definitions metafields --resource product --namespace all
+  metasync definitions metafields --resource all --namespace all
   metasync definitions metaobject --type territory
 `;
 
@@ -140,15 +148,15 @@ Examples:
   const defineMetafieldsCmd = defineCommand
     .command("metafields")
     .description("Sync metafield definitions")
-    .option("--resource <type>", "Type of resource (product, company, order, variant, customer)")
-    .option("--namespace <namespace>", "Namespace to sync")
+    .requiredOption("--resource <type>", "Type of resource (product, company, order, variant, customer, or 'all' for all types)")
+    .requiredOption("--namespace <namespace>", "Namespace to sync (required, use 'all' to sync all namespaces)")
     .option("--key <key>", "Specific definition key to sync (e.g., 'namespace.key' - optional if --namespace is used)")
     .action((cmdOptions) => {
       // Merge command options with main options
       Object.assign(mergedOptions, cmdOptions);
       // Set command type
       mergedOptions.command = "definitions";
-      mergedOptions.resource = cmdOptions.resource || "product"; // Default to product if not specified
+      // Don't default to product anymore
     });
 
   const defineMetaobjectsCmd = defineCommand

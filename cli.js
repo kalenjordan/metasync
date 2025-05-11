@@ -108,7 +108,7 @@ class MetaSyncCli {
   }
 
   _validateResourceType() {
-    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page', 'collection', 'everything'];
+    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page', 'collection', 'everything', 'all'];
 
     // Check if resource type was provided
     if (!this.options.resource) {
@@ -187,11 +187,6 @@ class MetaSyncCli {
     if (this.options.resource === 'metaobject' && !this.options.key) {
       consola.info(`No specific metaobject type specified (--type). Fetching available types...`);
       return true;
-    } else if (metafieldResourceTypes.includes(this.options.resource) &&
-              this.options.command === "definitions" &&
-              !this.options.namespace) {
-      consola.info(`No namespace specified (--namespace). Fetching all available ${this.options.resource} metafield namespaces...`);
-      return true;
     }
 
     return false;
@@ -204,10 +199,8 @@ class MetaSyncCli {
     if (this.options.resource === 'metaobject') {
       listPrompt = "\nPlease run the command again with --type <type> to specify which metaobject type to sync.";
       await this._listMetaobjectDefinitions();
-    } else if (metafieldResourceTypes.includes(this.options.resource)) {
-      listPrompt = `\nPlease run the command again with --namespace <namespace> to specify which ${this.options.resource} metafield namespace to sync.`;
-      await this._listMetafieldDefinitions();
     }
+    // We no longer need the metafield namespace prompt since namespace is required
 
     consola.info(listPrompt);
   }
@@ -238,6 +231,48 @@ class MetaSyncCli {
   async _selectAndRunStrategy() {
     // Select the appropriate strategy based on resource and command mode
     let StrategyClass;
+
+    // Special case for 'all' resource type in definitions mode
+    if (this.options.command === "definitions" && this.options.resource.toLowerCase() === 'all') {
+      consola.info(`Syncing all metafield resource types...`);
+      const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
+
+      let combinedResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
+
+      // Process each resource type
+      for (const resourceType of metafieldResourceTypes) {
+        consola.log('\n' + '═'.repeat(80) + '\n');
+        consola.info(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
+
+        // Get the strategy for this resource type
+        const ResourceStrategyClass = strategyLoader.getDefinitionStrategyForResource(resourceType);
+
+        if (ResourceStrategyClass) {
+          // Override the resource type temporarily
+          const originalResource = this.options.resource;
+          this.options.resource = resourceType;
+
+          // Create and run strategy
+          const syncStrategy = new ResourceStrategyClass(this.sourceClient, this.targetClient, this.options);
+          const syncResults = await syncStrategy.sync();
+
+          // Restore original resource type
+          this.options.resource = originalResource;
+
+          // Combine results
+          if (syncResults && syncResults.definitionResults) {
+            combinedResults.created += syncResults.definitionResults.created || 0;
+            combinedResults.updated += syncResults.definitionResults.updated || 0;
+            combinedResults.skipped += syncResults.definitionResults.skipped || 0;
+            combinedResults.failed += syncResults.definitionResults.failed || 0;
+          }
+        } else {
+          consola.warn(`No sync strategy available for ${resourceType} definitions.`);
+        }
+      }
+
+      return { definitionResults: combinedResults, dataResults: null };
+    }
 
     if (this.options.command === "definitions") {
       StrategyClass = strategyLoader.getDefinitionStrategyForResource(this.options.resource);
