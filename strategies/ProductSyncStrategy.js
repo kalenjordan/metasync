@@ -601,6 +601,8 @@ class ProductSyncStrategy {
 
       // Process the returned products directly (for single product by handle case)
       const sourceProducts = productsIterator;
+      let processedCount = 0;
+      const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
       for (let i = 0; i < sourceProducts.length; i++) {
         const product = sourceProducts[i];
         // Add newline before each product for better readability
@@ -680,7 +682,6 @@ class ProductSyncStrategy {
     }
 
     // For batch processing of multiple products
-    const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
     let processedCount = 0;
     let batchNumber = 1;
 
