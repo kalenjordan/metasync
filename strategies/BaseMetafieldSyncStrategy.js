@@ -175,12 +175,53 @@ class BaseMetafieldSyncStrategy {
       try {
         const result = await client.graphql(mutation, { definition: input }, operationName);
         if (result.metafieldDefinitionUpdate.userErrors.length > 0) {
-          LoggingUtils.error(
-            `Failed to update ${this.resourceName} definition ${definition.namespace}.${definition.key}:`,
-            0,
-            result.metafieldDefinitionUpdate.userErrors
+          // Check if the error is due to the pinned limit being reached
+          const pinnedLimitError = result.metafieldDefinitionUpdate.userErrors.find(
+            error => error.code === 'PINNED_LIMIT_REACHED'
           );
-          return null;
+
+          if (pinnedLimitError && input.pin) {
+            // If pinned limit reached and we tried to update to a pinned definition,
+            // retry with pin: false
+            LoggingUtils.warn(
+              `Pinned limit reached for ${this.resourceName} definition ${input.namespace}.${input.key}. Retrying as unpinned.`
+            );
+
+            // Create a new input with pin set to false
+            const unpinnedInput = { ...input, pin: false };
+
+            try {
+              const unpinnedResult = await client.graphql(
+                mutation,
+                { definition: unpinnedInput },
+                operationName
+              );
+
+              if (unpinnedResult.metafieldDefinitionUpdate.userErrors.length > 0) {
+                LoggingUtils.error(
+                  `Failed to update unpinned ${this.resourceName} definition ${input.namespace}.${input.key}:`,
+                  0,
+                  unpinnedResult.metafieldDefinitionUpdate.userErrors
+                );
+                return null;
+              }
+
+              return unpinnedResult.metafieldDefinitionUpdate.updatedDefinition;
+            } catch (retryError) {
+              LoggingUtils.error(
+                `Error updating unpinned ${this.resourceName} definition ${input.namespace}.${input.key}: ${retryError.message}`
+              );
+              return null;
+            }
+          } else {
+            // Handle other errors
+            LoggingUtils.error(
+              `Failed to update ${this.resourceName} definition ${definition.namespace}.${definition.key}:`,
+              0,
+              result.metafieldDefinitionUpdate.userErrors
+            );
+            return null;
+          }
         }
         return result.metafieldDefinitionUpdate.updatedDefinition;
       } catch (error) {

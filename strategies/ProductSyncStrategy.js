@@ -247,6 +247,32 @@ class ProductSyncStrategy {
       return metafields;
     }
 
+    // Special case: if namespace is 'all', don't filter by namespace
+    if (this.options.namespace && this.options.namespace.toLowerCase() === 'all') {
+      LoggingUtils.info(`Using special namespace 'all' - including all namespaces`, 4);
+
+      // Only filter by key if provided
+      if (this.options.key) {
+        LoggingUtils.info(`Filtering metafields by key: ${this.options.key}`, 4);
+
+        const filteredByKey = metafields.filter(metafield => {
+          // Handle case where key includes namespace (namespace.key format)
+          if (this.options.key.includes('.')) {
+            const [keyNamespace, keyName] = this.options.key.split('.');
+            return metafield.namespace === keyNamespace && metafield.key === keyName;
+          } else {
+            // Key without namespace
+            return metafield.key === this.options.key;
+          }
+        });
+
+        LoggingUtils.info(`Filtered from ${metafields.length} to ${filteredByKey.length} metafields`, 4);
+        return filteredByKey;
+      }
+
+      return metafields; // Return all metafields when namespace is 'all' and no key filter
+    }
+
     let logMessage = '';
 
     if (this.options.namespace) {

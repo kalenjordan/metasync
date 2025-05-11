@@ -169,6 +169,12 @@ class MetaSyncCli {
         }
       }
     } else if (this.options.command === "data") {
+      // Handle comma-separated namespaces for data command as well
+      if (this.options.namespace && this.options.namespace.includes(',')) {
+        this.options.namespaces = this.options.namespace.split(',').map(ns => ns.trim());
+        consola.info(`Parsed ${this.options.namespaces.length} namespaces for data sync: ${this.options.namespaces.join(', ')}`);
+      }
+
       // Validations for data command
       // For metaobject, type/key is required when syncing data
       if (this.options.resource === 'metaobject' && !this.options.key) {
