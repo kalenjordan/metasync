@@ -231,6 +231,7 @@ class MetaSyncCli {
   async _selectAndRunStrategy() {
     // Select the appropriate strategy based on resource and command mode
     let StrategyClass;
+    const LoggingUtils = require('./utils/LoggingUtils');
 
     // Special case for 'all' resource type in definitions mode
     if (this.options.command === "definitions" && this.options.resource.toLowerCase() === 'all') {
@@ -239,10 +240,15 @@ class MetaSyncCli {
 
       let combinedResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
+      // Reset indentation to ensure we start clean
+      LoggingUtils.resetIndent();
+
       // Process each resource type
       for (const resourceType of metafieldResourceTypes) {
-        consola.log('\n' + '═'.repeat(80) + '\n');
-        consola.info(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
+        // Use section header instead of separator line
+        LoggingUtils.section(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
+        // Indent everything under this resource type
+        LoggingUtils.indent();
 
         // Get the strategy for this resource type
         const ResourceStrategyClass = strategyLoader.getDefinitionStrategyForResource(resourceType);
@@ -269,6 +275,9 @@ class MetaSyncCli {
         } else {
           consola.warn(`No sync strategy available for ${resourceType} definitions.`);
         }
+
+        // Unindent after this resource type is done
+        LoggingUtils.unindent();
       }
 
       return { definitionResults: combinedResults, dataResults: null };
