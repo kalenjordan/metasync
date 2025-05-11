@@ -69,6 +69,7 @@ Examples:
   metasync definitions metafields --resource product --namespace all --source shopA --target shopB
   metasync definitions metafields --resource all --namespace all --source shopA --target shopB
   metasync definitions metafields --resource product --namespace custom1,custom2,custom3 --source shopA --target shopB
+  metasync definitions metafields --resource product --namespace custom --delete --live --source shopA --target shopB
   metasync definitions metaobject --type territory --source shopA --target shopB
   metasync data product --handle my-product --source shopA --target shopB --live
 `;
@@ -100,6 +101,7 @@ Examples:
   metasync definitions metafields --resource product --namespace all
   metasync definitions metafields --resource all --namespace all
   metasync definitions metafields --resource product --namespace custom1,custom2,custom3
+  metasync definitions metafields --resource product --namespace custom --delete --live
   metasync definitions metaobject --type territory
 `;
 
@@ -153,6 +155,7 @@ Examples:
     .requiredOption("--resource <type>", "Type of resource (product, company, order, variant, customer, or 'all' for all types)")
     .requiredOption("--namespace <namespace>", "Namespace to sync (required, use 'all' to sync all namespaces, or comma-separated list for multiple namespaces)")
     .option("--key <key>", "Specific definition key to sync (e.g., 'namespace.key' - optional if --namespace is used)")
+    .option("--delete", "Delete mode: removes all metafield definitions from target store (ignores source store)", false)
     .action((cmdOptions) => {
       // Merge command options with main options
       Object.assign(mergedOptions, cmdOptions);

@@ -1,0 +1,13 @@
+[
+  {
+    "name": "test",
+    "domain": "kalen-test-store.myshopify.com",
+    "protected": false,
+    "accessToken": "shpat_example_token_for_dev_shop"
+  },
+  {
+    "name": "demo",
+    "domain": "metasync-demo.myshopify.com",
+    "accessToken": "shpat_example_token_for_test_shop"
+  }
+]

@@ -18,7 +18,16 @@ function getShopConfig(shopName) {
     const shopsConfig = JSON.parse(fs.readFileSync(shopsFile, 'utf8'));
 
     // Find the shop by name
-    return shopsConfig.find(s => s.name === shopName) || null;
+    const shopConfig = shopsConfig.find(s => s.name === shopName) || null;
+
+    if (shopConfig) {
+      // If protected property is not present, default to true (protected)
+      if (shopConfig.protected === undefined) {
+        shopConfig.protected = true;
+      }
+    }
+
+    return shopConfig;
   } catch (error) {
     consola.error('Error reading .shops.json:', error.message);
     return null;

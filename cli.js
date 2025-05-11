@@ -49,6 +49,20 @@ class MetaSyncCli {
       throw new Error(`Target shop "${targetShopName}" not found in .shops.json`);
     }
 
+    // Check and store protection status
+    this.targetShopProtected = targetShopConfig.protected;
+
+    // If trying to make changes and target shop is protected, exit with error
+    if (this.options.notADrill && this.targetShopProtected) {
+      consola.error(`Error: Target shop "${targetShopName}" is protected. No changes can be made.`);
+      consola.info(`To allow changes, add "protected": false to this shop in .shops.json`);
+      process.exit(1);
+    } else if (!this.targetShopProtected) {
+      consola.info(`Target shop "${targetShopName}" is unprotected (protected: false).`);
+    } else {
+      consola.info(`Target shop "${targetShopName}" is protected (default).`);
+    }
+
     // Create Shopify clients
     const sourceClientInstance = new Shopify({
       shopName: sourceShopConfig.domain.replace('.myshopify.com', ''),
@@ -179,6 +193,13 @@ class MetaSyncCli {
     consola.info(`Version: ${currentCommit}`);
     consola.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     consola.info(`Limit: ${this.options.limit}`);
+
+    // Display protection status
+    if (this.targetShopProtected) {
+      consola.info(`Target Shop Protection: Enabled (default)`);
+    } else {
+      consola.info(`Target Shop Protection: Disabled`);
+    }
 
     // Log force-recreate if it's product data sync
     if (this.options.resource === 'product' && this.options.command === "data" && this.options.forceRecreate) {
@@ -330,7 +351,7 @@ class MetaSyncCli {
       outputTitle = `Definition Sync Results for ${this.options.resource.toUpperCase()}:`;
       outputResults = `${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
 
-      // Handle deleted count if available (for force recreate)
+      // Handle deleted count if available (for delete option or force recreate)
       if (definitionResults.deleted) {
         outputResults += `, ${definitionResults.deleted} deleted`;
       }
@@ -346,7 +367,7 @@ class MetaSyncCli {
       if (definitionResults.created !== undefined) {
         outputResults = `Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
 
-        // Handle deleted count if available (for force recreate)
+        // Handle deleted count if available (for delete option or force recreate)
         if (definitionResults.deleted) {
           outputResults += `, ${definitionResults.deleted} deleted`;
         }
