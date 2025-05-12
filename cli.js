@@ -57,7 +57,7 @@ class MetaSyncCli {
       logger.info(`To allow changes, add "protected": false to this shop in .shops.json`);
       process.exit(1);
     } else if (!this.targetShopProtected) {
-      logger.info(`Target shop ${chalk.cyan(targetShopName)} is ${chalk.green('unprotected')} (protected: false).')}`);
+      logger.info(`Target shop ${chalk.cyan(targetShopName)} is ${chalk.green('unprotected')} in .shops.json`);
     } else {
       logger.info(`Target shop "${targetShopName}" is protected (default).`);
     }
@@ -121,12 +121,20 @@ class MetaSyncCli {
   }
 
   _validateResourceType() {
-    const validResourceTypes = ['metaobject', 'product', 'company', 'order', 'variant', 'customer', 'page', 'collection', 'everything', 'all'];
+    const validResourceTypes = ['metaobjects', 'products', 'companies', 'orders', 'variants', 'customers', 'pages', 'collections', 'all'];
 
     // Check if resource type was provided
     if (!this.options.resource) {
-      logger.info("Please specify the resource type to sync.");
-      logger.info(`Available resource types: ${validResourceTypes.join(', ')}`);
+      logger.newline();
+      logger.info(chalk.bold("Available resource types:"));
+      logger.indent();
+      validResourceTypes.forEach(type => {
+        logger.info(`${chalk.cyan(type)}`, 0, 'main');
+      });
+      logger.unindent();
+      logger.newline();
+      logger.info(`Specify the resource type with ${chalk.yellow('--resource <type>')} option`);
+      logger.info(`Example: ${chalk.green('metasync definitions metafields --resource products --namespace custom')}`);
       return false;
     }
 
@@ -140,10 +148,21 @@ class MetaSyncCli {
   }
 
   _validateCommandOptions() {
-    const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
+    const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers'];
 
     // Command-specific validations
     if (this.options.command === "definitions") {
+      // Check if namespace is provided for metafield resources
+      if (metafieldResourceTypes.includes(this.options.resource) && !this.options.namespace) {
+        logger.newline();
+        logger.info(chalk.bold("Missing required namespace option."));
+        logger.info(`Specify the namespace with ${chalk.yellow('--namespace <namespace>')} option`);
+        logger.info(`Example: ${chalk.green('metasync definitions metafields --resource products --namespace custom')}`);
+        logger.info(`You can also use ${chalk.yellow('--namespace all')} to sync all namespaces.`);
+        logger.newline();
+        return false;
+      }
+
       // Handle comma-separated namespaces
       if (this.options.namespace && this.options.namespace.includes(',')) {
         this.options.namespaces = this.options.namespace.split(',').map(ns => ns.trim());
@@ -176,7 +195,7 @@ class MetaSyncCli {
 
       // Validations for data command
       // For metaobject, type/key is required when syncing data
-      if (this.options.resource === 'metaobject' && !this.options.key) {
+      if (this.options.resource === 'metaobjects' && !this.options.key) {
         logger.error(`Error: --type is required when syncing metaobject data.`);
         process.exit(1);
       }
@@ -209,7 +228,7 @@ class MetaSyncCli {
     const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
 
     // Determine if we need to list definitions and exit
-    if (this.options.resource === 'metaobject' && !this.options.key) {
+    if (this.options.resource === 'metaobjects' && !this.options.key) {
       logger.info(`No specific metaobject type specified (--type). Fetching available types...`);
       return true;
     }
@@ -218,7 +237,7 @@ class MetaSyncCli {
   }
 
   async _listDefinitionsAndExit() {
-    if (this.options.resource === 'metaobject') {
+    if (this.options.resource === 'metaobjects') {
       await this._listMetaobjectDefinitions();
     }
   }
@@ -263,7 +282,7 @@ class MetaSyncCli {
     // Special case for 'all' resource type in definitions mode
     if (this.options.command === "definitions" && this.options.resource.toLowerCase() === 'all') {
       logger.info(`Syncing all metafield resource types...`);
-      const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
+      const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers'];
 
       let combinedResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
@@ -356,8 +375,8 @@ class MetaSyncCli {
         outputResults += `, ${definitionResults.deleted} deleted`;
       }
     } else {
-      // Special case for "everything" resource
-      if (this.options.resource === 'everything') {
+      // Special case for "all" resource
+      if (this.options.resource === 'all') {
         outputTitle = `Complete Sync Results:`;
       } else {
         outputTitle = `Data Sync Results for ${this.options.resource.toUpperCase()}:`;

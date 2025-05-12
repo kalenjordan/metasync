@@ -153,8 +153,8 @@ Examples:
   const defineMetafieldsCmd = defineCommand
     .command("metafields")
     .description("Sync metafield definitions")
-    .requiredOption("--resource <type>", "Type of resource (product, company, order, variant, customer, or 'all' for all types)")
-    .requiredOption("--namespace <namespace>", "Namespace to sync (required, use 'all' to sync all namespaces, or comma-separated list for multiple namespaces)")
+    .option("--resource <type>", "Type of resource (product, company, order, variant, customer, or 'all' for all types)")
+    .option("--namespace <namespace>", "Namespace to sync (use 'all' to sync all namespaces, or comma-separated list for multiple namespaces)")
     .option("--key <key>", "Specific definition key to sync (e.g., 'namespace.key' - optional if --namespace is used)")
     .option("--delete", "Delete mode: removes all metafield definitions from target store (ignores source store)", false)
     .action((cmdOptions) => {
@@ -293,9 +293,9 @@ Sync ${singularResource} data
     addCommonOptions(cmd);
   });
 
-  // Add "everything" command to sync all resource types
-  const everythingCmd = dataCommand
-    .command("everything")
+  // Add "all" command to sync all resource types
+  const allCmd = dataCommand
+    .command("all")
     .description("Sync all resource types at once")
     .option("--batch-size <size>", "Number of items to process in each batch", 25)
     .action((cmdOptions) => {
@@ -303,15 +303,15 @@ Sync ${singularResource} data
       Object.assign(mergedOptions, cmdOptions);
       // Set command type to data
       mergedOptions.command = "data";
-      // Set special resource type for everything
-      mergedOptions.resource = "everything";
+      // Set special resource type for all
+      mergedOptions.resource = "all";
     });
 
-  // Add common options to everything command
-  addCommonOptions(everythingCmd);
+  // Add common options to all command
+  addCommonOptions(allCmd);
 
-  const everythingHelpText = `
-Example: metasync data everything --source shopA --target shopB --live
+  const allHelpText = `
+Example: metasync data all --source shopA --target shopB --live
 
 Syncs data for all supported resource types including:
 - Products data
@@ -328,7 +328,7 @@ are synced first using: metasync definitions metaobject
 Options:
   --batch-size <size>     Number of items to process in each batch
 `;
-  customizeHelp(everythingCmd, everythingHelpText);
+  customizeHelp(allCmd, allHelpText);
 
   // For legacy support, show new command structure if someone uses older commands
   program

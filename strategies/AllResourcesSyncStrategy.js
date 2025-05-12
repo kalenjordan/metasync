@@ -1,5 +1,5 @@
 /**
- * Everything Sync Strategy
+ * All Resources Sync Strategy
  *
  * This strategy syncs all supported resource types in one go:
  * - Products
@@ -23,7 +23,7 @@ const CustomerMetafieldSyncStrategy = require('./CustomerMetafieldSyncStrategy')
 const OrderMetafieldSyncStrategy = require('./OrderMetafieldSyncStrategy');
 const VariantMetafieldSyncStrategy = require('./VariantMetafieldSyncStrategy');
 
-class EverythingSyncStrategy {
+class AllResourcesSyncStrategy {
   constructor(sourceClient, targetClient, options) {
     this.sourceClient = sourceClient;
     this.targetClient = targetClient;
@@ -42,7 +42,7 @@ class EverythingSyncStrategy {
 
   async sync() {
     const startTime = Date.now();
-    logger.info(chalk.blue('📦 Starting Everything Data Sync - This will sync all supported resource types data'));
+    logger.info(chalk.blue('📦 Starting All Resources Data Sync - This will sync all supported resource types data'));
 
     // Create result containers for each resource type
     const results = {
@@ -89,7 +89,7 @@ class EverythingSyncStrategy {
 
       const endTime = Date.now();
       const durationSec = ((endTime - startTime) / 1000).toFixed(1);
-      logger.info(chalk.green(`✅ Everything Data Sync Completed in ${durationSec}s`));
+      logger.info(chalk.green(`✅ All Resources Data Sync Completed in ${durationSec}s`));
 
       return {
         definitionResults: results.definitions,
@@ -97,7 +97,7 @@ class EverythingSyncStrategy {
         metafieldResults: results.metafields
       };
     } catch (error) {
-      logger.error(chalk.red('❌ Everything Data Sync Failed:'), error.message);
+      logger.error(chalk.red('❌ All Resources Data Sync Failed:'), error.message);
       logger.debug(error.stack);
 
       return {
@@ -245,4 +245,4 @@ class EverythingSyncStrategy {
   }
 }
 
-module.exports = EverythingSyncStrategy;
+module.exports = AllResourcesSyncStrategy;

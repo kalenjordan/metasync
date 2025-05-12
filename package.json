@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node cli.js",
-    "codehawk": "codehawk .",
+    "codehawk": "codehawk utils",
     "test": "jest",
     "test:watch": "jest --watch"
   },

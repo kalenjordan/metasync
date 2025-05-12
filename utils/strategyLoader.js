@@ -9,25 +9,26 @@ const CustomerMetafieldSyncStrategy = require('../strategies/CustomerMetafieldSy
 const PageSyncStrategy = require('../strategies/PageSyncStrategy');
 const ProductSyncStrategy = require('../strategies/ProductSyncStrategy');
 const CollectionSyncStrategy = require('../strategies/CollectionSyncStrategy');
-const EverythingSyncStrategy = require('../strategies/EverythingSyncStrategy');
+const AllResourcesSyncStrategy = require('../strategies/AllResourcesSyncStrategy');
 
 // Definition strategies mapping
 const definitionStrategies = {
-  product: ProductMetafieldSyncStrategy,
-  company: CompanyMetafieldSyncStrategy,
-  order: OrderMetafieldSyncStrategy,
-  variant: VariantMetafieldSyncStrategy,
-  customer: CustomerMetafieldSyncStrategy,
-  metaobject: MetaobjectSyncStrategy
+  products: ProductMetafieldSyncStrategy,
+  companies: CompanyMetafieldSyncStrategy,
+  orders: OrderMetafieldSyncStrategy,
+  variants: VariantMetafieldSyncStrategy,
+  customers: CustomerMetafieldSyncStrategy,
+  metaobjects: MetaobjectSyncStrategy,
+
 };
 
 // Data strategies mapping
 const dataStrategies = {
-  product: ProductSyncStrategy,
-  page: PageSyncStrategy,
-  collection: CollectionSyncStrategy,
-  metaobject: MetaobjectSyncStrategy,
-  everything: EverythingSyncStrategy
+  products: ProductSyncStrategy,
+  pages: PageSyncStrategy,
+  collections: CollectionSyncStrategy,
+  metaobjects: MetaobjectSyncStrategy,
+  all: AllResourcesSyncStrategy,
   // Add other data strategies as they're implemented
 };
 
