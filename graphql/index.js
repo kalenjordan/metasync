@@ -7,18 +7,18 @@ const logger = require("../utils/logger");
 
 module.exports = {
   // Product queries
-  GetProducts: require('./GetProducts.graphql'),
-  GetProductByHandle: require('./GetProductByHandle.graphql'),
+  GetProducts: require('./GetProducts.graphql.js'),
+  GetProductByHandle: require('./GetProductByHandle.graphql.js'),
 
   // Collection queries
-  GetCollections: require('./GetCollections.graphql'),
-  GetCollectionByHandle: require('./GetCollectionByHandle.graphql'),
-  GetCollectionById: require('./GetCollectionById.graphql'),
-  CreateCollection: require('./CreateCollection.graphql'),
-  UpdateCollection: require('./UpdateCollection.graphql'),
+  GetCollections: require('./GetCollections.graphql.js'),
+  GetCollectionByHandle: require('./GetCollectionByHandle.graphql.js'),
+  GetCollectionById: require('./GetCollectionById.graphql.js'),
+  CreateCollection: require('./CreateCollection.graphql.js'),
+  UpdateCollection: require('./UpdateCollection.graphql.js'),
 
   // Page queries
-  GetPages: require('./GetPages.graphql'),
-  CreatePage: require('./CreatePage.graphql'),
-  UpdatePage: require('./UpdatePage.graphql'),
+  GetPages: require('./GetPages.graphql.js'),
+  CreatePage: require('./CreatePage.graphql.js'),
+  UpdatePage: require('./UpdatePage.graphql.js'),
 };

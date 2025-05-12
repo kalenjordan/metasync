@@ -9,6 +9,14 @@ module.exports = `#graphql
         id
         title
         handle
+        ruleSet {
+          rules {
+            column
+            condition
+            relation
+          }
+          appliedDisjunctively
+        }
       }
       userErrors {
         field

@@ -1,11 +1,13 @@
 const logger = require("../utils/logger");
 const { GetCollections, GetCollectionByHandle, CreateCollection, UpdateCollection } = require('../graphql');
+const SyncResultTracker = require('../utils/SyncResultTracker');
 
 class CollectionSyncStrategy {
   constructor(sourceClient, targetClient, options) {
     this.sourceClient = sourceClient;
     this.targetClient = targetClient;
     this.options = options;
+    this.resultTracker = new SyncResultTracker();
   }
 
   // --- Main Sync Method ---
@@ -18,17 +20,16 @@ class CollectionSyncStrategy {
     logger.info(`Found ${targetCollections.length} collection(s) in target shop`);
 
     const targetCollectionMap = this._buildTargetCollectionMap(targetCollections);
-    const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
     // Process collections
     logger.indent();
-    await this._processCollections(sourceCollections, targetCollectionMap, results);
+    await this._processCollections(sourceCollections, targetCollectionMap);
     logger.unindent();
 
     logger.success(`Finished syncing collections.`);
     logger.newline();
 
-    return { definitionResults: results, dataResults: null };
+    return this.resultTracker.formatForStrategyResult();
   }
 
   // --- Collection Fetch Methods ---
@@ -114,6 +115,12 @@ class CollectionSyncStrategy {
   }
 
   async updateCollection(client, collection, existingCollection) {
+    // Check if source has a ruleSet but target doesn't
+    if (collection.ruleSet && !existingCollection.ruleSet) {
+      logger.error(`Cannot update collection "${collection.title}": Source has a ruleSet but target doesn't. Smart collections can't be converted from manual collections.`);
+      return null;
+    }
+
     const input = {
       ...this._prepareCollectionInput(collection),
       id: existingCollection.id
@@ -169,6 +176,11 @@ class CollectionSyncStrategy {
       };
     }
 
+    // Add ruleSet if available (for smart collections)
+    if (collection.ruleSet) {
+      input.ruleSet = collection.ruleSet;
+    }
+
     return input;
   }
 
@@ -210,7 +222,7 @@ class CollectionSyncStrategy {
     return targetCollectionMap;
   }
 
-  async _processCollections(sourceCollections, targetCollectionMap, results) {
+  async _processCollections(sourceCollections, targetCollectionMap) {
     let processedCount = 0;
     const limit = this.options.limit || Number.MAX_SAFE_INTEGER;
 
@@ -220,16 +232,16 @@ class CollectionSyncStrategy {
         break;
       }
 
-      await this._processCollection(collection, targetCollectionMap, results);
+      await this._processCollection(collection, targetCollectionMap);
       processedCount++;
     }
   }
 
-  async _processCollection(collection, targetCollectionMap, results) {
+  async _processCollection(collection, targetCollectionMap) {
     // Skip collections without a handle
     if (!collection.handle) {
       logger.warn(`Skipping collection with no handle: ${collection.title || 'Unnamed collection'}`);
-      results.skipped++;
+      this.resultTracker.trackSkipped();
       return;
     }
 
@@ -237,22 +249,30 @@ class CollectionSyncStrategy {
     const existingCollection = targetCollectionMap[normalizedHandle];
 
     if (existingCollection) {
-      await this._updateExistingCollection(collection, existingCollection, results);
+      await this._updateExistingCollection(collection, existingCollection);
     } else {
-      await this._createNewCollection(collection, results);
+      await this._createNewCollection(collection);
     }
   }
 
-  async _updateExistingCollection(collection, existingCollection, results) {
+  async _updateExistingCollection(collection, existingCollection) {
     logger.info(`Updating collection: ${collection.title}`);
     const updated = await this.updateCollection(this.targetClient, collection, existingCollection);
-    updated ? results.updated++ : results.failed++;
+    if (updated) {
+      this.resultTracker.trackUpdate();
+    } else {
+      this.resultTracker.trackFailure();
+    }
   }
 
-  async _createNewCollection(collection, results) {
+  async _createNewCollection(collection) {
     logger.info(`Creating collection: ${collection.title}`);
     const created = await this.createCollection(this.targetClient, collection);
-    created ? results.created++ : results.failed++;
+    if (created) {
+      this.resultTracker.trackCreation();
+    } else {
+      this.resultTracker.trackFailure();
+    }
   }
 
   _logOperationErrors(operation, collectionTitle, errors) {

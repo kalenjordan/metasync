@@ -28,6 +28,14 @@ module.exports = `#graphql
           templateSuffix
           sortOrder
           updatedAt
+          ruleSet {
+            rules {
+              column
+              condition
+              relation
+            }
+            appliedDisjunctively
+          }
         }
       }
     }
