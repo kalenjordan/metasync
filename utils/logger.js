@@ -94,6 +94,25 @@ function unindent(levels = 1) {
   return indentLevel;
 }
 
+function debug(message) {
+  log(message);
+}
+
+/**
+ * Increase indentation level
+ * @param {number} levels - Number of levels to indent (default: 1)
+ */
+function startSection(message, levels = 1) {
+  info(message);
+  return indent(levels);
+}
+
+function endSection(message, levels = 1) {
+  info(message);
+  unindent(levels);
+}
+
+
 /**
  * Reset indentation level to zero
  */
@@ -242,16 +261,6 @@ function section(title) {
 }
 
 /**
- * Log a debug message with proper indentation
- * Only visible when debug mode is enabled
- * @param {string} message - Debug message
- */
-function debug(message) {
-  const indent = getIndent();
-  log(`${indent}${chalk.dim.blue('[DEBUG]')} ${message}`);
-}
-
-/**
  * Log a blank line with no symbols or prefixes
  */
 function newline() {
@@ -272,6 +281,8 @@ module.exports = {
   getLogFilePath,
   indent,
   unindent,
+  startSection,
+  endSection,
   resetIndent,
   getIndent,
   logProductAction,

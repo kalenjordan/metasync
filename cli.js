@@ -148,7 +148,7 @@ class MetaSyncCli {
   }
 
   _validateCommandOptions() {
-    const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers'];
+    const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers', 'collections'];
 
     // Command-specific validations
     if (this.options.command === "definitions") {
@@ -225,7 +225,7 @@ class MetaSyncCli {
   }
 
   _shouldListDefinitionsAndExit() {
-    const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer'];
+    const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer', 'collection'];
 
     // Determine if we need to list definitions and exit
     if (this.options.resource === 'metaobjects' && !this.options.key) {
@@ -282,7 +282,7 @@ class MetaSyncCli {
     // Special case for 'all' resource type in definitions mode
     if (this.options.command === "definitions" && this.options.resource.toLowerCase() === 'all') {
       logger.info(`Syncing all metafield resource types...`);
-      const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers'];
+      const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers', 'collections'];
 
       let combinedResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
 

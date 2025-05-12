@@ -6,6 +6,7 @@ const CompanyMetafieldSyncStrategy = require('../strategies/CompanyMetafieldSync
 const OrderMetafieldSyncStrategy = require('../strategies/OrderMetafieldSyncStrategy');
 const VariantMetafieldSyncStrategy = require('../strategies/VariantMetafieldSyncStrategy');
 const CustomerMetafieldSyncStrategy = require('../strategies/CustomerMetafieldSyncStrategy');
+const CollectionMetafieldSyncStrategy = require('../strategies/CollectionMetafieldSyncStrategy');
 const PageSyncStrategy = require('../strategies/PageSyncStrategy');
 const ProductSyncStrategy = require('../strategies/ProductSyncStrategy');
 const CollectionSyncStrategy = require('../strategies/CollectionSyncStrategy');
@@ -18,6 +19,7 @@ const definitionStrategies = {
   orders: OrderMetafieldSyncStrategy,
   variants: VariantMetafieldSyncStrategy,
   customers: CustomerMetafieldSyncStrategy,
+  collections: CollectionMetafieldSyncStrategy,
   metaobjects: MetaobjectSyncStrategy,
 
 };

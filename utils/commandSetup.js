@@ -166,7 +166,7 @@ Examples:
     });
 
   const defineMetaobjectsCmd = defineCommand
-    .command("metaobject")
+    .command("metaobjects")
     .description("Sync metaobject definitions")
     .option("--type <type>", "Specific metaobject definition type to sync (e.g., 'my_app.my_def')")
     .action((cmdOptions) => {
@@ -174,7 +174,7 @@ Examples:
       Object.assign(mergedOptions, cmdOptions);
       // Set command type
       mergedOptions.command = "definitions";
-      mergedOptions.resource = "metaobject";
+      mergedOptions.resource = "metaobjects";
       // Map type to key for backwards compatibility
       if (cmdOptions.type) {
         mergedOptions.key = cmdOptions.type;
