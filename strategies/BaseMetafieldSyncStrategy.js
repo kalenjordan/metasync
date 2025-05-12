@@ -29,8 +29,6 @@ class BaseMetafieldSyncStrategy {
   // --- Metafield Definition Methods ---
 
   async fetchMetafieldDefinitions(client, namespace = null, key = null) {
-    const logger = require('../utils/logger');
-
     let definitionKey = null;
     if (key) {
       const parts = key.split(".");
@@ -70,8 +68,6 @@ class BaseMetafieldSyncStrategy {
   }
 
   async createMetafieldDefinition(client, definition) {
-    const logger = require('../utils/logger');
-
     const input = {
       ownerType: this.ownerType,
       namespace: definition.namespace,
@@ -197,8 +193,6 @@ class BaseMetafieldSyncStrategy {
   }
 
   async updateMetafieldDefinition(client, definition, existingDefinition) {
-    const logger = require('../utils/logger');
-
     const input = {
       name: definition.name,
       description: definition.description || "",
@@ -324,8 +318,6 @@ class BaseMetafieldSyncStrategy {
   }
 
   async deleteMetafieldDefinition(client, definition) {
-    const logger = require('../utils/logger');
-
     const definitionId = definition.id;
     if (!definitionId) {
       logger.error(`Cannot delete ${this.resourceName} definition ${definition.namespace}.${definition.key}: missing ID`);
@@ -357,8 +349,6 @@ class BaseMetafieldSyncStrategy {
   }
 
   async getMetaobjectDefinitionTypeById(client, definitionId) {
-    const logger = require('../utils/logger');
-
     try {
       const response = await client.graphql(GetMetaobjectDefinitionType, { id: definitionId }, "GetMetaobjectDefinitionType");
       if (response.metaobjectDefinition) {
@@ -374,8 +364,6 @@ class BaseMetafieldSyncStrategy {
   }
 
   async getMetaobjectDefinitionIdByType(client, definitionType) {
-    const logger = require('../utils/logger');
-
     try {
       const response = await client.graphql(GetMetaobjectDefinitionId, { type: definitionType }, "GetMetaobjectDefinitionId");
       if (response.metaobjectDefinitionByType) {
@@ -393,17 +381,15 @@ class BaseMetafieldSyncStrategy {
   // --- Sync Orchestration Methods ---
 
   async syncDefinitionsOnly() {
-    const logger = require('../utils/logger');
-
     // Handle deletion mode separately
     if (this.options.delete) {
-      this.startSection(`Delete mode: Fetching ${this.resourceName} definitions from target...`);
+      logger.startSection(`Delete mode: Fetching ${this.resourceName} definitions from target...`);
 
       const targetDefinitions = await this.fetchMetafieldDefinitions(this.targetClient, this.options.namespace, this.options.key);
 
       if (targetDefinitions.length === 0) {
         logger.info(`No ${this.resourceName} definitions found in target to delete.`);
-        this.endSection();
+        logger.endSection();
         return { results: { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 }, definitionKeys: [] };
       }
 
@@ -419,7 +405,7 @@ class BaseMetafieldSyncStrategy {
       const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
       let processedCount = 0;
 
-      this.startSection("Deleting definitions");
+      logger.startSection("Deleting definitions");
 
       // Delete all target definitions
       for (const definition of targetDefinitions) {
@@ -447,13 +433,13 @@ class BaseMetafieldSyncStrategy {
         processedCount++;
       }
 
-      this.endSection(`Deleted ${results.deleted} definition(s) from target.`);
+      logger.endSection(`Deleted ${results.deleted} definition(s) from target.`);
 
       return { results, definitionKeys: [] };
     }
 
     // Regular sync mode below (non-delete mode)
-    this.startSection(`Fetching source ${this.resourceName} definitions`);
+    logger.startSection(`Fetching source ${this.resourceName} definitions`);
     const sourceDefinitions = await this.fetchMetafieldDefinitions(this.sourceClient, this.options.namespace, this.options.key);
     if (sourceDefinitions.length === 0) {
       logger.warn(
@@ -461,7 +447,7 @@ class BaseMetafieldSyncStrategy {
           ? `No ${this.resourceName} definitions found in source for key: ${this.options.key}`
           : `No ${this.resourceName} definitions found in source for namespace: ${this.options.namespace}`
       );
-      this.endSection();
+      logger.endSection();
       return { results: { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 }, definitionKeys: [] };
     }
     logger.info(
@@ -485,22 +471,22 @@ class BaseMetafieldSyncStrategy {
       }
     });
     logger.unindent();
-    this.endSection();
+    logger.endSection();
 
-    this.startSection(`Fetching target ${this.resourceName} definitions`);
+    logger.startSection(`Fetching target ${this.resourceName} definitions`);
     const targetDefinitions = await this.fetchMetafieldDefinitions(this.targetClient, this.options.namespace);
     logger.info(`Found ${targetDefinitions.length} definition(s) in target (for namespace: ${this.options.namespace || "all"})`);
     const targetDefinitionMap = targetDefinitions.reduce((map, def) => {
       map[`${def.namespace}.${def.key}`] = def;
       return map;
     }, {});
-    this.endSection();
+    logger.endSection();
 
     const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
     const definitionKeys = [];
     let processedCount = 0;
 
-    this.startSection(`Processing ${this.resourceName} definitions`);
+    logger.startSection(`Processing ${this.resourceName} definitions`);
 
     for (const definition of sourceDefinitions) {
       if (processedCount >= this.options.limit) {
@@ -600,15 +586,12 @@ class BaseMetafieldSyncStrategy {
       processedCount++;
     }
 
-    this.endSection(`Processed ${processedCount} ${this.resourceName} definition(s)`);
+    logger.endSection(`Processed ${processedCount} ${this.resourceName} definition(s)`);
 
     return { results, definitionKeys };
   }
 
   async listAvailableDefinitions() {
-    const logger = require('../utils/logger');
-    const chalk = require('chalk');
-
     logger.info(`Fetching all available ${this.resourceName} definitions...`);
     const definitions = await this.fetchMetafieldDefinitions(this.sourceClient);
     if (definitions.length === 0) {
@@ -658,19 +641,15 @@ class BaseMetafieldSyncStrategy {
    * @param {string} namespace - Namespace name
    */
   async logNamespaceHeading(namespace) {
-    const logger = require('../utils/logger');
-
     // Get current indent and log with purple color
     const indent = logger.getIndent();
-    console.log(`${indent}Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
+    logger.info(`${indent}Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
 
     // Increase indentation for everything under this namespace
     logger.indent();
   }
 
   async sync() {
-    const logger = require('../utils/logger');
-
     // Handle listing if namespace is missing (relevant for metafield types)
     if (!this.options.namespace) {
       logger.error(`Error: --namespace is required for ${this.resourceName} definitions sync.`);
@@ -686,11 +665,11 @@ class BaseMetafieldSyncStrategy {
     if (this.options.delete) {
       // Handle the special "all" namespace case in delete mode
       if (this.options.namespace.toLowerCase() === 'all') {
-        this.startSection(`Delete mode: Deleting all ${this.resourceName} namespaces`);
+        logger.startSection(`Delete mode: Deleting all ${this.resourceName} namespaces`);
         const definitions = await this.fetchMetafieldDefinitions(this.targetClient);
         if (definitions.length === 0) {
           logger.warn(`No ${this.resourceName} definitions found in target shop.`);
-          this.endSection();
+          logger.endSection();
           return { definitionResults, dataResults };
         }
 
@@ -701,7 +680,7 @@ class BaseMetafieldSyncStrategy {
         // Delete each namespace separately
         for (const namespace of namespaces) {
           // Create a subsection for each namespace with purple heading
-          this.startSection(`Deleting namespace: ${chalk.magenta.bold(namespace)}`);
+          (`Deleting namespace: ${chalk.magenta.bold(namespace)}`);
 
           // Temporarily set the namespace option
           const originalNamespace = this.options.namespace;
@@ -717,20 +696,20 @@ class BaseMetafieldSyncStrategy {
           definitionResults.deleted += defSync.results.deleted;
           definitionResults.failed += defSync.results.failed;
 
-          this.endSection(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}`);
+          logger.endSection(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}`);
         }
 
-        this.endSection(`Deleted definitions from ${namespaces.length} namespaces`);
+        logger.endSection(`Deleted definitions from ${namespaces.length} namespaces`);
         return { definitionResults, dataResults };
       }
       // Handle the comma-separated namespaces case in delete mode
       else if (this.options.namespaces && Array.isArray(this.options.namespaces)) {
-        this.startSection(`Delete mode: Deleting multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}`);
+        logger.startSection(`Delete mode: Deleting multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}`);
 
         // Delete each namespace separately
         for (const namespace of this.options.namespaces) {
           // Create a subsection for each namespace with purple heading
-          this.startSection(`Deleting namespace: ${chalk.magenta.bold(namespace)}`);
+          logger.startSection(`Deleting namespace: ${chalk.magenta.bold(namespace)}`);
 
           // Temporarily set the namespace option
           const originalNamespace = this.options.namespace;
@@ -746,29 +725,29 @@ class BaseMetafieldSyncStrategy {
           definitionResults.deleted += defSync.results.deleted;
           definitionResults.failed += defSync.results.failed;
 
-          this.endSection(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}`);
+          logger.endSection(`Finished deleting ${this.resourceName} definitions for namespace: ${namespace}`);
         }
 
-        this.endSection(`Deleted definitions from ${this.options.namespaces.length} namespaces`);
+        logger.endSection(`Deleted definitions from ${this.options.namespaces.length} namespaces`);
         return { definitionResults, dataResults };
       }
 
       // Single namespace delete mode
-      this.startSection(`Delete mode: Deleting ${this.resourceName} definitions for namespace: ${this.options.namespace}`);
+      logger.startSection(`Delete mode: Deleting ${this.resourceName} definitions for namespace: ${this.options.namespace}`);
       const defSync = await this.syncDefinitionsOnly();
       definitionResults = defSync.results;
-      this.endSection(`Finished deleting ${this.resourceName} definitions`);
+      logger.endSection(`Finished deleting ${this.resourceName} definitions`);
       return { definitionResults, dataResults };
     }
 
     // Regular sync mode (non-delete) below
     // Handle the special "all" namespace case
     if (this.options.namespace.toLowerCase() === 'all') {
-      this.startSection(`Syncing all ${this.resourceName} namespaces`);
+      logger.startSection(`Syncing all ${this.resourceName} namespaces`);
       const definitions = await this.fetchMetafieldDefinitions(this.sourceClient);
       if (definitions.length === 0) {
         logger.warn(`No ${this.resourceName} definitions found in source shop.`);
-        this.endSection();
+        logger.endSection();
         return { definitionResults, dataResults };
       }
 
@@ -779,7 +758,7 @@ class BaseMetafieldSyncStrategy {
       // Sync each namespace separately
       for (const namespace of namespaces) {
         // Create a subsection for each namespace with purple heading
-        this.startSection(`Syncing namespace: ${chalk.magenta.bold(namespace)}`);
+        logger.startSection(`Syncing namespace: ${chalk.magenta.bold(namespace)}`);
 
         // Temporarily set the namespace option
         const originalNamespace = this.options.namespace;
@@ -798,20 +777,20 @@ class BaseMetafieldSyncStrategy {
         definitionResults.failed += defSync.results.failed;
         definitionResults.deleted += defSync.results.deleted;
 
-        this.endSection(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}`);
+        logger.endSection(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}`);
       }
 
-      this.endSection(`Synced definitions from ${namespaces.length} namespaces`);
+      logger.endSection(`Synced definitions from ${namespaces.length} namespaces`);
       return { definitionResults, dataResults };
     }
     // Handle the comma-separated namespaces case
     else if (this.options.namespaces && Array.isArray(this.options.namespaces)) {
-      this.startSection(`Syncing multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}`);
+      logger.startSection(`Syncing multiple ${this.resourceName} namespaces: ${this.options.namespaces.join(', ')}`);
 
       // Sync each namespace separately
       for (const namespace of this.options.namespaces) {
         // Create a subsection for each namespace with purple heading
-        this.startSection(`Syncing namespace: ${chalk.magenta.bold(namespace)}`);
+        logger.startSection(`Syncing namespace: ${chalk.magenta.bold(namespace)}`);
 
         // Temporarily set the namespace option
         const originalNamespace = this.options.namespace;
@@ -830,19 +809,19 @@ class BaseMetafieldSyncStrategy {
         definitionResults.failed += defSync.results.failed;
         definitionResults.deleted += defSync.results.deleted;
 
-        this.endSection(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}`);
+        logger.endSection(`Finished syncing ${this.resourceName} definitions for namespace: ${namespace}`);
       }
 
-      this.endSection(`Synced definitions from ${this.options.namespaces.length} namespaces`);
+      logger.endSection(`Synced definitions from ${this.options.namespaces.length} namespaces`);
       return { definitionResults, dataResults };
     }
 
     // Only definition sync is supported for metafields
     if (!this.options.dataOnly) {
-      this.startSection(`Syncing ${this.resourceName} definitions for namespace: ${this.options.namespace}`);
+      logger.startSection(`Syncing ${this.resourceName} definitions for namespace: ${this.options.namespace}`);
       const defSync = await this.syncDefinitionsOnly();
       definitionResults = defSync.results;
-      this.endSection(`Finished syncing ${this.resourceName} definitions`);
+      logger.endSection(`Finished syncing ${this.resourceName} definitions`);
     } else {
       // This case should ideally be caught by run.js validation
       logger.error(`Data sync (--data-only) is not supported for ${this.resourceName}s.`);
@@ -906,23 +885,6 @@ class BaseMetafieldSyncStrategy {
       'number_integer'
     ];
     return supportedTypes.includes(metafieldType);
-  }
-
-  // Add these new section-based logging utility methods
-  startSection(title) {
-    const logger = require('../utils/logger');
-    logger.newline();
-    logger.info(chalk.cyan.bold(`${title}`));
-    logger.indent();
-  }
-
-  endSection(message = null) {
-    const logger = require('../utils/logger');
-    if (message) {
-      logger.success(message);
-    }
-    logger.unindent();
-    logger.newline();
   }
 }
 

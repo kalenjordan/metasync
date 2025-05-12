@@ -536,23 +536,36 @@ class MetaobjectSyncStrategy {
       return { definitionResults: null, dataResults: null }; // Indicate no sync occurred
     }
 
+    // Determine what to sync based on command/strategy type
+    const isSyncingDefinitions = this.options.command === 'definitions';
+    const isSyncingData = this.options.command === 'data';
+
     let definitionResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let dataResults = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let definitionTypes = [];
 
-    // Sync definitions if needed
-    if (!this.options.dataOnly) {
+    // Sync definitions if requested by command
+    if (isSyncingDefinitions) {
       const defSync = await this.syncDefinitionsOnly();
       definitionResults = defSync.results;
       definitionTypes = defSync.definitionTypes;
-    } else {
+    } else if (isSyncingData) {
       // If only syncing data, use the provided key as the type
       definitionTypes = [this.options.key];
-    }
 
-    // Sync data if needed
-    if (!this.options.definitionsOnly && definitionTypes.length > 0) {
-      dataResults = await this.syncDataOnly(definitionTypes);
+      // Sync data
+      if (definitionTypes.length > 0) {
+        dataResults = await this.syncDataOnly(definitionTypes);
+      }
+    } else {
+      // Default: sync both definitions and data
+      const defSync = await this.syncDefinitionsOnly();
+      definitionResults = defSync.results;
+      definitionTypes = defSync.definitionTypes;
+
+      if (definitionTypes.length > 0) {
+        dataResults = await this.syncDataOnly(definitionTypes);
+      }
     }
 
     return { definitionResults, dataResults };
