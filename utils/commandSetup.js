@@ -277,14 +277,15 @@ Sync ${singularResource} data
     cmd.action((cmdOptions) => {
       // Merge command options with main options
       Object.assign(mergedOptions, cmdOptions);
-      // Map plural resource back to singular for backwards compatibility
-      mergedOptions.resource = singularResource;
+
+      // Set resource to plural form
+      mergedOptions.resource = pluralResource;
 
       // Set command type
       mergedOptions.command = "data";
 
       // Map type to key for metaobjects (for backwards compatibility)
-      if (singularResource === "metaobject" && cmdOptions.type) {
+      if (pluralResource === "metaobjects" && cmdOptions.type) {
         mergedOptions.key = cmdOptions.type;
       }
     });

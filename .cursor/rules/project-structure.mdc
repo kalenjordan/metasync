@@ -56,7 +56,7 @@ The project uses specialized utility classes to handle specific aspects of Shopi
     - **`MetafieldFilterUtils.js`**: [utils/MetafieldFilterUtils.js](mdc:utils/MetafieldFilterUtils.js) filters metafields based on namespace and key constraints.
     - **`SyncResultTracker.js`**: [utils/SyncResultTracker.js](mdc:utils/SyncResultTracker.js) tracks operation results and formats them for display.
     - **`ShopifyIDUtils.js`**: [utils/ShopifyIDUtils.js](mdc:utils/ShopifyIDUtils.js) provides utility methods for Shopify ID validation and conversion.
-    - **`LoggingUtils.js`**: [utils/LoggingUtils.js](mdc:utils/LoggingUtils.js) provides consistent log formatting with indentation, symbols, and color coding.
+    - **`logger.js`**: [logger.js](mdc:utils/logger.js) provides consistent log formatting with indentation, symbols, and color coding.
     - **`ErrorHandler.js`**: [utils/ErrorHandler.js](mdc:utils/ErrorHandler.js) provides standardized error handling.
     - **`commandSetup.js`**: [utils/commandSetup.js](mdc:utils/commandSetup.js) handles command-line interface setup.
 

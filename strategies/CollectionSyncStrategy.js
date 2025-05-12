@@ -12,11 +12,14 @@ class CollectionSyncStrategy {
 
   // --- Collection Fetch Methods ---
 
-  async fetchCollections(client, limit = 250) {
+  async fetchCollections(client, limit = null) {
     try {
       let collections = [];
       let hasNextPage = true;
       let cursor = null;
+      let totalFetched = 0;
+
+      logger.info(`Fetching collections, please wait...`);
 
       while (hasNextPage) {
         const response = await client.graphql(
@@ -27,11 +30,16 @@ class CollectionSyncStrategy {
 
         const edges = response.collections.edges;
         collections = collections.concat(edges.map(edge => edge.node));
+        totalFetched += edges.length;
+
+        if (this.debug) {
+          logger.debug(`Fetched ${edges.length} collections, total: ${totalFetched}`);
+        }
 
         hasNextPage = response.collections.pageInfo.hasNextPage;
         cursor = response.collections.pageInfo.endCursor;
 
-        // Break if we've reached the limit
+        // Break if we've reached the provided limit (for source shop)
         if (limit && collections.length >= limit) {
           collections = collections.slice(0, limit);
           break;
@@ -70,9 +78,12 @@ class CollectionSyncStrategy {
 
   async getCollectionByHandle(client, handle) {
     try {
+      // Normalize handle for consistency with GraphQL query
+      const normalizedHandle = handle.trim().toLowerCase();
+
       const response = await client.graphql(
         GetCollectionByHandle,
-        { handle },
+        { handle: normalizedHandle },
         'GetCollectionByHandle'
       );
       return response.collectionByHandle;
@@ -89,6 +100,19 @@ class CollectionSyncStrategy {
 
     if (this.options.notADrill) {
       try {
+        // First, check if the collection already exists by handle
+        // If the handle is already normalized, we still need to pass it through getCollectionByHandle
+        // which may do its own normalization
+        const existingCollection = await this.getCollectionByHandle(client, collection.handle);
+
+        if (existingCollection) {
+          // Log with consistent message format
+          logger.info(`Updating collection: ${collection.title}`);
+          // If it exists, update it instead
+          return this.updateCollection(client, collection, existingCollection);
+        }
+
+        // Otherwise, create the collection
         const result = await client.graphql(
           CreateCollection,
           { input },
@@ -195,19 +219,40 @@ class CollectionSyncStrategy {
       logger.info(`Filtered to ${sourceCollections.length} manual/custom collection(s)`);
     }
 
-    const targetCollections = await this.fetchCollections(this.targetClient);
+    // Fetch ALL collections from target - no limit
+    const targetCollections = await this.fetchCollections(this.targetClient, null);
     logger.info(`Found ${targetCollections.length} collection(s) in target shop`);
 
+    // Debug info for target collections
+    if (this.debug) {
+      logger.debug(`First 5 target collections:`);
+      targetCollections.slice(0, 5).forEach(collection => {
+        logger.debug(`  - "${collection.title}" with handle: "${collection.handle}"`);
+      });
+    }
+
     // Create map of target collections by handle for easy lookup
-    const targetCollectionMap = targetCollections.reduce((map, collection) => {
+    // Normalize handles to lowercase and trim for case-insensitive comparison
+    const targetCollectionMap = {};
+    for (const collection of targetCollections) {
       if (collection.handle) {
-        map[collection.handle] = collection;
+        const normalizedHandle = collection.handle.trim().toLowerCase();
+        targetCollectionMap[normalizedHandle] = collection;
       }
-      return map;
-    }, {});
+    }
+
+    if (this.debug) {
+      logger.debug(`Target collection map has ${Object.keys(targetCollectionMap).length} entries`);
+      // Show a few example keys
+      const mapKeys = Object.keys(targetCollectionMap).slice(0, 5);
+      logger.debug(`Sample map keys: ${mapKeys.join(', ')}`);
+    }
 
     const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let processedCount = 0;
+
+    // Indent for collection processing
+    logger.indent();
 
     // Process each source collection
     for (const collection of sourceCollections) {
@@ -216,10 +261,32 @@ class CollectionSyncStrategy {
         break;
       }
 
-      if (collection.handle && targetCollectionMap[collection.handle]) {
+      // Skip collections without a handle
+      if (!collection.handle) {
+        logger.warn(`Skipping collection with no handle: ${collection.title || 'Unnamed collection'}`);
+        results.skipped++;
+        continue;
+      }
+
+      // Debug source collection info
+      if (this.debug) {
+        logger.debug(`Processing source collection: "${collection.title}" with handle: "${collection.handle}"`);
+      }
+
+      // Normalize handle for lookup consistently with how we normalized the map keys
+      const normalizedHandle = collection.handle.trim().toLowerCase();
+
+      // Check if the collection exists in target shop
+      const existingCollection = targetCollectionMap[normalizedHandle];
+
+      if (this.debug) {
+        logger.debug(`Looking for handle "${normalizedHandle}" - ${existingCollection ? 'Found' : 'Not found'}`);
+      }
+
+      if (existingCollection) {
         // Update existing collection
         logger.info(`Updating collection: ${collection.title}`);
-        const updated = await this.updateCollection(this.targetClient, collection, targetCollectionMap[collection.handle]);
+        const updated = await this.updateCollection(this.targetClient, collection, existingCollection);
         updated ? results.updated++ : results.failed++;
       } else {
         // Create new collection
@@ -231,7 +298,12 @@ class CollectionSyncStrategy {
       processedCount++;
     }
 
+    // Unindent after processing all collections
+    logger.unindent();
+
     logger.success(`Finished syncing collections.`);
+    logger.newline();
+
     return { definitionResults: results, dataResults: null };
   }
 }

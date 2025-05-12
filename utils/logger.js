@@ -194,16 +194,19 @@ function warn(message) {
 function info(message) {
   const indent = getIndent();
 
+  // Top level logs (indentLevel 0) have no symbol
+  if (indentLevel === 0) {
+    log(`${message}`);
+    return;
+  }
+
   // Determine symbol based on indentation level:
   // Level 1: • (bullet)
-  // Level 2: - (dash)
-  // Level 3+: further dashes
+  // Level 2+: - (dash)
   let symbol = '-'; // Default dash
 
   if (indentLevel === 1) {
     symbol = '•'; // Main operation - bullet point
-  } else if (indentLevel >= 3) {
-    symbol = '-'; // Sub-operation - dash
   } else {
     symbol = '-'; // Detail - dash
   }
