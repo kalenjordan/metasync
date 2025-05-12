@@ -79,6 +79,32 @@ class BaseMetafieldSyncStrategy {
       validations: definition.validations || [],
       pin: definition.pinnedPosition != null && definition.pinnedPosition >= 0
     };
+
+    // Only add capabilities that are supported for this metafield type
+    const capabilities = {};
+
+    // Check if smart collection capability is applicable
+    if (this.shouldEnableSmartCollectionCapability(definition.type.name)) {
+      capabilities.smartCollectionCondition = { enabled: true };
+    }
+
+    // Check if admin filterable capability is applicable
+    if (this.shouldEnableAdminFilterableCapability(definition.type.name)) {
+      capabilities.adminFilterable = { enabled: true };
+    }
+
+    // Check if unique values capability is applicable
+    // Note: Enabling uniqueValues can be risky as it won't work if there are existing metafields
+    // So we're only enabling it if specifically requested via options
+    if (this.options.enableUniqueValues && this.shouldEnableUniqueValuesCapability(definition.type.name)) {
+      capabilities.uniqueValues = { enabled: true };
+    }
+
+    // Only add capabilities if we have any to add
+    if (Object.keys(capabilities).length > 0) {
+      input.capabilities = capabilities;
+    }
+
     const mutation = `#graphql
           mutation createMetafieldDefinition($definition: MetafieldDefinitionInput!) {
             metafieldDefinitionCreate(definition: $definition) {
@@ -164,6 +190,32 @@ class BaseMetafieldSyncStrategy {
       key: definition.key,
       pin: definition.pinnedPosition != null && definition.pinnedPosition >= 0 // Pin/unpin based on source
     };
+
+    // Only add capabilities that are supported for this metafield type
+    const capabilities = {};
+
+    // Check if smart collection capability is applicable
+    if (this.shouldEnableSmartCollectionCapability(definition.type.name)) {
+      capabilities.smartCollectionCondition = { enabled: true };
+    }
+
+    // Check if admin filterable capability is applicable
+    if (this.shouldEnableAdminFilterableCapability(definition.type.name)) {
+      capabilities.adminFilterable = { enabled: true };
+    }
+
+    // Check if unique values capability is applicable
+    // Note: Enabling uniqueValues can be risky as it won't work if there are existing metafields
+    // So we're only enabling it if specifically requested via options
+    if (this.options.enableUniqueValues && this.shouldEnableUniqueValuesCapability(definition.type.name)) {
+      capabilities.uniqueValues = { enabled: true };
+    }
+
+    // Only add capabilities if we have any to add
+    if (Object.keys(capabilities).length > 0) {
+      input.capabilities = capabilities;
+    }
+
     const mutation = `#graphql
           mutation updateMetafieldDefinition($definition: MetafieldDefinitionUpdateInput!) {
             metafieldDefinitionUpdate(definition: $definition) {
@@ -353,6 +405,9 @@ class BaseMetafieldSyncStrategy {
       const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
       let processedCount = 0;
 
+      // Indent the delete operation section
+      logger.indent();
+
       // Delete all target definitions
       for (const definition of targetDefinitions) {
         if (processedCount >= this.options.limit) {
@@ -366,16 +421,21 @@ class BaseMetafieldSyncStrategy {
         // Indent the dry run message to appear under the delete message
         logger.indent();
         const deleted = await this.deleteMetafieldDefinition(this.targetClient, definition);
-        logger.unindent();
 
         if (deleted) {
           results.deleted++;
+          logger.success(`Successfully deleted ${this.resourceName} definition: ${definitionFullKey}`);
         } else {
           results.failed++;
         }
 
+        logger.unindent();
+
         processedCount++;
       }
+
+      // Unindent after all deletions
+      logger.unindent();
 
       logger.success(`Deleted ${results.deleted} definition(s) from target.`);
       return { results, definitionKeys: [] };
@@ -423,6 +483,9 @@ class BaseMetafieldSyncStrategy {
     const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
     const definitionKeys = [];
     let processedCount = 0;
+
+    // Indent the entire processing section
+    logger.indent();
 
     for (const definition of sourceDefinitions) {
       if (processedCount >= this.options.limit) {
@@ -482,23 +545,44 @@ class BaseMetafieldSyncStrategy {
 
       if (targetDefinition) {
         logger.info(`Updating ${this.resourceName} definition: ${definitionFullKey}`);
-        // Indent the dry run message to appear under the update message
+
+        // Increase indentation for update operation and output
         logger.indent();
+
         // Pass the potentially modified definitionToSync
         const updated = await this.updateMetafieldDefinition(this.targetClient, definitionToSync, targetDefinition);
+
+        if (updated) {
+          results.updated++;
+          logger.success(`Successfully updated ${this.resourceName} definition: ${definitionFullKey}`);
+        } else {
+          results.failed++;
+        }
+
         logger.unindent();
-        updated ? results.updated++ : results.failed++;
       } else {
         logger.info(`Creating ${this.resourceName} definition: ${definitionFullKey}`);
-        // Indent the dry run message to appear under the create message
+
+        // Increase indentation for create operation and output
         logger.indent();
+
         // Pass the potentially modified definitionToSync
         const created = await this.createMetafieldDefinition(this.targetClient, definitionToSync);
+
+        if (created) {
+          results.created++;
+          logger.success(`Successfully created ${this.resourceName} definition: ${definitionFullKey}`);
+        } else {
+          results.failed++;
+        }
+
         logger.unindent();
-        created ? results.created++ : results.failed++;
       }
       processedCount++;
     }
+
+    // Unindent at the end of processing
+    logger.unindent();
 
     return { results, definitionKeys };
   }
@@ -783,6 +867,61 @@ class BaseMetafieldSyncStrategy {
 
     // No data sync part for metafields
     return { definitionResults, dataResults };
+  }
+
+  /**
+   * Determine if a metafield type supports smart collection capability
+   * @param {string} metafieldType - The metafield type
+   * @returns {boolean} - Whether the type supports smart collection capability
+   */
+  shouldEnableSmartCollectionCapability(metafieldType) {
+    const supportedTypes = [
+      'boolean',
+      'number_integer',
+      'number_decimal',
+      'rating',
+      'single_line_text_field',
+      'metaobject_reference'
+    ];
+    return supportedTypes.includes(metafieldType);
+  }
+
+  /**
+   * Determine if a metafield type supports admin filterable capability
+   * @param {string} metafieldType - The metafield type
+   * @returns {boolean} - Whether the type supports admin filterable capability
+   */
+  shouldEnableAdminFilterableCapability(metafieldType) {
+    const supportedTypes = [
+      'boolean',
+      'single_line_text_field',
+      'list.single_line_text_field',
+      'product_reference',
+      'list.product_reference',
+      'collection_reference',
+      'list.collection_reference',
+      'page_reference',
+      'list.page_reference',
+      'metaobject_reference',
+      'list.metaobject_reference',
+      'company_reference',
+      'list.company_reference'
+    ];
+    return supportedTypes.includes(metafieldType);
+  }
+
+  /**
+   * Determine if a metafield type supports unique values capability
+   * @param {string} metafieldType - The metafield type
+   * @returns {boolean} - Whether the type supports unique values capability
+   */
+  shouldEnableUniqueValuesCapability(metafieldType) {
+    const supportedTypes = [
+      'single_line_text_field',
+      'url',
+      'number_integer'
+    ];
+    return supportedTypes.includes(metafieldType);
   }
 }
 

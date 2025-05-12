@@ -3,8 +3,8 @@ const logger = require("../utils/logger");
  * GraphQL query to fetch all collections with pagination support
  */
 module.exports = `#graphql
-  query GetCollections($first: Int!, $after: String) {
-    collections(first: $first, after: $after) {
+  query GetCollections($first: Int!, $after: String, $query: String) {
+    collections(first: $first, after: $after, query: $query) {
       pageInfo {
         hasNextPage
         endCursor
@@ -33,6 +33,16 @@ module.exports = `#graphql
               column
               condition
               relation
+              conditionObject {
+                ... on CollectionRuleMetafieldCondition {
+                  metafieldDefinition {
+                    id
+                    namespace
+                    key
+                    ownerType
+                  }
+                }
+              }
             }
             appliedDisjunctively
           }
@@ -57,6 +67,15 @@ module.exports = `#graphql
                 key
                 type
                 value
+                definition {
+                  id
+                  namespace
+                  key
+                  ownerType
+                  type {
+                    name
+                  }
+                }
               }
             }
           }
