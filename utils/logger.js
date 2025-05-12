@@ -108,7 +108,9 @@ function startSection(message, levels = 1) {
 }
 
 function endSection(message, levels = 1) {
-  info(message);
+  if (message) {
+    info(message);
+  }
   unindent(levels);
 }
 

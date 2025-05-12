@@ -1,0 +1,7 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+You can indent sections by using logger.startSection() and logger.endSection() with [logger.js](mdc:utils/logger.js)
+To log a newline without a bullet next to it use logger.newLine()
