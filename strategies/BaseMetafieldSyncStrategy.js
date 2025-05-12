@@ -456,21 +456,6 @@ class BaseMetafieldSyncStrategy {
       }`
     );
 
-    // Log each definition with its type
-    logger.indent();
-    sourceDefinitions.forEach(def => {
-      logger.info(`${def.namespace}.${def.key} (${def.name || 'unnamed'}): ${def.type.name}`, 0, 'main');
-
-      // Log validation rules if present
-      if (def.validations && def.validations.length > 0) {
-        logger.indent();
-        def.validations.forEach(validation => {
-          logger.info(`Validation: ${validation.name} = ${validation.value}`, 0, 'sub');
-        });
-        logger.unindent();
-      }
-    });
-    logger.unindent();
     logger.endSection();
 
     logger.startSection(`Fetching target ${this.resourceName} definitions`);
@@ -500,7 +485,7 @@ class BaseMetafieldSyncStrategy {
       let definitionToSync = { ...definition }; // Work on a copy
       let resolutionError = false;
       if ((definition.type.name === 'metaobject_reference' || definition.type.name === 'list.metaobject_reference') && definition.validations?.length > 0) {
-        logger.startSection(`Resolving metaobject references for ${definitionFullKey}`);
+        logger.startSection(`Resolving metaobject references for ${chalk.bold(definitionFullKey)}`);
         const resolvedValidations = [];
         for (const validation of definition.validations) {
           // Assuming the validation 'value' holds the GID for relevant rules
@@ -510,7 +495,7 @@ class BaseMetafieldSyncStrategy {
             const sourceMoDefType = await this.getMetaobjectDefinitionTypeById(this.sourceClient, sourceMoDefId);
 
             if (!sourceMoDefType) {
-              logger.endSection(`Failed to find type for source Metaobject Definition ID ${sourceMoDefId} referenced by ${definitionFullKey}. Skipping definition.`);
+              logger.warn(`Failed to find type for source Metaobject Definition ID ${sourceMoDefId} referenced by ${chalk.bold(definitionFullKey)}.`);
               resolutionError = true;
               break; // Stop processing validations for this definition
             }
@@ -518,12 +503,13 @@ class BaseMetafieldSyncStrategy {
             const targetMoDefId = await this.getMetaobjectDefinitionIdByType(this.targetClient, sourceMoDefType);
 
             if (!targetMoDefId) {
-              logger.endSection(`Failed to find target Metaobject Definition for type ${sourceMoDefType} (referenced by ${definitionFullKey}). Ensure it exists in the target store. Skipping definition.`);
+              logger.warn(`Metaobject definition with type ${sourceMoDefType} not found in target store.`);
+              logger.error(`Failed to find target Metaobject Definition for type ${sourceMoDefType} (referenced by ${chalk.bold(definitionFullKey)}). Ensure it exists in the target store. Skipping definition.`);
               resolutionError = true;
               break; // Stop processing validations for this definition
             }
 
-            logger.endSection(`Mapping validation ref: ${sourceMoDefId} (type: ${sourceMoDefType}) -> ${targetMoDefId}`);
+            logger.info(`Mapping validation ref: ${sourceMoDefId} -> ${targetMoDefId}`);
             resolvedValidations.push({ ...validation, value: targetMoDefId });
           } else {
             resolvedValidations.push(validation); // Keep non-reference validations as is
@@ -533,6 +519,7 @@ class BaseMetafieldSyncStrategy {
         if (!resolutionError) {
           definitionToSync.validations = resolvedValidations;
         }
+        logger.endSection();
       }
       // --- Resolve Metaobject References in Validations --- END ---
 
@@ -545,7 +532,7 @@ class BaseMetafieldSyncStrategy {
       const targetDefinition = targetDefinitionMap[definitionFullKey];
 
       if (targetDefinition) {
-        logger.info(`Updating ${this.resourceName} definition: ${definitionFullKey}`);
+        logger.info(`Updating ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
 
         // Increase indentation for update operation and output
         logger.indent();
@@ -555,14 +542,14 @@ class BaseMetafieldSyncStrategy {
 
         if (updated) {
           results.updated++;
-          logger.success(`Successfully updated ${this.resourceName} definition: ${definitionFullKey}`);
+          logger.success(`Successfully updated ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
         } else {
           results.failed++;
         }
 
         logger.unindent();
       } else {
-        logger.info(`Creating ${this.resourceName} definition: ${definitionFullKey}`);
+        logger.info(`Creating ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
 
         // Increase indentation for create operation and output
         logger.indent();
@@ -572,12 +559,12 @@ class BaseMetafieldSyncStrategy {
 
         if (created) {
           results.created++;
-          logger.success(`Successfully created ${this.resourceName} definition: ${definitionFullKey}`);
+          logger.success(`Successfully created ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
         } else {
           results.failed++;
           // Remove the incorrect message about metaobject definition not existing
           if (definitionFullKey === 'custom.banner_overlay') {
-            logger.error(`Failed to create ${this.resourceName} definition ${definitionFullKey}. Please check the Shopify Admin API response in the logs above for specific error details.`);
+            logger.error(`Failed to create ${this.resourceName} definition ${chalk.bold(definitionFullKey)}. Please check the Shopify Admin API response in the logs above for specific error details.`);
           }
         }
 
