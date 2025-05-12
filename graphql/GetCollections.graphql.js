@@ -36,6 +36,19 @@ module.exports = `#graphql
             }
             appliedDisjunctively
           }
+          publications(first: 25) {
+            edges {
+              node {
+                channel {
+                  id
+                  handle
+                  name
+                }
+                isPublished
+                publishDate
+              }
+            }
+          }
         }
       }
     }
