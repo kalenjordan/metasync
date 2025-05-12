@@ -57,40 +57,6 @@ class CollectionSyncStrategy {
       }
     }
 
-    // Extract all unique metafield owner types from collection rules
-    const ownerTypes = new Set();
-    // Add a fallback for detecting metafield rules even if conditionObject isn't present
-    for (const collection of sourceCollections) {
-      if (collection.ruleSet && collection.ruleSet.rules) {
-        for (const rule of collection.ruleSet.rules) {
-          // Check for both metafield and product metafield rules
-          if (rule.column === 'METAFIELD' || rule.column === 'PRODUCT_METAFIELD_DEFINITION') {
-            logger.info(`Found metafield rule (${rule.column}) in collection ${collection.title}`);
-
-            if (rule.conditionObject) {
-              // Extract from conditionObject if it's a metafield condition
-              const metafieldCondition = rule.conditionObject;
-              if (metafieldCondition && metafieldCondition.metafieldDefinition) {
-                const ownerType = metafieldCondition.metafieldDefinition.ownerType;
-                if (ownerType) {
-                  logger.info(`  Adding owner type: ${ownerType}`);
-                  ownerTypes.add(ownerType);
-                } else {
-                  logger.info(`  No ownerType found in metafieldDefinition`);
-                }
-              } else {
-                logger.info(`  No metafieldDefinition found in conditionObject`);
-              }
-            } else {
-              // If column is a metafield type but no conditionObject, assume PRODUCT owner type
-              logger.info(`  No conditionObject found, assuming PRODUCT owner type for ${rule.column}`);
-              ownerTypes.add("PRODUCT");
-            }
-          }
-        }
-      }
-    }
-
     const targetCollections = await this.fetchCollections(this.targetClient, null);
     logger.info(`Found ${targetCollections.length} collection(s) in target shop`);
 
@@ -101,24 +67,25 @@ class CollectionSyncStrategy {
       await this._fetchTargetPublicationData();
     }
 
-    // Fetch metafield definitions for all required owner types
-    logger.info(`Fetching metafield definitions for owner types used in collection rules...`);
+    // Fetch ALL metafield definitions for all common owner types to ensure we have everything
+    logger.info(`Fetching all metafield definitions from target shop...`);
     const metafieldDefinitions = {};
 
-    // Always add PRODUCT as a safe default for metafield rules
-    if (!ownerTypes.has("PRODUCT")) {
-      logger.info(`Adding PRODUCT owner type as a safe default for metafield rules`);
-      ownerTypes.add("PRODUCT");
-    }
+    // Common owner types that could be used in collections or metafield rules
+    const allOwnerTypes = [
+      "PRODUCT",
+      "COLLECTION",
+      "CUSTOMER",
+      "ORDER",
+      "PRODUCTVARIANT",
+      "COMPANY",
+      "COMPANY_LOCATION",
+      "SHOP"
+    ];
 
-    if (ownerTypes.size === 0) {
-      logger.info(`No metafield conditions found in collections. Skipping metafield definition fetch.`);
-    } else {
-      logger.info(`Found ${ownerTypes.size} unique owner types in collection rules.`);
-      for (const ownerType of ownerTypes) {
-        logger.info(`Fetching metafield definitions for owner type: ${ownerType}`);
-        metafieldDefinitions[ownerType] = await this._fetchTargetMetafieldDefinitions(ownerType);
-      }
+    for (const ownerType of allOwnerTypes) {
+      logger.info(`Fetching metafield definitions for owner type: ${ownerType}`);
+      metafieldDefinitions[ownerType] = await this._fetchTargetMetafieldDefinitions(ownerType);
     }
 
     this.targetMetafieldDefinitions = metafieldDefinitions;
@@ -606,46 +573,47 @@ class CollectionSyncStrategy {
         // Check if conditionObject is present for any rules
         const hasConditionObject = metafieldConditions.some(rule => rule.conditionObject);
         if (!hasConditionObject) {
-          logger.warn(`None of the metafield rules have conditionObject. This may indicate a GraphQL query issue.`);
+          logger.error(`None of the metafield rules have conditionObject. This may indicate a GraphQL query issue.`);
+          throw new Error(`Metafield rules missing conditionObject in collection ${collection.title}`);
         }
 
         // Log each metafield condition for diagnosis purposes only
         metafieldConditions.forEach((rule, index) => {
           logger.info(`Rule ${index + 1}: ${JSON.stringify(rule)}`);
 
-          if (rule.conditionObject && rule.conditionObject.metafieldDefinition) {
-            const def = rule.conditionObject.metafieldDefinition;
-            if (!def.ownerType) {
-              logger.error(`Metafield condition ${index + 1} is missing ownerType - cannot process rule`);
-              throw new Error(`Metafield condition is missing ownerType in rule set for collection ${collection.title}`);
-            }
+          if (!rule.conditionObject) {
+            logger.error(`Metafield rule ${index + 1} is missing conditionObject`);
+            throw new Error(`Metafield rule missing conditionObject in collection ${collection.title}`);
+          }
 
-            logger.info(`Metafield condition ${index + 1}: column=${rule.column}, namespace=${def.namespace}, key=${def.key}, ownerType=${def.ownerType}`);
+          if (!rule.conditionObject.metafieldDefinition) {
+            logger.error(`Metafield rule ${index + 1} is missing metafieldDefinition`);
+            throw new Error(`Metafield rule missing metafieldDefinition in collection ${collection.title}`);
+          }
 
-            // Find matching definitions by namespace and key (NOT by ID)
-            if (this.targetMetafieldDefinitions && this.targetMetafieldDefinitions[def.ownerType]) {
-              const matchingDef = this.targetMetafieldDefinitions[def.ownerType].find(targetDef =>
-                targetDef.namespace === def.namespace && targetDef.key === def.key
-              );
+          const def = rule.conditionObject.metafieldDefinition;
+          if (!def.ownerType) {
+            logger.error(`Metafield condition ${index + 1} is missing ownerType - cannot process rule`);
+            throw new Error(`Metafield condition is missing ownerType in rule set for collection ${collection.title}`);
+          }
 
-              if (matchingDef) {
-                logger.info(`✓ Found matching definition in target shop by namespace/key: ${matchingDef.namespace}.${matchingDef.key} (ID: ${matchingDef.id})`);
-              } else {
-                logger.info(`✗ No matching definition found in target shop for ${def.namespace}.${def.key} with ownerType=${def.ownerType}`);
-              }
-            } else {
-              logger.info(`✗ No definitions found for owner type: ${def.ownerType}`);
-            }
+          logger.info(`Metafield condition ${index + 1}: column=${rule.column}, namespace=${def.namespace}, key=${def.key}, ownerType=${def.ownerType}`);
+
+          // Find matching definitions by namespace and key (NOT by ID)
+          if (!this.targetMetafieldDefinitions[def.ownerType]) {
+            logger.error(`No metafield definitions found for owner type: ${def.ownerType}`);
+            throw new Error(`No metafield definitions found for owner type: ${def.ownerType} in collection ${collection.title}`);
+          }
+
+          const matchingDef = this.targetMetafieldDefinitions[def.ownerType].find(targetDef =>
+            targetDef.namespace === def.namespace && targetDef.key === def.key
+          );
+
+          if (matchingDef) {
+            logger.info(`✓ Found matching definition in target shop by namespace/key: ${matchingDef.namespace}.${matchingDef.key} (ID: ${matchingDef.id})`);
           } else {
-            // For metafield rules without conditionObject
-            logger.info(`Metafield condition ${index + 1} has no conditionObject or metafieldDefinition`);
-            // Assume PRODUCT as a fallback
-            const assumedOwnerType = "PRODUCT";
-            if (this.targetMetafieldDefinitions && this.targetMetafieldDefinitions[assumedOwnerType]) {
-              logger.info(`Using fallback approach with assumed owner type: ${assumedOwnerType}`);
-            } else {
-              logger.info(`No definitions found for assumed owner type: ${assumedOwnerType}`);
-            }
+            logger.error(`✗ No matching definition found in target shop for ${def.namespace}.${def.key} with ownerType=${def.ownerType}`);
+            throw new Error(`No matching metafield definition found for ${def.namespace}.${def.key} with ownerType=${def.ownerType} in collection ${collection.title}`);
           }
         });
       }
@@ -660,49 +628,34 @@ class CollectionSyncStrategy {
 
         // Handle both METAFIELD and PRODUCT_METAFIELD_DEFINITION columns
         if (rule.column === 'METAFIELD' || rule.column === 'PRODUCT_METAFIELD_DEFINITION') {
-          // Try with conditionObject if available
-          if (rule.conditionObject && rule.conditionObject.metafieldDefinition) {
-            const def = rule.conditionObject.metafieldDefinition;
-            if (!def.ownerType) {
-              logger.error(`Missing ownerType in metafield definition for rule with namespace=${def.namespace}, key=${def.key}`);
-              throw new Error(`Missing ownerType in metafield definition for collection ${collection.title}`);
-            }
+          if (!rule.conditionObject || !rule.conditionObject.metafieldDefinition) {
+            logger.error(`Metafield rule missing required conditionObject with metafieldDefinition`);
+            throw new Error(`Metafield rule missing required data in collection ${collection.title}`);
+          }
 
-            // Find matching definition by namespace and key (NOT by ID) in target shop
-            if (this.targetMetafieldDefinitions && this.targetMetafieldDefinitions[def.ownerType]) {
-              const matchingDef = this.targetMetafieldDefinitions[def.ownerType].find(targetDef =>
-                targetDef.namespace === def.namespace && targetDef.key === def.key
-              );
+          const def = rule.conditionObject.metafieldDefinition;
+          if (!def.ownerType) {
+            logger.error(`Missing ownerType in metafield definition for rule with namespace=${def.namespace}, key=${def.key}`);
+            throw new Error(`Missing ownerType in metafield definition for collection ${collection.title}`);
+          }
 
-              if (matchingDef) {
-                // Include the conditionObjectId which is required for metafield rules
-                logger.info(`Adding conditionObjectId: ${matchingDef.id} for ${rule.column} rule ${def.namespace}.${def.key}`);
-                baseRule.conditionObjectId = matchingDef.id;
-              } else {
-                logger.error(`Cannot create ${rule.column} rule for ${def.namespace}.${def.key}: No matching definition found in target shop`);
-              }
-            }
-          } else if (collection.title === "Fiberglass Collection") {
-            // Special handling for Fiberglass Collection - look for 'custom.material' definition in PRODUCT
-            if (this.targetMetafieldDefinitions && this.targetMetafieldDefinitions["PRODUCT"]) {
-              const targetMaterialDef = this.targetMetafieldDefinitions["PRODUCT"].find(def =>
-                def.namespace === 'custom' && def.key === 'material'
-              );
+          // Find matching definition by namespace and key (NOT by ID) in target shop
+          if (!this.targetMetafieldDefinitions[def.ownerType]) {
+            logger.error(`No metafield definitions found for owner type: ${def.ownerType}`);
+            throw new Error(`No metafield definitions found for owner type: ${def.ownerType} in collection ${collection.title}`);
+          }
 
-              if (targetMaterialDef) {
-                logger.info(`Found matching material definition in target shop: ${targetMaterialDef.id}`);
-                baseRule.conditionObjectId = targetMaterialDef.id;
-              } else {
-                // Try to find any PRODUCT definition as a last resort
-                if (this.targetMetafieldDefinitions["PRODUCT"].length > 0) {
-                  const firstDef = this.targetMetafieldDefinitions["PRODUCT"][0];
-                  logger.info(`No custom.material found. Using ${firstDef.namespace}.${firstDef.key} as fallback: ${firstDef.id}`);
-                  baseRule.conditionObjectId = firstDef.id;
-                } else {
-                  logger.error(`No metafield definitions available for PRODUCT owner type in target shop`);
-                }
-              }
-            }
+          const matchingDef = this.targetMetafieldDefinitions[def.ownerType].find(targetDef =>
+            targetDef.namespace === def.namespace && targetDef.key === def.key
+          );
+
+          if (matchingDef) {
+            // Include the conditionObjectId which is required for metafield rules
+            logger.info(`Adding conditionObjectId: ${matchingDef.id} for ${rule.column} rule ${def.namespace}.${def.key}`);
+            baseRule.conditionObjectId = matchingDef.id;
+          } else {
+            logger.error(`Cannot create ${rule.column} rule for ${def.namespace}.${def.key}: No matching definition found in target shop`);
+            throw new Error(`No matching metafield definition found for ${def.namespace}.${def.key} with ownerType=${def.ownerType} in collection ${collection.title}`);
           }
         }
 
@@ -724,41 +677,39 @@ class CollectionSyncStrategy {
       input.metafields = collection.metafields.edges.map(edge => {
         const node = edge.node;
 
-        const definitionId = node.definition ? node.definition.id : 'No definition ID available';
-        if (node.definition && !node.definition.ownerType) {
+        if (!node.definition) {
+          logger.error(`Missing definition in metafield ${node.namespace}.${node.key}`);
+          throw new Error(`Missing metafield definition for ${node.namespace}.${node.key} in collection ${collection.title}`);
+        }
+
+        const definitionId = node.definition.id || null;
+        if (!node.definition.ownerType) {
           logger.error(`Missing ownerType in metafield definition for ${node.namespace}.${node.key}`);
           throw new Error(`Missing ownerType in metafield definition for collection ${collection.title}`);
         }
 
-        const ownerType = node.definition?.ownerType;
-        logger.info(`Metafield: ${node.namespace}.${node.key} (Type: ${node.type}, Owner Type: ${ownerType || 'MISSING'}, Definition ID: ${definitionId})`);
+        logger.info(`Metafield: ${node.namespace}.${node.key} (Type: ${node.type}, Owner Type: ${node.definition.ownerType}, Definition ID: ${definitionId})`);
 
-        // If we have a definition, look for matching definition in target by namespace/key
-        if (node.definition && node.definition.ownerType && node.definition.namespace && node.definition.key) {
-          const def = node.definition;
-
-          if (this.targetMetafieldDefinitions && this.targetMetafieldDefinitions[def.ownerType]) {
-            const matchingDef = this.targetMetafieldDefinitions[def.ownerType].find(targetDef =>
-              targetDef.namespace === def.namespace && targetDef.key === def.key
-            );
-
-            if (matchingDef) {
-              logger.info(`Found matching definition in target shop by namespace/key: ${matchingDef.id}`);
-              return {
-                definitionId: matchingDef.id,
-                value: node.value
-              };
-            }
-          }
+        // Look for matching definition in target by namespace/key
+        if (!this.targetMetafieldDefinitions[node.definition.ownerType]) {
+          logger.error(`No metafield definitions found for owner type: ${node.definition.ownerType}`);
+          throw new Error(`No metafield definitions found for owner type: ${node.definition.ownerType} in collection ${collection.title}`);
         }
 
-        // Fall back to namespace/key/type format
-        return {
-          namespace: node.namespace,
-          key: node.key,
-          value: node.value,
-          type: node.type
-        };
+        const matchingDef = this.targetMetafieldDefinitions[node.definition.ownerType].find(targetDef =>
+          targetDef.namespace === node.namespace && targetDef.key === node.key
+        );
+
+        if (matchingDef) {
+          logger.info(`Found matching definition in target shop by namespace/key: ${matchingDef.id}`);
+          return {
+            definitionId: matchingDef.id,
+            value: node.value
+          };
+        } else {
+          logger.error(`No matching metafield definition found for ${node.namespace}.${node.key} with ownerType=${node.definition.ownerType}`);
+          throw new Error(`No matching metafield definition found for ${node.namespace}.${node.key} with ownerType=${node.definition.ownerType} in collection ${collection.title}`);
+        }
       });
     }
 
@@ -869,7 +820,7 @@ class CollectionSyncStrategy {
     // Check for metafield-related rules in smart collections
     if (collection.ruleSet && collection.ruleSet.rules) {
       const metafieldRules = collection.ruleSet.rules.filter(rule =>
-        rule.column === 'METAFIELD' && rule.conditionObject
+        rule.column === 'METAFIELD' || rule.column === 'PRODUCT_METAFIELD_DEFINITION'
       );
 
       if (metafieldRules.length > 0) {
@@ -877,16 +828,22 @@ class CollectionSyncStrategy {
         logger.indent();
 
         for (const rule of metafieldRules) {
-          const metafieldCondition = rule.conditionObject;
-          if (metafieldCondition && metafieldCondition.metafieldDefinition) {
-            const def = metafieldCondition.metafieldDefinition;
-            const ownerType = def.ownerType || 'unknown';
-            logger.info(`Metafield rule: namespace=${def.namespace}, key=${def.key}, ownerType=${ownerType}`);
-
-            // These would use a special CollectionRuleMetafieldCondition type in Shopify GraphQL
-            logger.info(`⚠ This collection uses metafield conditions which may require specific metafield definitions`);
-            logger.info(`  with the MetafieldCapabilitySmartCollectionCondition capability for owner type: ${ownerType}`);
+          if (!rule.conditionObject || !rule.conditionObject.metafieldDefinition) {
+            logger.error(`Metafield rule missing required conditionObject with metafieldDefinition`);
+            throw new Error(`Metafield rule missing required data in collection ${collection.title}`);
           }
+
+          const def = rule.conditionObject.metafieldDefinition;
+          if (!def.ownerType) {
+            logger.error(`Missing ownerType in metafield definition`);
+            throw new Error(`Missing ownerType in metafield definition for collection ${collection.title}`);
+          }
+
+          logger.info(`Metafield rule: namespace=${def.namespace}, key=${def.key}, ownerType=${def.ownerType}`);
+
+          // These would use a special CollectionRuleMetafieldCondition type in Shopify GraphQL
+          logger.info(`⚠ This collection uses metafield conditions which may require specific metafield definitions`);
+          logger.info(`  with the MetafieldCapabilitySmartCollectionCondition capability for owner type: ${def.ownerType}`);
         }
 
         logger.unindent();
@@ -910,13 +867,20 @@ class CollectionSyncStrategy {
         logger.info(`Type: ${m.type}`);
         logger.info(`Value: ${m.value}`);
 
-        if (m.definition) {
-          logger.info(`Definition ID: ${m.definition.id}`);
-          logger.info(`Definition type: ${m.definition.type?.name || 'unknown'}`);
-          logger.info(`Definition owner type: ${m.definition.ownerType || 'COLLECTION'}`);
-        } else {
-          logger.info(`No definition attached to this metafield`);
+        if (!m.definition) {
+          logger.error(`No definition attached to this metafield`);
+          throw new Error(`Missing metafield definition for ${m.namespace}.${m.key} in collection ${collection.title}`);
         }
+
+        logger.info(`Definition ID: ${m.definition.id}`);
+        logger.info(`Definition type: ${m.definition.type?.name || 'unknown'}`);
+
+        if (!m.definition.ownerType) {
+          logger.error(`Missing ownerType in metafield definition`);
+          throw new Error(`Missing ownerType in metafield definition for collection ${collection.title}`);
+        }
+
+        logger.info(`Definition owner type: ${m.definition.ownerType}`);
         logger.unindent();
       });
 
