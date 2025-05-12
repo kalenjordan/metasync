@@ -211,6 +211,7 @@ Examples:
          .option("--namespace <namespace>", "Sync only metafields with this namespace")
          .option("--key <key>", "Sync only metafields with this key (format: 'key' or 'namespace.key')")
          .option("--force-recreate", "Delete and recreate products instead of updating", false)
+         .option("--delete", "Delete mode: removes resources from target store that match criteria", false)
          .option("--batch-size <size>", "Number of products to process in each batch", 25)
          .option("--start-cursor <cursor>", "Pagination cursor to start from (for resuming interrupted syncs)");
 
@@ -223,13 +224,15 @@ Options:
   --namespace <namespace> Sync only metafields with this namespace
   --key <key>             Sync only metafields with this key
   --force-recreate        Delete and recreate products instead of updating
+  --delete                Delete mode: removes resources from target store that match criteria
   --batch-size <size>     Number of products to process in each batch
   --start-cursor <cursor> Pagination cursor for resuming interrupted syncs
 `;
       customizeHelp(cmd, productHelpText);
     } else if (pluralResource === "metaobjects") {
       cmd.option("--type <type>", "Metaobject definition type to sync (required)")
-         .option("--handle <handle>", "Metaobject handle to sync");
+         .option("--handle <handle>", "Metaobject handle to sync")
+         .option("--delete", "Delete mode: removes resources from target store that match criteria", false);
 
       const metaobjectHelpText = `
 Example: metasync data metaobjects --type territory --source shopA --target shopB
@@ -237,22 +240,26 @@ Example: metasync data metaobjects --type territory --source shopA --target shop
 Options:
   --type <type>           Metaobject definition type to sync (required)
   --handle <handle>       Metaobject handle to sync
+  --delete                Delete mode: removes resources from target store that match criteria
       `;
       customizeHelp(cmd, metaobjectHelpText);
     } else if (pluralResource === "pages") {
       cmd.option("--handle <handle>", "Page handle to sync")
-         .option("--id <id>", "Page ID to sync");
+         .option("--id <id>", "Page ID to sync")
+         .option("--delete", "Delete mode: removes resources from target store that match criteria", false);
 
       const pageHelpText = `
 Options:
   --handle <handle>       Page handle to sync
   --id <id>               Page ID to sync
+  --delete                Delete mode: removes resources from target store that match criteria
       `;
       customizeHelp(cmd, pageHelpText);
     } else if (pluralResource === "collections") {
       cmd.option("--handle <handle>", "Collection handle to sync")
          .option("--id <id>", "Collection ID to sync")
-         .option("--skip-automated", "Skip automated (smart) collections", false);
+         .option("--skip-automated", "Skip automated (smart) collections", false)
+         .option("--delete", "Delete mode: removes resources from target store that match criteria", false);
 
       const collectionHelpText = `
 Example: metasync data collections --handle my-collection --source shopA --target shopB
@@ -261,14 +268,21 @@ Options:
   --handle <handle>       Collection handle to sync
   --id <id>               Collection ID to sync
   --skip-automated        Skip automated (smart) collections
+  --delete                Delete mode: removes resources from target store that match criteria
       `;
       customizeHelp(cmd, collectionHelpText);
     } else {
+      // Add the delete option to all other resource types
+      cmd.option("--delete", "Delete mode: removes resources from target store that match criteria", false);
+
       // Generic help for other resource types
       const genericHelpText = `
 Usage: metasync data ${pluralResource} [options]
 
 Sync ${singularResource} data
+
+Options:
+  --delete                Delete mode: removes resources from target store that match criteria
       `;
       customizeHelp(cmd, genericHelpText);
     }

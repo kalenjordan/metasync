@@ -16,6 +16,7 @@ module.exports = {
   GetCollectionById: require('./GetCollectionById.graphql.js'),
   CreateCollection: require('./CreateCollection.graphql.js'),
   UpdateCollection: require('./UpdateCollection.graphql.js'),
+  DeleteCollection: require('./DeleteCollection.graphql.js'),
 
   // Page queries
   GetPages: require('./GetPages.graphql.js'),

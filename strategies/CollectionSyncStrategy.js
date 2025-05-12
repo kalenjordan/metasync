@@ -1,5 +1,5 @@
 const logger = require("../utils/logger");
-const { GetCollections, GetCollectionByHandle, CreateCollection, UpdateCollection } = require('../graphql');
+const { GetCollections, GetCollectionByHandle, CreateCollection, UpdateCollection, DeleteCollection } = require('../graphql');
 const SyncResultTracker = require('../utils/SyncResultTracker');
 
 class CollectionSyncStrategy {
@@ -15,6 +15,11 @@ class CollectionSyncStrategy {
   // --- Main Sync Method ---
   async sync() {
     logger.info(`Syncing collections...`);
+
+    // Check if we're in delete mode
+    if (this.options.delete) {
+      return await this._handleDeleteMode();
+    }
 
     // Fetch collections from source and target shops
     const sourceCollections = await this._fetchSourceCollections();
@@ -34,6 +39,68 @@ class CollectionSyncStrategy {
     logger.unindent();
 
     logger.success(`Finished syncing collections.`);
+    logger.newline();
+
+    return this.resultTracker.formatForStrategyResult();
+  }
+
+  // --- Handle Delete Mode ---
+  async _handleDeleteMode() {
+    logger.warn(`Running in DELETE mode. Collections in target shop will be deleted.`);
+
+    // Get the target collections
+    const targetCollections = await this.fetchCollections(this.targetClient, null);
+    logger.info(`Found ${targetCollections.length} collection(s) in target shop to evaluate for deletion`);
+
+    // Filter by handle if provided
+    let collectionsToDelete = targetCollections;
+    if (this.options.handle) {
+      const handle = this.options.handle.trim().toLowerCase();
+      collectionsToDelete = targetCollections.filter(collection =>
+        collection.handle && collection.handle.toLowerCase() === handle
+      );
+      logger.info(`Filtered to ${collectionsToDelete.length} collection(s) matching handle "${this.options.handle}"`);
+    }
+
+    // Filter by ID if provided
+    if (this.options.id) {
+      const normalizedId = this.options.id.startsWith('gid://')
+        ? this.options.id
+        : `gid://shopify/Collection/${this.options.id}`;
+
+      collectionsToDelete = targetCollections.filter(collection =>
+        collection.id === normalizedId
+      );
+      logger.info(`Filtered to ${collectionsToDelete.length} collection(s) matching ID "${this.options.id}"`);
+    }
+
+    // Apply the limit if provided
+    if (this.options.limit && collectionsToDelete.length > this.options.limit) {
+      collectionsToDelete = collectionsToDelete.slice(0, this.options.limit);
+      logger.info(`Limited to ${collectionsToDelete.length} collection(s) due to --limit option`);
+    }
+
+    // Delete collections
+    let deleteCount = 0;
+    let failCount = 0;
+
+    logger.indent();
+    for (const collection of collectionsToDelete) {
+      logger.info(`Deleting collection: ${collection.title} (${collection.handle})`);
+
+      const deleted = await this.deleteCollection(this.targetClient, collection.id);
+      if (deleted) {
+        this.resultTracker.trackDeletion();
+        deleteCount++;
+      } else {
+        this.resultTracker.trackFailure();
+        failCount++;
+      }
+    }
+    logger.unindent();
+
+    logger.success(`Finished delete operation.`);
+    logger.info(`Deleted: ${deleteCount}, Failed: ${failCount}`);
     logger.newline();
 
     return this.resultTracker.formatForStrategyResult();
@@ -154,6 +221,35 @@ class CollectionSyncStrategy {
     } catch (error) {
       logger.error(`Error updating collection "${collection.title}": ${error.message}`);
       return null;
+    }
+  }
+
+  async deleteCollection(client, collectionId) {
+    const input = {
+      id: collectionId
+    };
+
+    if (!this.options.notADrill) {
+      logger.info(`[DRY RUN] Would delete collection with ID "${collectionId}"`);
+      return true;
+    }
+
+    try {
+      const result = await client.graphql(
+        DeleteCollection,
+        { input },
+        'DeleteCollection'
+      );
+
+      if (result.collectionDelete.userErrors.length > 0) {
+        this._logOperationErrors('delete', collectionId, result.collectionDelete.userErrors);
+        return false;
+      }
+
+      return !!result.collectionDelete.deletedCollectionId;
+    } catch (error) {
+      logger.error(`Error deleting collection with ID "${collectionId}": ${error.message}`);
+      return false;
     }
   }
 
