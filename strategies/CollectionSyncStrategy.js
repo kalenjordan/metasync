@@ -601,9 +601,12 @@ class CollectionSyncStrategy {
         );
 
         if (matchingDef) {
+          // Fix: Use key/namespace/value format instead of definitionId
           return {
-            definitionId: matchingDef.id,
-            value: node.value
+            key: node.key,
+            namespace: node.namespace,
+            value: node.value,
+            type: matchingDef.type ? matchingDef.type.name : "string"
           };
         } else {
           logger.error(`No matching metafield definition found for ${node.namespace}.${node.key} with ownerType=${node.definition.ownerType}`);
@@ -716,7 +719,7 @@ class CollectionSyncStrategy {
   }
 
   async _updateExistingCollection(collection, existingCollection) {
-    logger.info(`Updating collection: ${collection.title}`);
+    logger.info(`Updating collection: ${collection.title} (${collection.handle})`);
     logger.indent();
 
     // If collection has metafields, just log count
@@ -775,7 +778,7 @@ class CollectionSyncStrategy {
   }
 
   async _createNewCollection(collection) {
-    logger.info(`Creating collection: ${collection.title}`);
+    logger.info(`Creating collection: ${collection.title} (${collection.handle})`);
     logger.indent();
 
     // Check for metafield-related rules in smart collections

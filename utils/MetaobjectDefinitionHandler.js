@@ -13,6 +13,7 @@ class MetaobjectDefinitionHandler {
     this.client = client;
     this.options = options;
     this.debug = options.debug;
+    this.definitionTypesMap = null;
   }
 
   async fetchMetaobjectDefinitions(type = null) {
@@ -48,9 +49,27 @@ class MetaobjectDefinitionHandler {
   }
 
   /**
+   * Finds a definition ID in the target store by type
+   */
+  async getDefinitionIdByType(type) {
+    if (!type) {
+      return null;
+    }
+
+    const definitions = await this.fetchMetaobjectDefinitions(type);
+
+    if (definitions.length === 0) {
+      logger.warn(`No definitions found for type: ${type}`);
+      return null;
+    }
+
+    return definitions[0].id;
+  }
+
+  /**
    * Processes a field definition for the API.
    */
-  processFieldDefinition(field) {
+  async processFieldDefinition(field, sourceDefinitionTypes = null) {
     const typeName = this.getFieldTypeName(field);
     const fieldDef = {
       key: field.key,
@@ -58,8 +77,9 @@ class MetaobjectDefinitionHandler {
       description: field.description || "",
       required: field.required,
       type: typeName,
-      validations: field.validations || []
+      validations: field.validations ? [...field.validations] : []
     };
+
     // Add special validations based on type
     if (typeName === "metaobject_reference" && field.type?.supportedTypes) {
         fieldDef.validations.push({ name: "metaobject_definition", value: JSON.stringify({ types: field.type.supportedTypes }) });
@@ -70,15 +90,48 @@ class MetaobjectDefinitionHandler {
     if (typeName === "list" && field.type?.validationRules?.allowedValues) {
         fieldDef.validations.push({ name: "allowed_values", value: JSON.stringify(field.type.validationRules.allowedValues) });
     }
+
+    // Handle metaobject_definition_id validations by looking up target store's definition ID
+    if (fieldDef.validations && fieldDef.validations.length > 0) {
+      for (let i = 0; i < fieldDef.validations.length; i++) {
+        const validation = fieldDef.validations[i];
+
+        if (validation.name === "metaobject_definition_id") {
+          const sourceDefinitionId = validation.value;
+
+          // Look up type in the source definitions map
+          if (sourceDefinitionTypes && sourceDefinitionTypes[sourceDefinitionId]) {
+            const definitionType = sourceDefinitionTypes[sourceDefinitionId];
+            const targetDefinitionId = await this.getDefinitionIdByType(definitionType);
+
+            if (targetDefinitionId) {
+              fieldDef.validations[i].value = targetDefinitionId;
+            } else {
+              logger.error(`Cannot create metaobject_definition_id validation: No definition of type '${definitionType}' found in target store`);
+              logger.error(`The definition '${definitionType}' must be synced to the target store first`);
+            }
+          } else {
+            logger.error(`Cannot resolve metaobject_definition_id validation in field '${field.key}'`);
+            logger.error(`Referenced definition ID '${sourceDefinitionId}' not found in source store`);
+            logger.error(`This may be a reference to a definition outside the current source store`);
+          }
+        }
+      }
+    }
+
     return fieldDef;
   }
 
-  async createMetaobjectDefinition(definition) {
+  async createMetaobjectDefinition(definition, sourceDefinitionTypes = null) {
+    const fieldDefinitions = await Promise.all(
+      definition.fieldDefinitions.map(field => this.processFieldDefinition(field, sourceDefinitionTypes))
+    );
+
     const input = {
       type: definition.type,
       name: definition.name,
       description: definition.description || "",
-      fieldDefinitions: definition.fieldDefinitions.map(field => this.processFieldDefinition(field)),
+      fieldDefinitions,
       capabilities: definition.capabilities || {},
     };
 
@@ -118,18 +171,20 @@ class MetaobjectDefinitionHandler {
     }
   }
 
-  async updateMetaobjectDefinition(definition, existingDefinition) {
+  async updateMetaobjectDefinition(definition, existingDefinition, sourceDefinitionTypes = null) {
     const existingFieldMap = existingDefinition.fieldDefinitions?.reduce((map, field) => {
       map[field.key] = field;
       return map;
     }, {}) || {};
 
-    const fieldDefinitions = definition.fieldDefinitions.map(field => {
-      const fieldDef = this.processFieldDefinition(field);
+    const fieldDefinitionsPromises = definition.fieldDefinitions.map(async (field) => {
+      const fieldDef = await this.processFieldDefinition(field, sourceDefinitionTypes);
       return existingFieldMap[field.key]
         ? { update: { key: fieldDef.key, name: fieldDef.name, description: fieldDef.description, required: fieldDef.required, validations: fieldDef.validations } }
         : { create: { key: fieldDef.key, type: fieldDef.type, name: fieldDef.name, description: fieldDef.description, required: fieldDef.required, validations: fieldDef.validations } };
     });
+
+    const fieldDefinitions = await Promise.all(fieldDefinitionsPromises);
 
     const input = {
       name: definition.name,
@@ -179,18 +234,53 @@ class MetaobjectDefinitionHandler {
 
     // Create a temporary handler for the source client
     const sourceHandler = new MetaobjectDefinitionHandler(sourceClient, this.options);
-    const sourceDefinitions = await sourceHandler.fetchMetaobjectDefinitions(typeToSync);
+
+    // First fetch all definitions from source to build a complete map
+    const allSourceDefinitions = await sourceHandler.fetchMetaobjectDefinitions();
+    logger.info(`Found ${allSourceDefinitions.length} total definition(s) in source store`);
+
+    // Create a complete map of definition IDs to types from all source definitions
+    const sourceDefinitionTypesMap = allSourceDefinitions.reduce((map, def) => {
+      map[def.id] = def.type;
+      return map;
+    }, {});
+
+    // Now get only the definitions we want to sync
+    let sourceDefinitions = allSourceDefinitions;
+    if (typeToSync) {
+      sourceDefinitions = sourceDefinitions.filter(def => def.type === typeToSync);
+      logger.info(`Processing ${sourceDefinitions.length} definition(s) of type: ${typeToSync}`);
+    }
 
     if (sourceDefinitions.length === 0) {
       logger.warn(typeToSync ? `No metaobject definitions found in source for type: ${typeToSync}` : `No metaobject definitions found in source.`);
       logger.endSection();
       return { results: { created: 0, updated: 0, skipped: 0, failed: 0 }, definitionTypes: [] };
     }
-    logger.info(`Found ${sourceDefinitions.length} definition(s) in source${typeToSync ? ` for type: ${typeToSync}` : ''}`);
+
+    // Check for metaobject_definition_id validations that reference definitions we don't have
+    for (const def of sourceDefinitions) {
+      if (def.fieldDefinitions) {
+        for (const field of def.fieldDefinitions) {
+          if (field.validations) {
+            for (const validation of field.validations) {
+              if (validation.name === "metaobject_definition_id" && !sourceDefinitionTypesMap[validation.value]) {
+                logger.warn(`Definition ${def.type} field ${field.key} references unknown definition ID: ${validation.value}`);
+              }
+            }
+          }
+        }
+      }
+    }
 
     const targetDefinitions = await this.fetchMetaobjectDefinitions();
-    logger.info(`Found ${targetDefinitions.length} definition(s) in target`);
-    const targetDefinitionMap = targetDefinitions.reduce((map, def) => { map[def.type] = def; return map; }, {});
+    logger.info(`Found ${targetDefinitions.length} definition(s) in target store`);
+
+    // Create a map of types to definitions in target store
+    const targetDefinitionTypeMap = targetDefinitions.reduce((map, def) => {
+      map[def.type] = def;
+      return map;
+    }, {});
 
     const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let processedCount = 0;
@@ -200,11 +290,11 @@ class MetaobjectDefinitionHandler {
         logger.info(`Reached processing limit (${this.options.limit}). Stopping definition sync.`);
         break;
       }
-      if (targetDefinitionMap[definition.type]) {
-        const updated = await this.updateMetaobjectDefinition(definition, targetDefinitionMap[definition.type]);
+      if (targetDefinitionTypeMap[definition.type]) {
+        const updated = await this.updateMetaobjectDefinition(definition, targetDefinitionTypeMap[definition.type], sourceDefinitionTypesMap);
         updated ? results.updated++ : results.failed++;
       } else {
-        const created = await this.createMetaobjectDefinition(definition);
+        const created = await this.createMetaobjectDefinition(definition, sourceDefinitionTypesMap);
         created ? results.created++ : results.failed++;
       }
       processedCount++;
