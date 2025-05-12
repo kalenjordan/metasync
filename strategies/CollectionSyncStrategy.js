@@ -1,5 +1,4 @@
 const logger = require("../utils/logger");
-;
 const { GetCollections, GetCollectionByHandle, CreateCollection, UpdateCollection } = require('../graphql');
 
 class CollectionSyncStrategy {
@@ -13,84 +12,68 @@ class CollectionSyncStrategy {
   // --- Collection Fetch Methods ---
 
   async fetchCollections(client, limit = null) {
-    try {
-      let collections = [];
-      let hasNextPage = true;
-      let cursor = null;
-      let totalFetched = 0;
+    let collections = [];
+    let hasNextPage = true;
+    let cursor = null;
+    let totalFetched = 0;
 
-      logger.info(`Fetching collections, please wait...`);
+    logger.info(`Fetching collections, please wait...`);
 
-      while (hasNextPage) {
-        const response = await client.graphql(
-          GetCollections,
-          { first: 100, after: cursor },
-          'GetCollections'
-        );
-
-        const edges = response.collections.edges;
-        collections = collections.concat(edges.map(edge => edge.node));
-        totalFetched += edges.length;
-
-        if (this.debug) {
-          logger.debug(`Fetched ${edges.length} collections, total: ${totalFetched}`);
-        }
-
-        hasNextPage = response.collections.pageInfo.hasNextPage;
-        cursor = response.collections.pageInfo.endCursor;
-
-        // Break if we've reached the provided limit (for source shop)
-        if (limit && collections.length >= limit) {
-          collections = collections.slice(0, limit);
-          break;
-        }
-      }
-
-      return collections;
-    } catch (error) {
-      logger.error(`Error fetching collections: ${error.message}`);
-      return [];
-    }
-  }
-
-  // Additional method to determine if collection is smart or custom
-  async getCollectionType(client, collectionId) {
-    try {
-      // Use a query to fetch smart collections
-      const smartQuery = `query: "id:${collectionId} AND collection_type:smart"`;
-      const smartResponse = await client.graphql(
+    while (hasNextPage) {
+      const response = await client.graphql(
         GetCollections,
-        { first: 1, query: smartQuery },
-        'GetSmartCollection'
+        { first: 100, after: cursor },
+        'GetCollections'
       );
 
-      // If we found a result, it's a smart collection
-      if (smartResponse.collections.edges.length > 0) {
-        return 'smart';
+      const edges = response.collections.edges;
+      collections = collections.concat(edges.map(edge => edge.node));
+      totalFetched += edges.length;
+
+      if (this.debug) {
+        logger.debug(`Fetched ${edges.length} collections, total: ${totalFetched}`);
       }
 
-      return 'custom';
-    } catch (error) {
-      logger.warn(`Error determining collection type: ${error.message}`);
-      return 'custom';  // Default to custom if we can't determine
+      hasNextPage = response.collections.pageInfo.hasNextPage;
+      cursor = response.collections.pageInfo.endCursor;
+
+      // Break if we've reached the provided limit (for source shop)
+      if (limit && collections.length >= limit) {
+        collections = collections.slice(0, limit);
+        break;
+      }
     }
+
+    return collections;
+  }
+
+  async getCollectionType(client, collectionId) {
+    // Use a query to fetch smart collections
+    const smartQuery = `query: "id:${collectionId} AND collection_type:smart"`;
+    const smartResponse = await client.graphql(
+      GetCollections,
+      { first: 1, query: smartQuery },
+      'GetSmartCollection'
+    );
+
+    // If we found a result, it's a smart collection
+    if (smartResponse.collections.edges.length > 0) {
+      return 'smart';
+    }
+
+    return 'custom';  // Default to custom if not found as smart
   }
 
   async getCollectionByHandle(client, handle) {
-    try {
-      // Normalize handle for consistency with GraphQL query
-      const normalizedHandle = handle.trim().toLowerCase();
+    // Normalize handle for consistency with GraphQL query
+    const normalizedHandle = handle.trim().toLowerCase();
 
-      const response = await client.graphql(
-        GetCollectionByHandle,
-        { handle: normalizedHandle },
-        'GetCollectionByHandle'
-      );
-      return response.collectionByHandle;
-    } catch (error) {
-      logger.error(`Error fetching collection with handle "${handle}": ${error.message}`);
-      return null;
-    }
+    const response = await client.graphql(
+      GetCollectionByHandle,
+      { handle: normalizedHandle },
+      'GetCollectionByHandle'
+    );
+    return response.collectionByHandle;
   }
 
   // --- Collection Create/Update Methods ---
@@ -99,36 +82,29 @@ class CollectionSyncStrategy {
     const input = this._prepareCollectionInput(collection);
 
     if (this.options.notADrill) {
-      try {
-        // First, check if the collection already exists by handle
-        // If the handle is already normalized, we still need to pass it through getCollectionByHandle
-        // which may do its own normalization
-        const existingCollection = await this.getCollectionByHandle(client, collection.handle);
+      // First, check if the collection already exists by handle
+      const existingCollection = await this.getCollectionByHandle(client, collection.handle);
 
-        if (existingCollection) {
-          // Log with consistent message format
-          logger.info(`Updating collection: ${collection.title}`);
-          // If it exists, update it instead
-          return this.updateCollection(client, collection, existingCollection);
-        }
+      if (existingCollection) {
+        // Log with consistent message format
+        logger.info(`Updating collection: ${collection.title}`);
+        // If it exists, update it instead
+        return this.updateCollection(client, collection, existingCollection);
+      }
 
-        // Otherwise, create the collection
-        const result = await client.graphql(
-          CreateCollection,
-          { input },
-          'CreateCollection'
-        );
+      // Otherwise, create the collection
+      const result = await client.graphql(
+        CreateCollection,
+        { input },
+        'CreateCollection'
+      );
 
-        if (result.collectionCreate.userErrors.length > 0) {
-          logger.error(`Failed to create collection "${collection.title}":`, result.collectionCreate.userErrors);
-          return null;
-        }
-
-        return result.collectionCreate.collection;
-      } catch (error) {
-        logger.error(`Error creating collection "${collection.title}": ${error.message}`);
+      if (result.collectionCreate.userErrors.length > 0) {
+        logger.error(`Failed to create collection "${collection.title}":`, result.collectionCreate.userErrors);
         return null;
       }
+
+      return result.collectionCreate.collection;
     } else {
       logger.info(`[DRY RUN] Would create collection "${collection.title}"`);
       return { id: "dry-run-id", title: collection.title, handle: collection.handle };
@@ -142,23 +118,18 @@ class CollectionSyncStrategy {
     input.id = existingCollection.id;
 
     if (this.options.notADrill) {
-      try {
-        const result = await client.graphql(
-          UpdateCollection,
-          { input },
-          'UpdateCollection'
-        );
+      const result = await client.graphql(
+        UpdateCollection,
+        { input },
+        'UpdateCollection'
+      );
 
-        if (result.collectionUpdate.userErrors.length > 0) {
-          logger.error(`Failed to update collection "${collection.title}":`, result.collectionUpdate.userErrors);
-          return null;
-        }
-
-        return result.collectionUpdate.collection;
-      } catch (error) {
-        logger.error(`Error updating collection "${collection.title}": ${error.message}`);
+      if (result.collectionUpdate.userErrors.length > 0) {
+        logger.error(`Failed to update collection "${collection.title}":`, result.collectionUpdate.userErrors);
         return null;
       }
+
+      return result.collectionUpdate.collection;
     } else {
       logger.info(`[DRY RUN] Would update collection "${collection.title}"`);
       return { id: existingCollection.id, title: collection.title, handle: collection.handle };
@@ -196,17 +167,10 @@ class CollectionSyncStrategy {
     return input;
   }
 
-  // --- Sync Orchestration Method ---
-
-  async sync() {
-    logger.info(`Syncing collections...`);
-
-    // Fetch collections from source and target shops
+  async _fetchSourceCollections() {
     const limit = this.options.limit || 250;
-    let sourceCollections = await this.fetchCollections(this.sourceClient, limit);
-    logger.info(`Found ${sourceCollections.length} collection(s) in source shop`);
 
-    // If skipAutomated is set, fetch only custom collections
+    // Check if skipAutomated flag is set
     if (this.options.skipAutomated) {
       const customQuery = 'collection_type:custom';
       const response = await this.sourceClient.graphql(
@@ -215,25 +179,22 @@ class CollectionSyncStrategy {
         'GetCustomCollections'
       );
 
-      sourceCollections = response.collections.edges.map(edge => edge.node);
-      logger.info(`Filtered to ${sourceCollections.length} manual/custom collection(s)`);
+      const collections = response.collections.edges.map(edge => edge.node);
+      logger.info(`Filtered to ${collections.length} manual/custom collection(s)`);
+      return collections;
     }
 
-    // Fetch ALL collections from target - no limit
-    const targetCollections = await this.fetchCollections(this.targetClient, null);
-    logger.info(`Found ${targetCollections.length} collection(s) in target shop`);
+    // Default: fetch all collections
+    const collections = await this.fetchCollections(this.sourceClient, limit);
+    logger.info(`Found ${collections.length} collection(s) in source shop`);
+    return collections;
+  }
 
-    // Debug info for target collections
-    if (this.debug) {
-      logger.debug(`First 5 target collections:`);
-      targetCollections.slice(0, 5).forEach(collection => {
-        logger.debug(`  - "${collection.title}" with handle: "${collection.handle}"`);
-      });
-    }
-
+  _buildTargetCollectionMap(targetCollections) {
     // Create map of target collections by handle for easy lookup
     // Normalize handles to lowercase and trim for case-insensitive comparison
     const targetCollectionMap = {};
+
     for (const collection of targetCollections) {
       if (collection.handle) {
         const normalizedHandle = collection.handle.trim().toLowerCase();
@@ -248,6 +209,67 @@ class CollectionSyncStrategy {
       logger.debug(`Sample map keys: ${mapKeys.join(', ')}`);
     }
 
+    return targetCollectionMap;
+  }
+
+  async _processCollection(collection, targetCollectionMap, results) {
+    // Skip collections without a handle
+    if (!collection.handle) {
+      logger.warn(`Skipping collection with no handle: ${collection.title || 'Unnamed collection'}`);
+      results.skipped++;
+      return;
+    }
+
+    // Debug source collection info
+    if (this.debug) {
+      logger.debug(`Processing source collection: "${collection.title}" with handle: "${collection.handle}"`);
+    }
+
+    // Normalize handle for lookup consistently with how we normalized the map keys
+    const normalizedHandle = collection.handle.trim().toLowerCase();
+
+    // Check if the collection exists in target shop
+    const existingCollection = targetCollectionMap[normalizedHandle];
+
+    if (this.debug) {
+      logger.debug(`Looking for handle "${normalizedHandle}" - ${existingCollection ? 'Found' : 'Not found'}`);
+    }
+
+    if (existingCollection) {
+      // Update existing collection
+      logger.info(`Updating collection: ${collection.title}`);
+      const updated = await this.updateCollection(this.targetClient, collection, existingCollection);
+      updated ? results.updated++ : results.failed++;
+    } else {
+      // Create new collection
+      logger.info(`Creating collection: ${collection.title}`);
+      const created = await this.createCollection(this.targetClient, collection);
+      created ? results.created++ : results.failed++;
+    }
+  }
+
+  // --- Sync Orchestration Method ---
+
+  async sync() {
+    logger.info(`Syncing collections...`);
+
+    // Fetch collections from source and target shops
+    const sourceCollections = await this._fetchSourceCollections();
+
+    // Fetch ALL collections from target - no limit
+    const targetCollections = await this.fetchCollections(this.targetClient, null);
+    logger.info(`Found ${targetCollections.length} collection(s) in target shop`);
+
+    // Debug info for target collections
+    if (this.debug) {
+      logger.debug(`First 5 target collections:`);
+      targetCollections.slice(0, 5).forEach(collection => {
+        logger.debug(`  - "${collection.title}" with handle: "${collection.handle}"`);
+      });
+    }
+
+    const targetCollectionMap = this._buildTargetCollectionMap(targetCollections);
+
     const results = { created: 0, updated: 0, skipped: 0, failed: 0 };
     let processedCount = 0;
 
@@ -261,40 +283,7 @@ class CollectionSyncStrategy {
         break;
       }
 
-      // Skip collections without a handle
-      if (!collection.handle) {
-        logger.warn(`Skipping collection with no handle: ${collection.title || 'Unnamed collection'}`);
-        results.skipped++;
-        continue;
-      }
-
-      // Debug source collection info
-      if (this.debug) {
-        logger.debug(`Processing source collection: "${collection.title}" with handle: "${collection.handle}"`);
-      }
-
-      // Normalize handle for lookup consistently with how we normalized the map keys
-      const normalizedHandle = collection.handle.trim().toLowerCase();
-
-      // Check if the collection exists in target shop
-      const existingCollection = targetCollectionMap[normalizedHandle];
-
-      if (this.debug) {
-        logger.debug(`Looking for handle "${normalizedHandle}" - ${existingCollection ? 'Found' : 'Not found'}`);
-      }
-
-      if (existingCollection) {
-        // Update existing collection
-        logger.info(`Updating collection: ${collection.title}`);
-        const updated = await this.updateCollection(this.targetClient, collection, existingCollection);
-        updated ? results.updated++ : results.failed++;
-      } else {
-        // Create new collection
-        logger.info(`Creating collection: ${collection.title}`);
-        const created = await this.createCollection(this.targetClient, collection);
-        created ? results.created++ : results.failed++;
-      }
-
+      await this._processCollection(collection, targetCollectionMap, results);
       processedCount++;
     }
 
