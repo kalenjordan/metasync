@@ -89,6 +89,11 @@ class ProductSyncStrategy {
       logger.debug(`Options received by ProductSyncStrategy:`, this.options);
     }
 
+    // Check if we're in delete mode
+    if (this.options.delete) {
+      return await this._handleDeleteMode();
+    }
+
     // Fetch products from source shop with options
     const options = {};
 
@@ -113,6 +118,131 @@ class ProductSyncStrategy {
 
     // Return results for the CLI to display
     return this.resultTracker.formatForStrategyResult();
+  }
+
+  // --- Delete Mode Handler ---
+  async _handleDeleteMode() {
+    logger.warn(`Running in DELETE mode. Products in target shop will be deleted.`);
+
+    // Get the target products
+    const targetProducts = await this._fetchTargetProducts();
+    logger.info(`Found ${targetProducts.length} product(s) in target shop to evaluate for deletion`);
+
+    // Filter by handle if provided
+    let productsToDelete = targetProducts;
+    if (this.options.handle) {
+      const handle = this.options.handle.trim().toLowerCase();
+      productsToDelete = targetProducts.filter(product =>
+        product.handle && product.handle.toLowerCase() === handle
+      );
+      logger.info(`Filtered to ${productsToDelete.length} product(s) matching handle "${this.options.handle}"`);
+    }
+
+    // Filter by ID if provided
+    if (this.options.id) {
+      const normalizedId = this.options.id.startsWith('gid://')
+        ? this.options.id
+        : `gid://shopify/Product/${this.options.id}`;
+
+      productsToDelete = targetProducts.filter(product =>
+        product.id === normalizedId
+      );
+      logger.info(`Filtered to ${productsToDelete.length} product(s) matching ID "${this.options.id}"`);
+    }
+
+    // Apply the limit if provided
+    if (this.options.limit && productsToDelete.length > this.options.limit) {
+      productsToDelete = productsToDelete.slice(0, this.options.limit);
+      logger.info(`Limited to ${productsToDelete.length} product(s) due to --limit option`);
+    }
+
+    // Delete products
+    let deleteCount = 0;
+    let failCount = 0;
+
+    logger.indent();
+    for (const product of productsToDelete) {
+      logger.info(`Deleting product: ${product.title} (${product.handle})`);
+      logger.indent();
+      logger.info(`Deleting product with ID: ${product.id}`);
+
+      const deleted = await this.productHandler.deleteProduct(product.id);
+      if (deleted) {
+        this.resultTracker.trackDeletion();
+        deleteCount++;
+        logger.success(`Successfully deleted product: ${product.title}`);
+      } else {
+        this.resultTracker.trackFailure();
+        failCount++;
+        logger.error(`Failed to delete product: ${product.title}`);
+      }
+      logger.unindent();
+    }
+    logger.unindent();
+
+    logger.success(`Finished delete operation.`);
+    logger.info(`Deleted: ${deleteCount}, Failed: ${failCount}`);
+    logger.newline();
+
+    return this.resultTracker.formatForStrategyResult();
+  }
+
+  // --- Helper Method for Fetching Target Products ---
+  async _fetchTargetProducts() {
+    const limit = this.options.limit || 250;
+    let products = [];
+    let hasNextPage = true;
+    let cursor = null;
+    let totalFetched = 0;
+
+    logger.info(`Fetching products from target shop, please wait...`);
+
+    while (hasNextPage) {
+      try {
+        const query = `
+          query GetProducts($first: Int!, $after: String) {
+            products(first: $first, after: $after) {
+              edges {
+                node {
+                  id
+                  title
+                  handle
+                }
+                cursor
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        `;
+
+        const response = await this.targetClient.graphql(
+          query,
+          { first: 100, after: cursor },
+          'GetProducts'
+        );
+
+        const edges = response.products.edges;
+        products = products.concat(edges.map(edge => edge.node));
+        totalFetched += edges.length;
+
+        hasNextPage = response.products.pageInfo.hasNextPage;
+        cursor = response.products.pageInfo.endCursor;
+
+        // Break if we've reached the provided limit
+        if (limit && products.length >= limit) {
+          products = products.slice(0, limit);
+          break;
+        }
+      } catch (error) {
+        logger.error(`Error fetching products: ${error.message}`);
+        break;
+      }
+    }
+
+    return products;
   }
 
   /**

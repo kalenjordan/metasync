@@ -10,6 +10,7 @@ class CollectionSyncStrategy {
     this.resultTracker = new SyncResultTracker();
     this.targetChannels = null;
     this.targetPublications = null;
+    this.lastProcessedCollection = null;
   }
 
   // --- Main Sync Method ---
@@ -505,6 +506,20 @@ class CollectionSyncStrategy {
       input.ruleSet = collection.ruleSet;
     }
 
+    // Add metafields if available
+    if (collection.metafields && collection.metafields.edges && collection.metafields.edges.length > 0) {
+      // In Shopify API Collection Input requires specific metafield format
+      input.metafields = collection.metafields.edges.map(edge => {
+        const node = edge.node;
+        return {
+          namespace: node.namespace,
+          key: node.key,
+          value: node.value,
+          type: node.type
+        };
+      });
+    }
+
     return input;
   }
 
@@ -562,6 +577,9 @@ class CollectionSyncStrategy {
   }
 
   async _processCollection(collection, targetCollectionMap) {
+    // Store reference to the current collection for error handling
+    this.lastProcessedCollection = collection;
+
     // Skip collections without a handle
     if (!collection.handle) {
       logger.warn(`Skipping collection with no handle: ${collection.title || 'Unnamed collection'}`);
@@ -608,7 +626,54 @@ class CollectionSyncStrategy {
   }
 
   _logOperationErrors(operation, collectionTitle, errors) {
-    logger.error(`Failed to ${operation} collection "${collectionTitle}":`, errors);
+    logger.error(`Failed to ${operation} collection "${collectionTitle}":`);
+
+    // Check for metafield definition errors
+    const metafieldErrors = errors.filter(err =>
+      err.message && (
+        err.message.includes('metafield definition') ||
+        err.message.includes('The metafield definition')
+      )
+    );
+
+    if (metafieldErrors.length > 0 && this.options.debug) {
+      logger.indent();
+      logger.error(`Metafield Definition Errors:`);
+      logger.indent();
+
+      // If collection has metafields, try to log which one is causing problems
+      if (this.lastProcessedCollection && this.lastProcessedCollection.metafields) {
+        const metafields = this.lastProcessedCollection.metafields.edges
+          ? this.lastProcessedCollection.metafields.edges.map(edge => edge.node)
+          : this.lastProcessedCollection.metafields;
+
+        logger.error(`Collection has the following metafields:`);
+        metafields.forEach(metafield => {
+          if (metafield.namespace && metafield.key) {
+            logger.error(`- ${metafield.namespace}.${metafield.key} (${metafield.type || 'unknown type'})`);
+          }
+        });
+      } else {
+        logger.error(`Could not find metafield information for this collection.`);
+      }
+
+      logger.unindent();
+      logger.unindent();
+    }
+
+    // Log errors with proper formatting
+    logger.indent();
+    errors.forEach(err => {
+      if (err.field) {
+        logger.error(`Field: ${err.field}, Message: ${err.message}`);
+      } else if (err.message) {
+        logger.error(`Message: ${err.message}`);
+      } else {
+        // Fallback if error structure is unexpected
+        logger.error(JSON.stringify(err, null, 2));
+      }
+    });
+    logger.unindent();
   }
 }
 

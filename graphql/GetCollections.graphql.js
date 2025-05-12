@@ -49,6 +49,17 @@ module.exports = `#graphql
               }
             }
           }
+          metafields(first: 50) {
+            edges {
+              node {
+                id
+                namespace
+                key
+                type
+                value
+              }
+            }
+          }
         }
       }
     }
