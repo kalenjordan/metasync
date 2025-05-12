@@ -5,11 +5,76 @@
  * - Indentation
  * - Symbols for operations and statuses
  * - Color coding
+ * - File logging with timestamps
  */
 const chalk = require('chalk');
+const fs = require('fs');
+const path = require('path');
+const stripAnsi = require('strip-ansi');
 
 // Static indentation level
 let indentLevel = 0;
+
+// Log file stream
+let logFileStream = null;
+let logFilePath = null;
+
+/**
+ * Initialize logging to file with timestamped filename
+ * Creates the logs directory if it doesn't exist
+ */
+function initializeLogFile() {
+  // Create logs directory if it doesn't exist
+  const logsDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  // Generate timestamp for filename (YYYY-MM-DD_HH-MM-SS)
+  const now = new Date();
+  const timestamp = now.toISOString()
+    .replace(/T/, '_')
+    .replace(/\..+/, '')
+    .replace(/:/g, '-');
+
+  // Create log file name
+  logFilePath = path.join(logsDir, `sync_${timestamp}.log`);
+
+  // Open write stream
+  logFileStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+
+  // Log initial information
+  const startMessage = `=== Sync operation started at ${now.toLocaleString()} ===\n`;
+  logFileStream.write(startMessage);
+
+  return logFilePath;
+}
+
+/**
+ * Close the log file stream
+ */
+function closeLogFile() {
+  if (logFileStream) {
+    const endMessage = `\n=== Sync operation completed at ${new Date().toLocaleString()} ===\n`;
+    logFileStream.write(endMessage);
+    logFileStream.end();
+    logFileStream = null;
+  }
+}
+
+/**
+ * Log to both console and file
+ * @param {string} message - Message to log
+ */
+function log(message) {
+  // Log to console
+  console.log(message);
+
+  // Log to file (strip ANSI color codes)
+  if (logFileStream) {
+    logFileStream.write(stripAnsi(message) + '\n');
+  }
+}
 
 /**
  * Increase indentation level
@@ -65,8 +130,11 @@ function logProductAction(message, title, handle, type = 'update') {
 
   const indent = getIndent();
   // Use a cleaner format that separates the title from the handle
-  console.log(`${indent}${color.bold(`◆ ${message}`)}`);
-  console.log(`${indent}  ${chalk.bold(title)} ${chalk.dim(`(${handle})`)}`);
+  const line1 = `${indent}${color.bold(`◆ ${message}`)}`;
+  const line2 = `${indent}  ${chalk.bold(title)} ${chalk.dim(`(${handle})`)}`;
+
+  log(line1);
+  log(line2);
 
   // Automatically indent to create visual hierarchy for operations on this product
   indentLevel++;
@@ -88,7 +156,7 @@ function endProductAction() {
 function success(message) {
   const indent = getIndent();
   // Use green checkmark ✓ with consistent formatting
-  console.log(`${indent}${chalk.green('✓')} ${message}`);
+  log(`${indent}${chalk.green('✓')} ${message}`);
 }
 
 /**
@@ -99,9 +167,13 @@ function success(message) {
 function error(message, data = null) {
   const indent = getIndent();
   if (data) {
-    console.log(`${indent}${chalk.red('✖')} ${message}`, data);
+    log(`${indent}${chalk.red('✖')} ${message}`);
+    console.log(data); // Log data to console
+    if (logFileStream) {
+      logFileStream.write(JSON.stringify(data, null, 2) + '\n'); // Write formatted data to file
+    }
   } else {
-    console.log(`${indent}${chalk.red('✖')} ${message}`);
+    log(`${indent}${chalk.red('✖')} ${message}`);
   }
 }
 
@@ -111,7 +183,7 @@ function error(message, data = null) {
  */
 function warn(message) {
   const indent = getIndent();
-  console.log(`${indent}${chalk.yellow('⚠')} ${message}`);
+  log(`${indent}${chalk.yellow('⚠')} ${message}`);
 }
 
 /**
@@ -136,7 +208,7 @@ function info(message) {
     symbol = '-'; // Detail - dash
   }
 
-  console.log(`${indent}${symbol} ${message}`);
+  log(`${indent}${symbol} ${message}`);
 }
 
 /**
@@ -145,7 +217,7 @@ function info(message) {
  */
 function subdued(message) {
   const indent = getIndent();
-  console.log(`${indent}${chalk.gray(message)}`);
+  log(`${indent}${chalk.gray(message)}`);
 }
 
 /**
@@ -155,7 +227,7 @@ function subdued(message) {
 function dryRun(message) {
   const indent = getIndent();
   // Use dimmed text with a muted blue color for dry run messages
-  console.log(`${indent}${chalk.dim(' > [DRY RUN] ' + message)}`);
+  log(`${indent}${chalk.dim(' > [DRY RUN] ' + message)}`);
 }
 
 /**
@@ -163,7 +235,7 @@ function dryRun(message) {
  * @param {string} title - Section title
  */
 function section(title) {
-  console.log(`\n${chalk.bold.cyan(title)}`);
+  log(`\n${chalk.bold.cyan(title)}`);
 }
 
 /**
@@ -173,17 +245,28 @@ function section(title) {
  */
 function debug(message) {
   const indent = getIndent();
-  console.log(`${indent}${chalk.dim.blue('[DEBUG]')} ${message}`);
+  log(`${indent}${chalk.dim.blue('[DEBUG]')} ${message}`);
 }
 
 /**
  * Log a blank line with no symbols or prefixes
  */
 function newline() {
-  console.log('');
+  log('');
+}
+
+/**
+ * Get the current log file path
+ * @returns {string|null} Log file path or null if logging to file is not initialized
+ */
+function getLogFilePath() {
+  return logFilePath;
 }
 
 module.exports = {
+  initializeLogFile,
+  closeLogFile,
+  getLogFilePath,
   indent,
   unindent,
   resetIndent,

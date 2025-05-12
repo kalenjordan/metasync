@@ -457,13 +457,8 @@ class MetaSyncCli {
 }
 
 async function main() {
+  // Parse command line arguments and initialize options
   const options = commandSetup.setupCommandLineOptions();
-
-  // Set debug level based on flag
-  if (options.debug) {
-    // Note: We don't need to set a log level for our logger since it simply
-    // uses console.log and includes [DEBUG] prefix for debug logs
-  }
 
   // Validate we have minimal required configuration
   if (!options.source) {
@@ -476,12 +471,22 @@ async function main() {
     process.exit(1);
   }
 
-  const syncer = new MetaSyncCli(options);
-  await syncer.run();
+  // Initialize log file
+  const logFilePath = logger.initializeLogFile();
+  logger.info(`Logging to file: ${logFilePath}`);
+
+  // Create instance and run
+  const cli = new MetaSyncCli(options);
+  await cli.run();
+
+  // Close log file when done
+  logger.closeLogFile();
 }
 
+// Run the program
 main().catch(error => {
-  logger.error(`Unhandled Error: ${error.message}`);
-  logger.debug(error.stack || '');
+  console.error(`Fatal error: ${error.message}`);
+  // Ensure log file is closed on fatal error
+  logger.closeLogFile();
   process.exit(1);
 });

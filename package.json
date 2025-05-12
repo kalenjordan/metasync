@@ -17,7 +17,8 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
-    "shopify-api-node": "^3.15.0"
+    "shopify-api-node": "^3.15.0",
+    "strip-ansi": "^6.0.1"
   },
   "devDependencies": {
     "codehawk-cli": "^10.1.0",
