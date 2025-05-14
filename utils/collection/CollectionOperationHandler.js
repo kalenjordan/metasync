@@ -21,6 +21,13 @@ class CollectionOperationHandler {
 
   // --- Collection Mutation Methods ---
   async createCollection(client, collection) {
+    // Validate metaobject references before creating
+    const validationResult = await this._validateMetaobjectReferences(collection);
+    if (!validationResult.valid) {
+      logger.error(validationResult.error);
+      return null;
+    }
+
     const input = this._prepareCollectionInput(collection);
 
     if (!this.options.notADrill) {
@@ -48,6 +55,13 @@ class CollectionOperationHandler {
   }
 
   async updateCollection(client, collection, existingCollection) {
+    // Validate metaobject references before updating
+    const validationResult = await this._validateMetaobjectReferences(collection);
+    if (!validationResult.valid) {
+      logger.error(validationResult.error);
+      return null;
+    }
+
     // Check if source has a ruleSet but target doesn't
     if (collection.ruleSet && !existingCollection.ruleSet) {
       logger.error(`Cannot update collection "${collection.title}": Source has a ruleSet but target doesn't. Smart collections can't be converted from manual collections.`);
@@ -113,6 +127,141 @@ class CollectionOperationHandler {
   }
 
   // --- Helper Methods ---
+
+  async _validateMetaobjectReferences(collection) {
+    if (!collection.metafields || !collection.metafields.edges || collection.metafields.edges.length === 0) {
+      return { valid: true };
+    }
+
+    logger.startSection(`Validating metaobject references for collection "${collection.title}"`);
+
+    for (const edge of collection.metafields.edges) {
+      const node = edge.node;
+      // Check if the metafield value might contain a metaobject reference
+      if (node.value) {
+        let metaobjectIds = [];
+
+        try {
+          // Check if value is a JSON string that might be an array
+          if (node.value.startsWith('[') && node.value.includes('gid://shopify/Metaobject/')) {
+            // Parse the JSON string to get the array
+            const parsedValue = JSON.parse(node.value);
+            if (Array.isArray(parsedValue)) {
+              // Extract all metaobject IDs from the array
+              metaobjectIds = parsedValue.filter(item =>
+                typeof item === 'string' && item.includes('gid://shopify/Metaobject/')
+              );
+            }
+          }
+          // Handle direct metaobject reference (not in array)
+          else if (typeof node.value === 'string' && node.value.includes('gid://shopify/Metaobject/')) {
+            metaobjectIds = [node.value];
+          }
+        } catch (e) {
+          logger.warn(`Could not parse metafield value: ${e.message}`);
+          // If parsing fails, check if the raw string contains a metaobject reference
+          if (typeof node.value === 'string' && node.value.includes('gid://shopify/Metaobject/')) {
+            metaobjectIds = [node.value];
+          }
+        }
+
+        // Validate each metaobject ID found
+        for (const metaobjectId of metaobjectIds) {
+          logger.info(`Validating metaobject reference: ${metaobjectId}`);
+
+          try {
+            // Query the target store to check if this metaobject exists
+            const response = await this.targetClient.graphql(`
+              query CheckMetaobject($id: ID!) {
+                node(id: $id) {
+                  id
+                  ... on Metaobject {
+                    handle
+                    type
+                  }
+                }
+              }
+            `, { id: metaobjectId });
+
+            if (!response.node) {
+              // Get the metaobject details from source store for better error message
+              const sourceResponse = await this.sourceClient.graphql(`
+                query GetMetaobjectDetails($id: ID!) {
+                  node(id: $id) {
+                    id
+                    ... on Metaobject {
+                      handle
+                      type
+                    }
+                  }
+                }
+              `, { id: metaobjectId });
+
+              const metaobjectInfo = sourceResponse.node
+                ? `type: ${sourceResponse.node.type}, handle: ${sourceResponse.node.handle}`
+                : `ID: ${metaobjectId}`;
+
+              logger.endSection();
+              return {
+                valid: false,
+                error: `Collection "${collection.title}" references a metaobject (${metaobjectInfo}) that doesn't exist in the target store. Sync the metaobjects first.`
+              };
+            } else {
+              logger.info(`Metaobject exists in target store: ${response.node.type}/${response.node.handle}`);
+
+              // Additional check to validate metaobject belongs to correct definition
+              const metafieldDefinition = node.definition;
+              if (metafieldDefinition && metafieldDefinition.validations) {
+                const validations = typeof metafieldDefinition.validations === 'string'
+                  ? JSON.parse(metafieldDefinition.validations)
+                  : metafieldDefinition.validations;
+
+                // Check if there's a metaobject_definition validation
+                if (validations.metaobject_definition) {
+                  const requiredDefinitionId = validations.metaobject_definition;
+
+                  // Check if the metaobject belongs to the correct definition
+                  const metaobjectTypeResponse = await this.sourceClient.graphql(`
+                    query GetMetaobjectType($id: ID!) {
+                      node(id: $id) {
+                        id
+                        ... on Metaobject {
+                          definition {
+                            id
+                          }
+                        }
+                      }
+                    }
+                  `, { id: metaobjectId });
+
+                  if (metaobjectTypeResponse.node &&
+                      metaobjectTypeResponse.node.definition &&
+                      metaobjectTypeResponse.node.definition.id !== requiredDefinitionId) {
+                    logger.endSection();
+                    return {
+                      valid: false,
+                      error: `Metaobject ${metaobjectId} doesn't belong to the required definition ${requiredDefinitionId}`
+                    };
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            logger.error(`Error validating metaobject reference: ${error.message}`);
+            logger.endSection();
+            return {
+              valid: false,
+              error: `Failed to validate metaobject reference ${metaobjectId}: ${error.message}`
+            };
+          }
+        }
+      }
+    }
+
+    logger.endSection();
+    return { valid: true };
+  }
+
   _prepareCollectionInput(collection) {
     const input = {
       title: collection.title,

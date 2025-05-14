@@ -54,9 +54,76 @@ class CollectionMetafieldHandler {
     return metafieldDefinitions;
   }
 
+  async validateMetaobjectReferences(collection) {
+    if (!collection.metafields || !collection.metafields.edges || collection.metafields.edges.length === 0) {
+      return { valid: true };
+    }
+
+    for (const edge of collection.metafields.edges) {
+      const node = edge.node;
+      // Check if the metafield value is a metaobject reference
+      if (node.value && node.value.includes('gid://shopify/Metaobject/')) {
+        const metaobjectId = node.value;
+
+        try {
+          // Query the target store to check if this metaobject exists
+          const response = await this.targetClient.graphql(`
+            query CheckMetaobject($id: ID!) {
+              node(id: $id) {
+                id
+                ... on Metaobject {
+                  handle
+                  type
+                }
+              }
+            }
+          `, { id: metaobjectId });
+
+          if (!response.node) {
+            // Get the metaobject details from source store for better error message
+            const sourceResponse = await this.sourceClient.graphql(`
+              query GetMetaobjectDetails($id: ID!) {
+                node(id: $id) {
+                  id
+                  ... on Metaobject {
+                    handle
+                    type
+                  }
+                }
+              }
+            `, { id: metaobjectId });
+
+            const metaobjectInfo = sourceResponse.node
+              ? `type: ${sourceResponse.node.type}, handle: ${sourceResponse.node.handle}`
+              : `ID: ${metaobjectId}`;
+
+            return {
+              valid: false,
+              error: `Collection "${collection.title}" references a metaobject (${metaobjectInfo}) that doesn't exist in the target store. Sync the metaobjects first.`
+            };
+          }
+        } catch (error) {
+          logger.error(`Error validating metaobject reference: ${error.message}`);
+          return {
+            valid: false,
+            error: `Failed to validate metaobject reference ${metaobjectId}: ${error.message}`
+          };
+        }
+      }
+    }
+
+    return { valid: true };
+  }
+
   async lookupMetafieldDefinitionIds(collection) {
     if (!collection.metafields || !collection.metafields.edges || collection.metafields.edges.length === 0) {
       return null;
+    }
+
+    // Validate any metaobject references first
+    const validationResult = await this.validateMetaobjectReferences(collection);
+    if (!validationResult.valid) {
+      throw new Error(validationResult.error);
     }
 
     // Always use COLLECTION owner type
