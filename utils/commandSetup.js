@@ -63,16 +63,6 @@ COMMON OPTIONS:
 COMMANDS:
   definitions           Sync only the definitions, not the data
   data                  Sync data for specified resources (no definitions)
-
-Examples:
-  metasync definitions metafields --resource product --namespace custom --source shopA --target shopB
-  metasync definitions metafields --resource all --namespace custom --source shopA --target shopB
-  metasync definitions metafields --resource product --namespace all --source shopA --target shopB
-  metasync definitions metafields --resource all --namespace all --source shopA --target shopB
-  metasync definitions metafields --resource product --namespace custom1,custom2,custom3 --source shopA --target shopB
-  metasync definitions metafields --resource product --namespace custom --delete --live --source shopA --target shopB
-  metasync definitions metaobject --type territory --source shopA --target shopB
-  metasync data product --handle my-product --source shopA --target shopB --live
 `;
 
   // Definitions command help text
