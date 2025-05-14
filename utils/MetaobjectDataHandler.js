@@ -44,9 +44,21 @@ class MetaobjectDataHandler {
   }
 
   async createMetaobject(client, metaobject, definitionType) {
-    const fields = metaobject.fields
+    // Filter out fields with MediaImage references before creating
+    let fields = metaobject.fields
       .filter((field) => field.value !== null && field.value !== undefined)
       .map((field) => ({ key: field.key, value: field.value || "" }));
+
+    // Remove fields with MediaImage references
+    fields = fields.filter(field => {
+      if (field.value && typeof field.value === 'string' &&
+         (field.value.includes('gid://shopify/MediaImage/') ||
+          (field.value.startsWith('[') && field.value.includes('gid://shopify/MediaImage/')))) {
+        logger.warn(`Removing MediaImage reference in field ${field.key}: ${field.value}`);
+        return false;
+      }
+      return true;
+    });
 
     const input = { type: definitionType, fields, capabilities: metaobject.capabilities || {} };
     if (metaobject.handle) input.handle = metaobject.handle;
@@ -96,9 +108,21 @@ class MetaobjectDataHandler {
   }
 
   async updateMetaobject(client, metaobject, existingMetaobject) {
-    const fields = metaobject.fields
+    // Filter out fields with MediaImage references before updating
+    let fields = metaobject.fields
       .filter((field) => field.value !== null && field.value !== undefined)
       .map((field) => ({ key: field.key, value: field.value || "" }));
+
+    // Remove fields with MediaImage references
+    fields = fields.filter(field => {
+      if (field.value && typeof field.value === 'string' &&
+         (field.value.includes('gid://shopify/MediaImage/') ||
+          (field.value.startsWith('[') && field.value.includes('gid://shopify/MediaImage/')))) {
+        logger.warn(`Removing MediaImage reference in field ${field.key}: ${field.value}`);
+        return false;
+      }
+      return true;
+    });
 
     const input = { fields };
 
@@ -383,6 +407,26 @@ class MetaobjectDataHandler {
         return processedFields;
       };
 
+      // Process fields for MediaImage references
+      const processMediaImageReferences = (fields, metaobject) => {
+        const processedFields = [];
+
+        for (const field of fields) {
+          // Check if field value references a MediaImage
+          if (field.value && typeof field.value === 'string' &&
+             (field.value.includes('gid://shopify/MediaImage/') ||
+              (field.value.startsWith('[') && field.value.includes('gid://shopify/MediaImage/')))) {
+            logger.warn(`MediaImage reference detected in field ${field.key} for metaobject ${metaobject.handle || "unknown"}: ${field.value}`);
+            // Skip this field - don't add it to processedFields
+          } else {
+            // Keep fields without MediaImage references
+            processedFields.push(field);
+          }
+        }
+
+        return processedFields;
+      };
+
       let processedCount = 0;
       for (const metaobject of filteredMetaobjects) {
         if (processedCount >= this.options.limit) {
@@ -416,10 +460,14 @@ class MetaobjectDataHandler {
         });
 
         // Process metaobject reference fields to map IDs from source to target
-        processedMetaobject.fields = await processMetaobjectReferenceFields(
+        let processedFields = await processMetaobjectReferenceFields(
           Object.values(existingFieldMap),
           metaobject
         );
+
+        // Process MediaImage references
+        processedFields = processMediaImageReferences(processedFields, metaobject);
+        processedMetaobject.fields = processedFields;
 
         try {
           if (metaobject.handle && targetMetaobjectMap[metaobject.handle]) {
@@ -430,8 +478,13 @@ class MetaobjectDataHandler {
             results.created++;
           }
         } catch (error) {
-          // Errors are logged within create/update methods, just count failure here
-          results.failed++;
+          if (error.message && error.message.includes('MediaImage')) {
+            logger.warn(`Warning: MediaImage reference issue with metaobject ${metaobject.handle || "unknown"}: ${error.message}`);
+            results.skipped++;
+          } else {
+            // Errors are logged within create/update methods, just count failure here
+            results.failed++;
+          }
         }
         processedCount++;
       }

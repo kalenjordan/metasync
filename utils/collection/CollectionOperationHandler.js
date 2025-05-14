@@ -135,6 +135,9 @@ class CollectionOperationHandler {
 
     logger.startSection(`Validating metaobject references for collection "${collection.title}"`);
 
+    // Create a map to store source->target ID mappings
+    this.metaobjectIdMap = {};
+
     for (const edge of collection.metafields.edges) {
       const node = edge.node;
       // Check if the metafield value might contain a metaobject reference
@@ -224,6 +227,9 @@ class CollectionOperationHandler {
               };
             } else {
               logger.info(`Metaobject exists in target store: ${targetMetaobject.type}/${targetMetaobject.handle} (ID: ${targetMetaobject.id})`);
+
+              // Store mapping of source ID to target ID
+              this.metaobjectIdMap[metaobjectId] = targetMetaobject.id;
 
               // Additional check to validate metaobject belongs to correct definition
               const metafieldDefinition = node.definition;
@@ -344,11 +350,46 @@ class CollectionOperationHandler {
         );
 
         if (matchingDef) {
+          let value = node.value;
+
+          // Replace metaobject references with target IDs
+          if (this.metaobjectIdMap && Object.keys(this.metaobjectIdMap).length > 0) {
+            // Check if value contains metaobject references
+            if (value && typeof value === 'string') {
+              // Handle array of references (JSON string)
+              if (value.startsWith('[') && value.includes('gid://shopify/Metaobject/')) {
+                try {
+                  const parsedValue = JSON.parse(value);
+                  if (Array.isArray(parsedValue)) {
+                    // Replace each ID in the array
+                    const updatedValue = parsedValue.map(item => {
+                      if (typeof item === 'string' && item.includes('gid://shopify/Metaobject/') && this.metaobjectIdMap[item]) {
+                        return this.metaobjectIdMap[item];
+                      }
+                      return item;
+                    });
+                    value = JSON.stringify(updatedValue);
+                    logger.info(`Replaced metaobject IDs in array for ${node.namespace}.${node.key}`);
+                  }
+                } catch (e) {
+                  logger.warn(`Could not parse JSON array in metafield ${node.namespace}.${node.key}: ${e.message}`);
+                }
+              }
+              // Handle single reference
+              else if (value.includes('gid://shopify/Metaobject/')) {
+                if (this.metaobjectIdMap[value]) {
+                  value = this.metaobjectIdMap[value];
+                  logger.info(`Replaced metaobject ID ${node.value} with ${value} for ${node.namespace}.${node.key}`);
+                }
+              }
+            }
+          }
+
           // Fix: Use key/namespace/value format instead of definitionId
           return {
             key: node.key,
             namespace: node.namespace,
-            value: node.value,
+            value: value,
             type: matchingDef.type ? matchingDef.type.name : "string"
           };
         } else {
