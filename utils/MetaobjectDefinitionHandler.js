@@ -5,6 +5,7 @@ const FETCH_METAOBJECT_DEFINITIONS = require("../graphql/MetaobjectFetchDefiniti
 const FETCH_ALL_METAOBJECT_DEFINITIONS = require("../graphql/MetaobjectFetchAllDefinitions");
 const CREATE_METAOBJECT_DEFINITION = require("../graphql/MetaobjectCreateDefinition");
 const UPDATE_METAOBJECT_DEFINITION = require("../graphql/MetaobjectUpdateDefinition");
+const FETCH_METAOBJECT_DEFINITION_BY_ID = require("../graphql/MetaobjectFetchDefinitionById");
 
 class MetaobjectDefinitionHandler {
   constructor(client, options = {}) {
@@ -31,6 +32,32 @@ class MetaobjectDefinitionHandler {
     }
 
     return definitions;
+  }
+
+  /**
+   * Fetches a metaobject definition by its ID
+   * @param {string} id The metaobject definition ID
+   * @returns {Object|null} The metaobject definition or null if not found
+   */
+  async fetchMetaobjectDefinitionById(id) {
+    if (!id) {
+      logger.error("No definition ID provided to fetchMetaobjectDefinitionById");
+      return null;
+    }
+
+    try {
+      const response = await this.client.graphql(FETCH_METAOBJECT_DEFINITION_BY_ID, { id }, "FetchMetaobjectDefinitionById");
+      if (response.metaobjectDefinition) {
+        logger.info(`Successfully fetched definition for ID: ${id} (type: ${response.metaobjectDefinition.type})`);
+        return response.metaobjectDefinition;
+      } else {
+        logger.warn(`No definition found for ID: ${id}`);
+        return null;
+      }
+    } catch (error) {
+      logger.error(`Error fetching metaobject definition by ID ${id}: ${error.message}`);
+      return null;
+    }
   }
 
   /**

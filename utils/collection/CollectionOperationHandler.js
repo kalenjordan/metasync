@@ -167,12 +167,12 @@ class CollectionOperationHandler {
 
         // Validate each metaobject ID found
         for (const metaobjectId of metaobjectIds) {
-          logger.info(`Validating metaobject reference: ${metaobjectId}`);
+          logger.startSection(`Validating metaobject reference: ${metaobjectId}`);
 
           try {
-            // Query the target store to check if this metaobject exists
-            const response = await this.targetClient.graphql(`
-              query CheckMetaobject($id: ID!) {
+            // First, get the metaobject type and handle from the source store
+            const sourceResponse = await this.sourceClient.graphql(`
+              query GetMetaobjectDetails($id: ID!) {
                 node(id: $id) {
                   id
                   ... on Metaobject {
@@ -183,31 +183,47 @@ class CollectionOperationHandler {
               }
             `, { id: metaobjectId });
 
-            if (!response.node) {
-              // Get the metaobject details from source store for better error message
-              const sourceResponse = await this.sourceClient.graphql(`
-                query GetMetaobjectDetails($id: ID!) {
-                  node(id: $id) {
-                    id
-                    ... on Metaobject {
+            if (!sourceResponse.node) {
+              logger.error(`Could not find metaobject with ID ${metaobjectId} in source store.`);
+              logger.endSection();
+              return {
+                valid: false,
+                error: `Collection "${collection.title}" references a metaobject (ID: ${metaobjectId}) that doesn't exist in the source store.`
+              };
+            }
+
+            const metaobjectType = sourceResponse.node.type;
+            const metaobjectHandle = sourceResponse.node.handle;
+
+            logger.info(`Found metaobject in source: type=${metaobjectType}, handle=${metaobjectHandle}`);
+
+            // Now check if a metaobject with the same type and handle exists in the target store
+            const targetResponse = await this.targetClient.graphql(`
+              query GetMetaobjectByTypeAndHandle($type: String!) {
+                metaobjects(first: 1, type: $type, query: "handle:'${metaobjectHandle}'") {
+                  edges {
+                    node {
+                      id
                       handle
                       type
                     }
                   }
                 }
-              `, { id: metaobjectId });
+              }
+            `, {
+              type: metaobjectType,
+            });
 
-              const metaobjectInfo = sourceResponse.node
-                ? `type: ${sourceResponse.node.type}, handle: ${sourceResponse.node.handle}`
-                : `ID: ${metaobjectId}`;
+            const targetMetaobject = targetResponse.metaobjects?.edges?.[0]?.node;
 
+            if (!targetMetaobject) {
               logger.endSection();
               return {
                 valid: false,
-                error: `Collection "${collection.title}" references a metaobject (${metaobjectInfo}) that doesn't exist in the target store. Sync the metaobjects first.`
+                error: `Collection "${collection.title}" references a metaobject (type: ${metaobjectType}, handle: ${metaobjectHandle}) that doesn't exist in the target store. Sync the metaobjects first.`
               };
             } else {
-              logger.info(`Metaobject exists in target store: ${response.node.type}/${response.node.handle}`);
+              logger.info(`Metaobject exists in target store: ${targetMetaobject.type}/${targetMetaobject.handle} (ID: ${targetMetaobject.id})`);
 
               // Additional check to validate metaobject belongs to correct definition
               const metafieldDefinition = node.definition;
@@ -254,6 +270,8 @@ class CollectionOperationHandler {
               error: `Failed to validate metaobject reference ${metaobjectId}: ${error.message}`
             };
           }
+
+          logger.endSection();
         }
       }
     }
