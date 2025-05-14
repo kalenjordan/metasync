@@ -9,6 +9,14 @@ class CollectionRuleSetHandler {
   }
 
   /**
+   * Set the target metafield definitions
+   * @param {Object} targetMetafieldDefinitions - Metafield definitions from target shop
+   */
+  setTargetMetafieldDefinitions(targetMetafieldDefinitions) {
+    this.targetMetafieldDefinitions = targetMetafieldDefinitions;
+  }
+
+  /**
    * Analyzes a collection's ruleset and logs detailed information
    * @param {Object} collection - The collection to analyze
    */

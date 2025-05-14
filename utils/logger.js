@@ -111,6 +111,11 @@ function endSection(message, levels = 1) {
   if (message) {
     info(message);
   }
+
+  if (indentLevel == 1) {
+    newline();
+  }
+
   unindent(levels);
 }
 
