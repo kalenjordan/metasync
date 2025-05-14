@@ -248,7 +248,7 @@ Options:
     } else if (pluralResource === "collections") {
       cmd.option("--handle <handle>", "Collection handle to sync")
          .option("--id <id>", "Collection ID to sync")
-         .option("--skip-automated", "Skip automated (smart) collections", false)
+         .option("--type <type>", "Filter by collection type ('manual' or 'smart')")
          .option("--delete", "Delete mode: removes resources from target store that match criteria", false);
 
       const collectionHelpText = `
@@ -257,7 +257,7 @@ Example: metasync data collections --handle my-collection --source shopA --targe
 Options:
   --handle <handle>       Collection handle to sync
   --id <id>               Collection ID to sync
-  --skip-automated        Skip automated (smart) collections
+  --type <type>           Filter by collection type ('manual' or 'smart')
   --delete                Delete mode: removes resources from target store that match criteria
       `;
       customizeHelp(cmd, collectionHelpText);

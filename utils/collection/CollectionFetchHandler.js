@@ -80,8 +80,17 @@ class CollectionFetchHandler {
 
     const limit = this.options.limit || 250;
 
-    if (this.options.skipAutomated) {
-      return this.fetchCustomCollections(limit);
+    // If type option is provided, filter by collection type
+    if (this.options.type) {
+      const type = this.options.type.toLowerCase();
+      if (type === 'manual' || type === 'custom') {
+        // "manual" in our CLI maps to "custom" in Shopify's API
+        return this.fetchCollectionsByType('custom', limit);
+      } else if (type === 'smart') {
+        return this.fetchCollectionsByType('smart', limit);
+      } else {
+        logger.warn(`Invalid collection type "${this.options.type}". Valid types are 'manual' or 'smart'.`);
+      }
     }
 
     const collections = await this.fetchCollections(this.sourceClient, limit);
@@ -89,16 +98,16 @@ class CollectionFetchHandler {
     return collections;
   }
 
-  async fetchCustomCollections(limit) {
-    const customQuery = 'collection_type:custom';
+  async fetchCollectionsByType(collectionType, limit) {
+    const typeQuery = `collection_type:${collectionType}`;
     const response = await this.sourceClient.graphql(
       GetCollections,
-      { first: limit, query: customQuery },
-      'GetCustomCollections'
+      { first: limit, query: typeQuery },
+      `Get${collectionType.charAt(0).toUpperCase() + collectionType.slice(1)}Collections`
     );
 
     const collections = response.collections.edges.map(edge => edge.node);
-    logger.info(`Filtered to ${collections.length} manual/custom collection(s)`);
+    logger.info(`Filtered to ${collections.length} ${collectionType} collection(s)`);
     return collections;
   }
 

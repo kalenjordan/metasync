@@ -39,6 +39,11 @@ class CollectionSyncStrategy {
       return await this._handleDeleteMode();
     }
 
+    // Log filter information
+    if (this.options.type) {
+      logger.info(`Filtering collections by type: ${this.options.type}`);
+    }
+
     // Fetch collections from source and target shops
     const sourceCollections = await this.fetchHandler.fetchSourceCollections();
 
