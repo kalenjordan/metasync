@@ -32,7 +32,7 @@ class CollectionSyncStrategy {
 
   // --- Main Sync Method ---
   async sync() {
-    logger.info(`Syncing collections...`);
+    logger.startSection(`Preparing to sync collections`);
 
     // Check if we're in delete mode
     if (this.options.delete) {
@@ -43,38 +43,41 @@ class CollectionSyncStrategy {
     const sourceCollections = await this.fetchHandler.fetchSourceCollections();
 
     // Add extensive logging to diagnose rule structure
-    logger.info(`Analyzing ${sourceCollections.length} source collections for metafield rules...`);
+    logger.startSection(`Analyzing ${sourceCollections.length} source collections for metafield rules...`);
     for (const collection of sourceCollections) {
-      logger.info(`Collection: ${collection.title}`);
+      logger.startSection(`Collection: ${collection.title}`);
 
       if (collection.ruleSet) {
-        logger.info(`  Has ruleSet with ${collection.ruleSet.rules ? collection.ruleSet.rules.length : 0} rules`);
+        logger.info(`Has ruleSet with ${collection.ruleSet.rules ? collection.ruleSet.rules.length : 0} rules`);
 
         if (collection.ruleSet.rules && collection.ruleSet.rules.length > 0) {
           collection.ruleSet.rules.forEach((rule, index) => {
-            logger.info(`  Rule ${index + 1}: column=${rule.column}, condition=${rule.condition}`);
+            logger.info(`Rule ${index + 1}: column=${rule.column}, condition=${rule.condition}`);
 
             // Log the entire rule for debugging
-            logger.info(`  Rule details: ${JSON.stringify(rule)}`);
+            logger.info(`Rule details: ${JSON.stringify(rule)}`);
 
             // Check for any kind of metafield rule
             if (rule.column === 'METAFIELD' || rule.column === 'PRODUCT_METAFIELD_DEFINITION') {
-              logger.info(`  ✓ Found metafield rule! Type: ${rule.column}`);
+              logger.startSection(`Found metafield rule! Type: ${rule.column}`);
               if (rule.conditionObject) {
-                logger.info(`    Has conditionObject: ${JSON.stringify(rule.conditionObject)}`);
+                logger.info(`Has conditionObject: ${JSON.stringify(rule.conditionObject)}`);
               } else {
-                logger.info(`    No conditionObject found in the rule`);
+                logger.info(`No conditionObject found in the rule`);
               }
+              logger.endSection();
             }
           });
         }
       } else {
-        logger.info(`  No ruleSet found`);
+        logger.info(`No ruleSet found`);
       }
+      logger.endSection();
     }
+    logger.endSection();
 
     const targetCollections = await this.fetchHandler.fetchCollections(this.targetClient, null);
-    logger.info(`Found ${targetCollections.length} collection(s) in target shop`);
+    logger.endSection(`Found ${targetCollections.length} collection(s) in target shop`);
 
     const targetCollectionMap = this.fetchHandler.buildTargetCollectionMap(targetCollections);
 

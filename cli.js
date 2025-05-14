@@ -57,10 +57,36 @@ class MetaSyncCli {
       logger.info(`To allow changes, add "protected": false to this shop in .shops.json`);
       process.exit(1);
     } else if (!this.targetShopProtected) {
-      logger.info(`Target shop ${chalk.cyan(targetShopName)} is ${chalk.green('unprotected')} in .shops.json`);
+      logger.startSection(`Target shop ${chalk.cyan(targetShopName)} is ${chalk.green('unprotected')} in .shops.json`);
     } else {
-      logger.info(`Target shop "${targetShopName}" is protected (default).`);
+      logger.startSection(`Target shop "${targetShopName}" is protected (default).`);
     }
+
+    // Get current git commit
+    let currentCommit = 'unknown';
+    try {
+      currentCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    } catch (error) {
+      logger.warn('Could not determine current git commit');
+    }
+
+    // Display info
+    logger.info(`Version: ${currentCommit}`);
+    logger.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
+    logger.info(`Limit: ${this.options.limit}`);
+
+    // Initialize log file if not already initialized
+    if (!logger.getLogFilePath()) {
+      const logFilePath = logger.initializeLogFile();
+      logger.info(`Logging to file: ${logFilePath}`);
+    }
+
+    // Log force-recreate if it's product data sync
+    if (this.options.resource === 'product' && this.options.command === "data" && this.options.forceRecreate) {
+      logger.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
+    }
+
+    logger.endSection();
 
     // Create Shopify clients
     const sourceClientInstance = new Shopify({
@@ -205,23 +231,7 @@ class MetaSyncCli {
   }
 
   _displayExecutionInfo() {
-    // Get current git commit
-    let currentCommit = 'unknown';
-    try {
-      currentCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-    } catch (error) {
-      logger.warn('Could not determine current git commit');
-    }
-
-    // Display info
-    logger.info(`Version: ${currentCommit}`);
-    logger.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
-    logger.info(`Limit: ${this.options.limit}`);
-
-    // Log force-recreate if it's product data sync
-    if (this.options.resource === 'product' && this.options.command === "data" && this.options.forceRecreate) {
-      logger.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
-    }
+    // This method is now empty, as the execution info is displayed in _initializeClients
   }
 
   _shouldListDefinitionsAndExit() {
@@ -470,10 +480,6 @@ async function main() {
     logger.error("Error: Source shop not found in .shops.json");
     process.exit(1);
   }
-
-  // Initialize log file
-  const logFilePath = logger.initializeLogFile();
-  logger.info(`Logging to file: ${logFilePath}`);
 
   // Create instance and run
   const cli = new MetaSyncCli(options);
