@@ -9,10 +9,15 @@ class CollectionOperationHandler {
     this.lastProcessedCollection = null;
     this.ruleSetHandler = null;
     this.targetMetafieldDefinitions = {};
+    this.metafieldHandler = null;
   }
 
   setRuleSetHandler(ruleSetHandler) {
     this.ruleSetHandler = ruleSetHandler;
+  }
+
+  setMetafieldHandler(metafieldHandler) {
+    this.metafieldHandler = metafieldHandler;
   }
 
   setTargetMetafieldDefinitions(targetMetafieldDefinitions) {
@@ -325,7 +330,7 @@ class CollectionOperationHandler {
       // In Shopify API Collection Input requires specific metafield format
       logger.info(`Preparing ${collection.metafields.edges.length} metafields for collection "${collection.title}"`);
 
-      input.metafields = collection.metafields.edges.map(edge => {
+      let metafieldsArray = collection.metafields.edges.map(edge => {
         const node = edge.node;
 
         if (!node.definition) {
@@ -397,6 +402,17 @@ class CollectionOperationHandler {
           return null;
         }
       }).filter(Boolean);
+
+      // Filter out any metafields that reference collections
+      if (this.metafieldHandler) {
+        const originalCount = metafieldsArray.length;
+        metafieldsArray = this.metafieldHandler.filterCollectionMetafields(metafieldsArray);
+        if (metafieldsArray.length < originalCount) {
+          logger.info(`After filtering collection references: ${metafieldsArray.length} metafields remaining for collection "${collection.title}"`);
+        }
+      }
+
+      input.metafields = metafieldsArray;
     }
 
     return input;

@@ -115,15 +115,105 @@ class CollectionMetafieldHandler {
     return { valid: true };
   }
 
+  async validateCollectionReferences(collection) {
+    if (!collection.metafields || !collection.metafields.edges || collection.metafields.edges.length === 0) {
+      return { valid: true, validMetafields: collection.metafields };
+    }
+
+    const validMetafieldEdges = [];
+    const invalidCollectionRefs = [];
+
+    for (const edge of collection.metafields.edges) {
+      const node = edge.node;
+      // Check if the metafield value is a collection reference
+      if (node.value && node.value.includes('gid://shopify/Collection/')) {
+        const collectionId = node.value;
+
+        try {
+          // Query the target store to check if this collection exists
+          const response = await this.targetClient.graphql(`
+            query CheckCollection($id: ID!) {
+              node(id: $id) {
+                id
+                ... on Collection {
+                  title
+                }
+              }
+            }
+          `, { id: collectionId });
+
+          if (!response.node) {
+            // Get the collection details from source store for better warning message
+            let collectionInfo = collectionId;
+            try {
+              const sourceResponse = await this.sourceClient.graphql(`
+                query GetCollectionDetails($id: ID!) {
+                  node(id: $id) {
+                    id
+                    ... on Collection {
+                      title
+                    }
+                  }
+                }
+              `, { id: collectionId });
+
+              if (sourceResponse.node) {
+                collectionInfo = `"${sourceResponse.node.title}" (${collectionId})`;
+              }
+            } catch (err) {
+              // If we can't get source details, just use the ID
+            }
+
+            // Log a warning and don't include this metafield
+            logger.warn(`Collection "${collection.title}" references collection ${collectionInfo} that doesn't exist in the target store. Removing this metafield reference.`);
+            invalidCollectionRefs.push(`${node.namespace}.${node.key}`);
+            continue;
+          }
+        } catch (error) {
+          logger.warn(`Error validating collection reference: ${error.message}. Removing this metafield reference.`);
+          invalidCollectionRefs.push(`${node.namespace}.${node.key}`);
+          continue;
+        }
+      }
+
+      // Add valid metafield to the list
+      validMetafieldEdges.push(edge);
+    }
+
+    // Create a new metafields object with only valid references
+    const validMetafields = {
+      ...collection.metafields,
+      edges: validMetafieldEdges
+    };
+
+    return {
+      valid: true,
+      validMetafields,
+      invalidCollectionRefs
+    };
+  }
+
   async lookupMetafieldDefinitionIds(collection) {
     if (!collection.metafields || !collection.metafields.edges || collection.metafields.edges.length === 0) {
       return null;
     }
 
     // Validate any metaobject references first
-    const validationResult = await this.validateMetaobjectReferences(collection);
-    if (!validationResult.valid) {
-      throw new Error(validationResult.error);
+    const metaobjectValidationResult = await this.validateMetaobjectReferences(collection);
+    if (!metaobjectValidationResult.valid) {
+      throw new Error(metaobjectValidationResult.error);
+    }
+
+    // Validate and filter out invalid collection references
+    const collectionValidationResult = await this.validateCollectionReferences(collection);
+    const validatedCollection = {
+      ...collection,
+      metafields: collectionValidationResult.validMetafields
+    };
+
+    // If all metafields were filtered out, return null
+    if (validatedCollection.metafields.edges.length === 0) {
+      return null;
     }
 
     // Always use COLLECTION owner type
@@ -137,7 +227,7 @@ class CollectionMetafieldHandler {
 
     const metafieldLookup = {};
 
-    for (const edge of collection.metafields.edges) {
+    for (const edge of validatedCollection.metafields.edges) {
       const node = edge.node;
       const key = `${node.namespace}.${node.key}`;
 
@@ -154,6 +244,33 @@ class CollectionMetafieldHandler {
     }
 
     return metafieldLookup;
+  }
+
+  // This method will be called directly before preparing metafields for API
+  filterCollectionMetafields(metafields) {
+    if (!metafields || !Array.isArray(metafields) || metafields.length === 0) {
+      return [];
+    }
+
+    const filteredMetafields = [];
+
+    for (const metafield of metafields) {
+      // Filter out collection references
+      if (metafield.value && typeof metafield.value === 'string' &&
+          metafield.value.includes('gid://shopify/Collection/')) {
+        logger.warn(`Filtering out collection reference in metafield ${metafield.namespace}.${metafield.key}: ${metafield.value}`);
+        continue;
+      }
+
+      // Add valid metafield to the filtered list
+      filteredMetafields.push(metafield);
+    }
+
+    if (filteredMetafields.length < metafields.length) {
+      logger.info(`Removed ${metafields.length - filteredMetafields.length} collection references from metafields`);
+    }
+
+    return filteredMetafields;
   }
 
   getTargetMetafieldDefinitions() {

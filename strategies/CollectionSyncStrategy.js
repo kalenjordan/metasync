@@ -28,6 +28,9 @@ class CollectionSyncStrategy {
     this.metafieldHandler = new CollectionMetafieldHandler(sourceClient, targetClient, options);
     this.ruleSetHandler = new CollectionRuleSetHandler();
     this.productHandler = new CollectionProductHandler(sourceClient, targetClient, options);
+
+    // Set up the metafieldHandler on the operationHandler so it can filter collection references
+    this.operationHandler.setMetafieldHandler(this.metafieldHandler);
   }
 
   // --- Main Sync Method ---
