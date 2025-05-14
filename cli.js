@@ -9,6 +9,7 @@ const { SHOPIFY_API_VERSION } = require('./constants');
 const commandSetup = require('./utils/commandSetup');
 const shopConfig = require('./utils/shopConfig');
 const chalk = require('chalk');
+require('dotenv').config();
 
 // Import strategies
 const strategyLoader = require('./utils/strategyLoader');
@@ -75,10 +76,13 @@ class MetaSyncCli {
     logger.info(`Dry Run: ${!this.options.live ? 'Yes (no changes will be made)' : 'No (changes will be made)'}`);
     logger.info(`Limit: ${this.options.limit}`);
 
-    // Initialize log file if not already initialized
-    if (!logger.getLogFilePath()) {
+    // Initialize log file if not already initialized and LOG_TO_FILE is not false
+    const logToFile = process.env.LOG_TO_FILE !== 'false';
+    if (!logger.getLogFilePath() && logToFile) {
       const logFilePath = logger.initializeLogFile();
       logger.info(`Logging to file: ${logFilePath}`);
+    } else if (!logToFile) {
+      logger.info(`File logging disabled by LOG_TO_FILE environment variable`);
     }
 
     // Log force-recreate if it's product data sync
@@ -485,14 +489,18 @@ async function main() {
   const cli = new MetaSyncCli(options);
   await cli.run();
 
-  // Close log file when done
-  logger.closeLogFile();
+  // Close log file when done only if logging to file is enabled
+  if (process.env.LOG_TO_FILE !== 'false' && logger.getLogFilePath()) {
+    logger.closeLogFile();
+  }
 }
 
 // Run the program
 main().catch(error => {
   console.error(`Fatal error: ${error.message}`);
-  // Ensure log file is closed on fatal error
-  logger.closeLogFile();
+  // Ensure log file is closed on fatal error only if it was initialized
+  if (process.env.LOG_TO_FILE !== 'false' && logger.getLogFilePath()) {
+    logger.closeLogFile();
+  }
   process.exit(1);
 });
