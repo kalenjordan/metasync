@@ -15,6 +15,7 @@ require('dotenv').config();
 const strategyLoader = require('./utils/strategyLoader');
 const ShopifyIDUtils = require('./utils/ShopifyIDUtils');
 const logger = require('./utils/logger');
+const { MetaobjectFetchDefinitions } = require('./graphql');
 
 class MetaSyncCli {
   constructor(options = {}) {
@@ -436,36 +437,17 @@ class MetaSyncCli {
   }
 
   async fetchMetaobjectDefinitions(client, type = null) {
-    const query = `#graphql
-        query FetchMetaobjectDefinitions {
-            metaobjectDefinitions(first: 100) {
-                nodes {
-                    id
-                    name
-                    type
-                    description
-                    fieldDefinitions {
-                        key
-                        name
-                        description
-                        required
-                        type { name }
-                        validations { name value }
-                    }
-                    access { admin storefront }
-                    capabilities {
-                       publishable { enabled }
-                    }
-                }
-            }
-        }
-      `;
+    const variables = type ? { type } : undefined;
     try {
-        const response = await client.graphql(query, undefined, 'FetchMetaobjectDefinitions');
-        return response.metaobjectDefinitions.nodes;
+      const response = await client.graphql(
+        MetaobjectFetchDefinitions,
+        variables,
+        'FetchMetaobjectDefinitions'
+      );
+      return response.metaobjectDefinitions.nodes;
     } catch (error) {
-        logger.error(`Error fetching metaobject definitions: ${error.message}`);
-        return [];
+      logger.error(`Error fetching metaobject definitions: ${error.message}`);
+      return [];
     }
   }
 }

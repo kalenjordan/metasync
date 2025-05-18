@@ -25,6 +25,8 @@ const UpdateMetafieldDefinition = require('./UpdateMetafieldDefinition.graphql')
 const DeleteMetafieldDefinition = require('./DeleteMetafieldDefinition.graphql');
 const GetMetaobjectDefinitionType = require('./GetMetaobjectDefinitionType.graphql');
 const GetMetaobjectDefinitionId = require('./GetMetaobjectDefinitionId.graphql');
+const MetaobjectFetchDefinitions = require('./MetaobjectFetchDefinitions');
+const MetaobjectFetchAllDefinitions = require('./MetaobjectFetchAllDefinitions');
 
 module.exports = {
   DeleteCollection,
@@ -45,5 +47,7 @@ module.exports = {
   UpdateMetafieldDefinition,
   DeleteMetafieldDefinition,
   GetMetaobjectDefinitionType,
-  GetMetaobjectDefinitionId
+  GetMetaobjectDefinitionId,
+  MetaobjectFetchDefinitions,
+  MetaobjectFetchAllDefinitions
 };
