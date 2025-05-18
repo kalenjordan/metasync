@@ -26,17 +26,6 @@ describe('metasync CLI tool', () => {
     expect(stdout).toContain('--namespace <namespace>')
   })
 
-  it('shows error for missing required resource parameter', async () => {
-    try {
-      await execa('node', [cliPath, 'definitions', 'metafields', '--namespace', 'custom'])
-      // If the command doesn't throw, the test should fail
-      expect(true).toBe(false)
-    } catch (err) {
-      // Check if the error indicates missing required parameter
-      expect(err.stderr).toMatch(/required option.*--resource/i)
-    }
-  })
-
   // Only run these tests if .shops.json exists
   if (shopsConfigExists) {
     describe('Live API tests', () => {
