@@ -1,6 +1,6 @@
 # MetaSync CLI
 
-A command-line tool to sync Shopify metaobject definitions, metafield definitions, and resource data between stores.
+A command-line tool to synchronize Shopify metaobject definitions, metafield definitions and resource data between stores.
 
 ## Installation
 
@@ -34,68 +34,114 @@ Create a `.shops.json` file in the root directory based on the provided `.shops.
 ]
 ```
 
-Replace the example values with your actual shop names, domains, and access tokens. You'll need an access token with appropriate permissions for the resources you want to sync.
+Replace the example values with your actual shop names, domains and access tokens. You'll need an access token with the necessary permissions for the resources you want to sync.
 
 ### Shop Protection
 
-By default, all shops are protected from accidental modifications. To allow changes to be made to a shop, you must explicitly set `"protected": false` in your `.shops.json` file for that shop:
+By default all shops are protected from accidental modifications. To allow changes to be made to a shop you must explicitly set `"protected": false` in your `.shops.json` file for that shop:
 
 ```json
 {
   "name": "my-shop",
   "domain": "my-shop.myshopify.com",
   "accessToken": "shpat_access_token",
-  "protected": false  // Must be set to false to allow writes
+  "protected": false
 }
 ```
 
-If a shop is protected and you try to make changes with the `--live` flag, the tool will exit with an error.
+If a shop is protected and you try to make changes with the `--live` flag the tool will exit with an error.
 
 ## Usage
 
-MetaSync has two main commands:
+MetaSync has two top‑level commands:
 
-- `definitions` - Sync definitions only (metaobject definitions, metafield definitions)
-- `data` - Sync data only (products, metaobjects, pages)
+- `definitions` – sync only the definitions (metaobjects or metafield definitions)
+- `data` – sync resource data only
 
 ### Common Options
 
-All commands accept these common options:
+All commands accept the following options:
 
-- `--source <shop>` - Source shop name (must exist in .shops.json) [required]
-- `--target <shop>` - Target shop name (defaults to source shop if not specified)
-- `--live` - Make actual changes (default is dry run)
-- `--debug` - Enable debug logging
-- `--limit <number>` - Limit the number of items to process per run (default: 3)
+- `--source <shop>` – Source shop name (required)
+- `--target <shop>` – Target shop name (defaults to source if not specified)
+- `--live` – Make actual changes (default is dry run)
+- `--debug` – Enable debug logging
+- `--limit <number>` – Limit the number of items to process (default: 3)
+- `--batch-size <number>` – Batch size for pagination (default: 25)
 
-### Basic Example
+### Definition Commands
+
+```
+metasync definitions metafields --resource <resource> --namespace <namespace> [options]
+metasync definitions metaobjects --type <type> [options]
+```
+
+Options for `metafields`:
+
+- `--resource <type>` – Resource type (products, companies, orders, variants, customers, collections or `all`)
+- `--namespace <namespace>` – Namespace to sync (`all` or comma separated list)
+- `--key <key>` – Specific definition key (`namespace.key`)
+- `--delete` – Delete mode, remove definitions from the target store
+
+Options for `metaobjects`:
+
+- `--type <type>` – Metaobject definition type to sync
+
+### Data Commands
+
+```
+metasync data <resource> [options]
+```
+
+Supported resources: `products`, `metaobjects`, `pages`, `collections`, `customers`, `orders`, `variants`, or `all` to sync everything in one run.
+
+Resource‑specific options:
+
+**products**
+- `--handle <handle>` – Sync a single product by handle
+- `--id <id>` – Sync a single product by ID
+- `--namespace <namespace>` – Sync only metafields in this namespace
+- `--key <key>` – Sync only metafields with this key
+- `--force-recreate` – Delete and recreate products instead of updating
+- `--delete` – Remove matching products from the target store
+- `--batch-size <size>` – Number of products per batch (default: 25)
+- `--start-cursor <cursor>` – Pagination cursor for resuming interrupted syncs
+
+**metaobjects**
+- `--type <type>` – Metaobject definition type to sync (required)
+- `--handle <handle>` – Sync a single metaobject by handle
+- `--delete` – Remove matching metaobjects from the target store
+
+**pages**, **collections**, **customers**, **orders**, **variants**
+- `--handle <handle>` / `--id <id>` (where applicable)
+- `--type <type>` for collections (`manual` or `smart`)
+- `--delete` – Remove matching resources from the target store
+
+The `data all` command accepts `--batch-size` to control pagination across all resources.
+
+### Examples
 
 ```sh
-# Sync product data from dev shop to test shop (dry run mode)
+# Dry run product sync between shops
 metasync data products --source my-dev-shop --target my-test-shop
 
-# Apply changes with --live flag
+# Apply changes
 metasync data products --source my-dev-shop --target my-test-shop --live
 
-# Sync multiple namespaces at once using comma-separated values
-metasync definitions metafields --resource products --namespace custom1,custom2,custom3 --source my-dev-shop --target my-test-shop
+# Sync multiple namespaces at once
+metasync definitions metafields --resource products --namespace custom1,custom2 --source my-dev-shop --target my-test-shop
 
-# Delete mode: remove all metafield definitions from target store
+# Delete metafield definitions from target
 metasync definitions metafields --resource products --namespace custom --delete --live --source my-dev-shop --target my-test-shop
 ```
 
-For detailed command options and more examples, use the built-in help:
-
-```sh
-metasync --help
-```
+For additional examples and the most up‑to‑date options run `metasync --help`.
 
 ## Safety Features
 
-- By default, the tool runs in "dry run" mode, showing what would happen without making changes
-- All shops are protected by default, requiring explicit `"protected": false` in `.shops.json` to allow modifications
-- Cannot use target shops with "production" or "prod" in the name for safety
-- Full logging during synchronization process
+- Runs in dry run mode by default
+- Shops are protected by default and require `"protected": false` to allow writes
+- Full logging of all synchronization actions
 
 ## ISSUES
 
