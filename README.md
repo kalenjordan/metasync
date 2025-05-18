@@ -55,7 +55,7 @@ If a shop is protected and you try to make changes with the `--live` flag, the t
 
 MetaSync has two main commands:
 
-- `define` - Sync definitions only (metaobject definitions, metafield definitions)
+- `definitions` - Sync definitions only (metaobject definitions, metafield definitions)
 - `data` - Sync data only (products, metaobjects, pages)
 
 ### Common Options
@@ -72,10 +72,10 @@ All commands accept these common options:
 
 ```sh
 # Sync product data from dev shop to test shop (dry run mode)
-metasync data product --source my-dev-shop --target my-test-shop
+metasync data products --source my-dev-shop --target my-test-shop
 
 # Apply changes with --live flag
-metasync data product --source my-dev-shop --target my-test-shop --live
+metasync data products --source my-dev-shop --target my-test-shop --live
 
 # Sync multiple namespaces at once using comma-separated values
 metasync definitions metafields --resource product --namespace custom1,custom2,custom3 --source my-dev-shop --target my-test-shop
