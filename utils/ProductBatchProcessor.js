@@ -5,7 +5,6 @@ const logger = require("./logger");
  * Handles batch processing of products during sync operations.
  * Provides a pagination-aware product fetcher and batch processing utilities.
  */
-;
 const chalk = require('chalk');
 
 class ProductBatchProcessor {

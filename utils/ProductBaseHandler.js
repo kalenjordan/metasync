@@ -7,7 +7,6 @@
  * - Product deletion
  * - Fetching products by ID or handle
  */
-;
 const logger = require('./logger');
 
 class ProductBaseHandler {

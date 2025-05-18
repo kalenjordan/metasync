@@ -7,7 +7,6 @@ const logger = require("./logger");
  * - Associating images with variants
  * - Managing media attachments
  */
-;
 const ShopifyIDUtils = require('./ShopifyIDUtils');
 
 class ProductImageHandler {

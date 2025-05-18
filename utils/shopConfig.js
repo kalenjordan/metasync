@@ -1,7 +1,6 @@
 const logger = require("./logger");
 const path = require('path');
 const fs = require('fs');
-;
 
 /**
  * Get shop configuration from .shops.json file by shop name

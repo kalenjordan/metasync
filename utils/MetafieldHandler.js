@@ -4,7 +4,6 @@
  * Handles batching and synchronization of metafields for various Shopify resources.
  * Supports batching to respect Shopify's 25-metafield-per-call limit.
  */
-;
 const logger = require('./logger');
 const ErrorHandler = require('./ErrorHandler');
 

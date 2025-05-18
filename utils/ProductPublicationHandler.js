@@ -8,7 +8,6 @@ const logger = require("./logger");
  * - Publishing products to channels
  * - Managing publication errors
  */
-;
 
 class ProductPublicationHandler {
   constructor(client, options = {}) {

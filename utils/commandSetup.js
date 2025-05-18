@@ -1,6 +1,5 @@
 const logger = require("./logger");
 const { program } = require("commander");
-;
 
 /**
  * Setup command line options and parse argv

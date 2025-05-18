@@ -7,7 +7,6 @@
  * - Variant image association
  * - Variant metafield management
  */
-;
 const logger = require('./logger');
 
 class ProductVariantHandler {
