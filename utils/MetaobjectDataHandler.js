@@ -2,10 +2,10 @@ const logger = require("./logger");
 const ErrorHandler = require("./ErrorHandler");
 
 // Import GraphQL queries/mutations
-const FETCH_METAOBJECTS = require("../graphql/MetaobjectFetch");
-const CREATE_METAOBJECT = require("../graphql/MetaobjectCreate");
-const UPDATE_METAOBJECT = require("../graphql/MetaobjectUpdate");
-const FETCH_METAOBJECT_BY_ID = require("../graphql/MetaobjectFetchById");
+const FETCH_METAOBJECTS = require("../graphql/MetaobjectFetch.graphql");
+const CREATE_METAOBJECT = require("../graphql/MetaobjectCreate.graphql");
+const UPDATE_METAOBJECT = require("../graphql/MetaobjectUpdate.graphql");
+const FETCH_METAOBJECT_BY_ID = require("../graphql/MetaobjectFetchById.graphql");
 
 class MetaobjectDataHandler {
   constructor(client, options) {

@@ -4,12 +4,12 @@ const ErrorHandler = require('../utils/ErrorHandler');
 
 // Import GraphQL queries and mutations
 const {
-  FetchMetafieldDefinitions,
-  CreateMetafieldDefinition,
-  UpdateMetafieldDefinition,
-  DeleteMetafieldDefinition,
-  GetMetaobjectDefinitionType,
-  GetMetaobjectDefinitionId
+  MetafieldDefinitionsFetch,
+  MetafieldDefinitionCreate,
+  MetafieldDefinitionUpdate,
+  MetafieldDefinitionDelete,
+  MetaobjectDefinitionTypeFetch,
+  MetaobjectDefinitionIdFetch
 } = require('../graphql');
 
 class BaseMetafieldSyncStrategy {
@@ -59,7 +59,7 @@ class BaseMetafieldSyncStrategy {
 
     const operationName = `Fetch${this.ownerType}MetafieldDefinitions`;
     try {
-      const response = await client.graphql(FetchMetafieldDefinitions, variables, operationName);
+      const response = await client.graphql(MetafieldDefinitionsFetch, variables, operationName);
       return response.metafieldDefinitions.nodes;
     } catch (error) {
       logger.error(`Error fetching ${this.resourceName} definitions: ${error.message}`);
@@ -111,7 +111,7 @@ class BaseMetafieldSyncStrategy {
     if (this.options.notADrill) {
       try {
         logger.info(`Sending API request to create metafield definition: ${input.namespace}.${input.key}`);
-        const result = await client.graphql(CreateMetafieldDefinition, { definition: input }, operationName);
+        const result = await client.graphql(MetafieldDefinitionCreate, { definition: input }, operationName);
 
         if (result.metafieldDefinitionCreate.userErrors.length > 0) {
           // Use ErrorHandler to handle user errors
@@ -142,7 +142,7 @@ class BaseMetafieldSyncStrategy {
 
             try {
               const unpinnedResult = await client.graphql(
-                CreateMetafieldDefinition,
+                MetafieldDefinitionCreate,
                 { definition: unpinnedInput },
                 operationName
               );
@@ -235,7 +235,7 @@ class BaseMetafieldSyncStrategy {
     const operationName = `Update${this.ownerType}MetafieldDefinition`;
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(UpdateMetafieldDefinition, { definition: input }, operationName);
+        const result = await client.graphql(MetafieldDefinitionUpdate, { definition: input }, operationName);
         if (result.metafieldDefinitionUpdate.userErrors.length > 0) {
           // Use ErrorHandler to handle user errors
           ErrorHandler.handleGraphQLUserErrors(
@@ -265,7 +265,7 @@ class BaseMetafieldSyncStrategy {
 
             try {
               const unpinnedResult = await client.graphql(
-                UpdateMetafieldDefinition,
+                MetafieldDefinitionUpdate,
                 { definition: unpinnedInput },
                 operationName
               );
@@ -328,7 +328,7 @@ class BaseMetafieldSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(DeleteMetafieldDefinition, { id: definitionId }, operationName);
+        const result = await client.graphql(MetafieldDefinitionDelete, { id: definitionId }, operationName);
         if (result.metafieldDefinitionDelete.userErrors.length > 0) {
           logger.error(
             `Failed to delete ${this.resourceName} definition ${definition.namespace}.${definition.key}:`,
@@ -350,7 +350,7 @@ class BaseMetafieldSyncStrategy {
 
   async getMetaobjectDefinitionTypeById(client, definitionId) {
     try {
-      const response = await client.graphql(GetMetaobjectDefinitionType, { id: definitionId }, "GetMetaobjectDefinitionType");
+      const response = await client.graphql(MetaobjectDefinitionTypeFetch, { id: definitionId }, "GetMetaobjectDefinitionType");
       if (response.metaobjectDefinition) {
         return response.metaobjectDefinition.type;
       } else {
@@ -365,7 +365,7 @@ class BaseMetafieldSyncStrategy {
 
   async getMetaobjectDefinitionIdByType(client, definitionType) {
     try {
-      const response = await client.graphql(GetMetaobjectDefinitionId, { type: definitionType }, "GetMetaobjectDefinitionId");
+      const response = await client.graphql(MetaobjectDefinitionIdFetch, { type: definitionType }, "GetMetaobjectDefinitionId");
       if (response.metaobjectDefinitionByType) {
         return response.metaobjectDefinitionByType.id;
       } else {

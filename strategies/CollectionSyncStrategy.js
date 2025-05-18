@@ -1,5 +1,11 @@
 const logger = require("../utils/logger");
-const { GetCollections, GetCollectionByHandle, CreateCollection, UpdateCollection, DeleteCollection } = require('../graphql');
+const {
+  CollectionFetchAll,
+  CollectionFetchByHandle,
+  CollectionCreate,
+  CollectionUpdate,
+  CollectionDelete
+} = require('../graphql');
 const SyncResultTracker = require('../utils/SyncResultTracker');
 const CollectionRuleSetHandler = require('../utils/CollectionRuleSetHandler');
 

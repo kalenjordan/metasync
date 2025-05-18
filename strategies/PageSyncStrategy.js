@@ -1,6 +1,10 @@
 const logger = require("../utils/logger");
 ;
-const { GetPages, CreatePage, UpdatePage } = require('../graphql');
+const {
+  PageFetchAll,
+  PageCreate,
+  PageUpdate
+} = require('../graphql');
 
 class PageSyncStrategy {
   constructor(sourceClient, targetClient, options) {
@@ -14,7 +18,7 @@ class PageSyncStrategy {
 
   async fetchPages(client) {
     try {
-      const response = await client.graphql(GetPages, { first: 100 }, 'GetPages');
+      const response = await client.graphql(PageFetchAll, { first: 100 }, 'GetPages');
       return response.pages.edges.map(edge => edge.node);
     } catch (error) {
       logger.error(`Error fetching pages: ${error.message}`);
@@ -40,7 +44,7 @@ class PageSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(CreatePage, { page: input }, 'CreatePage');
+        const result = await client.graphql(PageCreate, { page: input }, 'CreatePage');
         if (result.pageCreate.userErrors.length > 0) {
           logger.error(`Failed to create page "${page.title}":`, result.pageCreate.userErrors);
           return null;
@@ -77,7 +81,7 @@ class PageSyncStrategy {
 
     if (this.options.notADrill) {
       try {
-        const result = await client.graphql(UpdatePage, { id, page: input }, 'UpdatePage');
+        const result = await client.graphql(PageUpdate, { id, page: input }, 'UpdatePage');
         if (result.pageUpdate.userErrors.length > 0) {
           logger.error(`Failed to update page "${page.title}":`, result.pageUpdate.userErrors);
           return null;
