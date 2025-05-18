@@ -133,6 +133,15 @@ metasync definitions metafields --resource products --namespace custom1,custom2 
 
 # Delete metafield definitions from target
 metasync definitions metafields --resource products --namespace custom --delete --live --source my-dev-shop --target my-test-shop
+
+# Sync a single metaobject by handle
+metasync data metaobjects --type blog --handle introduction --source my-dev-shop --target my-test-shop --live
+
+# Limit number of products and enable debug logging
+metasync data products --source my-dev-shop --target my-test-shop --limit 10 --debug
+
+# Resume product sync from a saved cursor
+metasync data products --source my-dev-shop --target my-test-shop --start-cursor <cursor> --live
 ```
 
 For additional examples and the most up‑to‑date options run `metasync --help`.
