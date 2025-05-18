@@ -86,8 +86,8 @@ class MetaSyncCli {
       logger.info(`File logging disabled by LOG_TO_FILE environment variable`);
     }
 
-    // Log force-recreate if it's product data sync
-    if (this.options.resource === 'product' && this.options.command === "data" && this.options.forceRecreate) {
+    // Log force-recreate if it's products data sync
+    if (this.options.resource === 'products' && this.options.command === "data" && this.options.forceRecreate) {
       logger.info(`Force Recreate: ${this.options.forceRecreate ? 'Yes' : 'No'}`);
     }
 
@@ -240,7 +240,7 @@ class MetaSyncCli {
   }
 
   _shouldListDefinitionsAndExit() {
-    const metafieldResourceTypes = ['product', 'company', 'order', 'variant', 'customer', 'collection'];
+    const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers', 'collections'];
 
     // Determine if we need to list definitions and exit
     if (this.options.resource === 'metaobjects' && !this.options.key) {

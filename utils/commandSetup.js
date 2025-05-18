@@ -86,12 +86,12 @@ COMMANDS:
   metaobject            Sync metaobject definitions
 
 Examples:
-  metasync definitions metafields --resource product --namespace custom
+  metasync definitions metafields --resource products --namespace custom
   metasync definitions metafields --resource all --namespace custom
-  metasync definitions metafields --resource product --namespace all
+  metasync definitions metafields --resource products --namespace all
   metasync definitions metafields --resource all --namespace all
-  metasync definitions metafields --resource product --namespace custom1,custom2,custom3
-  metasync definitions metafields --resource product --namespace custom --delete --live
+  metasync definitions metafields --resource products --namespace custom1,custom2,custom3
+  metasync definitions metafields --resource products --namespace custom --delete --live
   metasync definitions metaobject --type territory
 `;
 
@@ -142,7 +142,7 @@ Examples:
   const defineMetafieldsCmd = defineCommand
     .command("metafields")
     .description("Sync metafield definitions")
-    .option("--resource <type>", "Type of resource (product, company, order, variant, customer, or 'all' for all types)")
+    .option("--resource <type>", "Type of resource (products, companies, orders, variants, customers, or 'all' for all types)")
     .option("--namespace <namespace>", "Namespace to sync (use 'all' to sync all namespaces, or comma-separated list for multiple namespaces)")
     .option("--key <key>", "Specific definition key to sync (e.g., 'namespace.key' - optional if --namespace is used)")
     .option("--delete", "Delete mode: removes all metafield definitions from target store (ignores source store)", false)
@@ -151,7 +151,7 @@ Examples:
       Object.assign(mergedOptions, cmdOptions);
       // Set command type
       mergedOptions.command = "definitions";
-      // Don't default to product anymore
+      // Don't default to products anymore
     });
 
   const defineMetaobjectsCmd = defineCommand

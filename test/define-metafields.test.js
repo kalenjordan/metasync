@@ -28,7 +28,7 @@ if (!shopsConfigExists) {
           cliPath,
           'definitions',
           'metafields',
-          '--resource', 'product',
+          '--resource', 'products',
           '--namespace', 'custom',
           '--source', 'demo',
           '--target', 'test'

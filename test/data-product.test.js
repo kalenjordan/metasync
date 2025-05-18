@@ -9,19 +9,19 @@ const shopsConfigExists = fs.existsSync(path.join(__dirname, '../.shops.json'))
 
 // Skip all tests if .shops.json doesn't exist
 if (!shopsConfigExists) {
-  describe.skip('Data Product Command Tests (skipped - missing .shops.json)', () => {
+  describe.skip('Data Products Command Tests (skipped - missing .shops.json)', () => {
     it('dummy test', () => {
       expect(true).toBe(true)
     })
   })
 } else {
-  describe('Data Product Command', () => {
+  describe('Data Products Command', () => {
     beforeAll(() => {
       // Set longer timeout for API calls
       jest.setTimeout(60000)
     })
 
-    it('executes data product command', async () => {
+    it('executes data products command', async () => {
       try {
         // Run the command
         await execa('node', [

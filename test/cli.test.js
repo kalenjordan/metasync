@@ -47,7 +47,7 @@ describe('metasync CLI tool', () => {
             cliPath,
             'definitions',
             'metafields',
-            '--resource', 'product',
+            '--resource', 'products',
             '--source', 'demo',
             '--target', 'test',
             '--namespace', 'custom'

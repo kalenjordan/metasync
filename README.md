@@ -78,10 +78,10 @@ metasync data products --source my-dev-shop --target my-test-shop
 metasync data products --source my-dev-shop --target my-test-shop --live
 
 # Sync multiple namespaces at once using comma-separated values
-metasync definitions metafields --resource product --namespace custom1,custom2,custom3 --source my-dev-shop --target my-test-shop
+metasync definitions metafields --resource products --namespace custom1,custom2,custom3 --source my-dev-shop --target my-test-shop
 
 # Delete mode: remove all metafield definitions from target store
-metasync definitions metafields --resource product --namespace custom --delete --live --source my-dev-shop --target my-test-shop
+metasync definitions metafields --resource products --namespace custom --delete --live --source my-dev-shop --target my-test-shop
 ```
 
 For detailed command options and more examples, use the built-in help:
