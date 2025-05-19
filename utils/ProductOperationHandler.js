@@ -42,7 +42,12 @@ class ProductOperationHandler {
       handle: product.handle,
       status: product.status || 'ACTIVE',
       tags: product.tags,
-      options: product.options.map(opt => opt.name)
+      productOptions: product.options.map(opt => {
+        return {
+          name: opt.name,
+          values: opt.values.map(value => ({ name: value }))
+        };
+      })
       // Don't include variants directly as we'll use productVariantsBulkCreate for better control
     };
 
