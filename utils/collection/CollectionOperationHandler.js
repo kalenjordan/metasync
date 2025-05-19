@@ -1,5 +1,9 @@
 const logger = require('../logger');
-const { CreateCollection, UpdateCollection, DeleteCollection } = require('../../graphql');
+const {
+  CollectionCreate,
+  CollectionUpdate,
+  CollectionDelete
+} = require('../../graphql');
 
 class CollectionOperationHandler {
   constructor(sourceClient, targetClient, options) {
@@ -42,7 +46,7 @@ class CollectionOperationHandler {
 
     try {
       const result = await client.graphql(
-        CreateCollection,
+        CollectionCreate,
         { input },
         'CreateCollection'
       );
@@ -85,7 +89,7 @@ class CollectionOperationHandler {
 
     try {
       const result = await client.graphql(
-        UpdateCollection,
+        CollectionUpdate,
         { input },
         'UpdateCollection'
       );
@@ -114,7 +118,7 @@ class CollectionOperationHandler {
 
     try {
       const result = await client.graphql(
-        DeleteCollection,
+        CollectionDelete,
         { input },
         'DeleteCollection'
       );

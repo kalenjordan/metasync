@@ -58,7 +58,7 @@ class ProductBatchProcessor {
             after: cursor
           };
 
-          const response = await client.graphql(require('../graphql').GetProducts, variables, 'GetProducts');
+          const response = await client.graphql(require('../graphql').ProductFetchAll, variables, 'GetProducts');
 
           // Process products
           const batchProducts = response.products.edges.map(edge => {
@@ -124,7 +124,7 @@ class ProductBatchProcessor {
    */
   async getProductByHandle(client, handle) {
     try {
-      const response = await client.graphql(require('../graphql').GetProductByHandle, { handle }, 'GetProductByHandle');
+      const response = await client.graphql(require('../graphql').ProductFetchByHandle, { handle }, 'GetProductByHandle');
 
       if (!response.productByHandle) {
         return null;
@@ -171,7 +171,7 @@ class ProductBatchProcessor {
    */
   async getCollectionByHandle(client, handle) {
     try {
-      const response = await client.graphql(require('../graphql').GetCollectionByHandle, { handle }, 'GetCollectionByHandle');
+      const response = await client.graphql(require('../graphql').CollectionFetchByHandle, { handle }, 'GetCollectionByHandle');
       return response.collectionByHandle;
     } catch (error) {
       logger.error(`Error fetching collection by handle: ${error.message}`, 4);
@@ -187,7 +187,7 @@ class ProductBatchProcessor {
    */
   async getCollectionById(client, id) {
     try {
-      const response = await client.graphql(require('../graphql').GetCollectionById, { id }, 'GetCollectionById');
+      const response = await client.graphql(require('../graphql').CollectionFetchById, { id }, 'GetCollectionById');
       return response.collection;
     } catch (error) {
       logger.error(`Could not find collection for ID: ${id}`, 4);

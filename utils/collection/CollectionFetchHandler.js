@@ -1,5 +1,8 @@
 const logger = require('../logger');
-const { GetCollections, GetCollectionByHandle } = require('../../graphql');
+const {
+  CollectionFetchAll,
+  CollectionFetchByHandle
+} = require('../../graphql');
 
 class CollectionFetchHandler {
   constructor(sourceClient, targetClient, options) {
@@ -19,7 +22,7 @@ class CollectionFetchHandler {
 
     while (hasNextPage) {
       const response = await client.graphql(
-        GetCollections,
+        CollectionFetchAll,
         { first: 100, after: cursor },
         'GetCollections'
       );
@@ -44,7 +47,7 @@ class CollectionFetchHandler {
   async getCollectionType(client, collectionId) {
     const smartQuery = `query: "id:${collectionId} AND collection_type:smart"`;
     const smartResponse = await client.graphql(
-      GetCollections,
+      CollectionFetchAll,
       { first: 1, query: smartQuery },
       'GetSmartCollection'
     );
@@ -55,7 +58,7 @@ class CollectionFetchHandler {
   async getCollectionByHandle(client, handle) {
     const normalizedHandle = handle.trim().toLowerCase();
     const response = await client.graphql(
-      GetCollectionByHandle,
+      CollectionFetchByHandle,
       { handle: normalizedHandle },
       'GetCollectionByHandle'
     );
@@ -101,7 +104,7 @@ class CollectionFetchHandler {
   async fetchCollectionsByType(collectionType, limit) {
     const typeQuery = `collection_type:${collectionType}`;
     const response = await this.sourceClient.graphql(
-      GetCollections,
+      CollectionFetchAll,
       { first: limit, query: typeQuery },
       `Get${collectionType.charAt(0).toUpperCase() + collectionType.slice(1)}Collections`
     );

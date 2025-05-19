@@ -5,49 +5,66 @@ const logger = require("../utils/logger");
  * This file exports all GraphQL queries in one convenient place for easier importing.
  */
 
-const DeleteCollection = require('./DeleteCollection.graphql');
-const DeleteProduct = require('./DeleteProduct.graphql');
-const GetCollectionById = require('./GetCollectionById.graphql');
-const GetCollectionByHandle = require('./GetCollectionByHandle.graphql');
-const GetCollections = require('./GetCollections.graphql');
-const GetProductByHandle = require('./GetProductByHandle.graphql');
-const GetProducts = require('./GetProducts.graphql');
-const CreateCollection = require('./CreateCollection.graphql');
-const UpdateCollection = require('./UpdateCollection.graphql');
-const GetPages = require('./GetPages.graphql');
-const CreatePage = require('./CreatePage.graphql');
-const UpdatePage = require('./UpdatePage.graphql');
+const CollectionDelete = require('./CollectionDelete.graphql');
+const CollectionCreate = require('./CollectionCreate.graphql');
+const CollectionUpdate = require('./CollectionUpdate.graphql');
+const CollectionFetchById = require('./CollectionFetchById.graphql');
+const CollectionFetchByHandle = require('./CollectionFetchByHandle.graphql');
+const CollectionFetchAll = require('./CollectionFetchAll.graphql');
+const ProductDelete = require('./ProductDelete.graphql');
+const ProductFetchByHandle = require('./ProductFetchByHandle.graphql');
+const ProductFetchAll = require('./ProductFetchAll.graphql');
+const PageFetchAll = require('./PageFetchAll.graphql');
+const PageCreate = require('./PageCreate.graphql');
+const PageUpdate = require('./PageUpdate.graphql');
 
-// Add metafield operation imports
-const FetchMetafieldDefinitions = require('./FetchMetafieldDefinitions.graphql');
-const CreateMetafieldDefinition = require('./CreateMetafieldDefinition.graphql');
-const UpdateMetafieldDefinition = require('./UpdateMetafieldDefinition.graphql');
-const DeleteMetafieldDefinition = require('./DeleteMetafieldDefinition.graphql');
-const GetMetaobjectDefinitionType = require('./GetMetaobjectDefinitionType.graphql');
-const GetMetaobjectDefinitionId = require('./GetMetaobjectDefinitionId.graphql');
-const MetaobjectFetchDefinitions = require('./MetaobjectFetchDefinitions');
-const MetaobjectFetchAllDefinitions = require('./MetaobjectFetchAllDefinitions');
+// Metafield operations
+const MetafieldDefinitionsFetch = require('./MetafieldDefinitionsFetch.graphql');
+const MetafieldDefinitionCreate = require('./MetafieldDefinitionCreate.graphql');
+const MetafieldDefinitionUpdate = require('./MetafieldDefinitionUpdate.graphql');
+const MetafieldDefinitionDelete = require('./MetafieldDefinitionDelete.graphql');
+const MetaobjectDefinitionTypeFetch = require('./MetaobjectDefinitionTypeFetch.graphql');
+const MetaobjectDefinitionIdFetch = require('./MetaobjectDefinitionIdFetch.graphql');
+
+// Metaobject operations
+const MetaobjectFetch = require('./MetaobjectFetch.graphql');
+const MetaobjectFetchById = require('./MetaobjectFetchById.graphql');
+const MetaobjectFetchDefinitions = require('./MetaobjectFetchDefinitions.graphql');
+const MetaobjectFetchAllDefinitions = require('./MetaobjectFetchAllDefinitions.graphql');
+const MetaobjectFetchDefinitionById = require('./MetaobjectFetchDefinitionById.graphql');
+const MetaobjectCreate = require('./MetaobjectCreate.graphql');
+const MetaobjectUpdate = require('./MetaobjectUpdate.graphql');
+const MetaobjectCreateDefinition = require('./MetaobjectCreateDefinition.graphql');
+const MetaobjectUpdateDefinition = require('./MetaobjectUpdateDefinition.graphql');
 
 module.exports = {
-  DeleteCollection,
-  DeleteProduct,
-  GetCollectionById,
-  GetCollectionByHandle,
-  GetCollections,
-  GetProductByHandle,
-  GetProducts,
-  CreateCollection,
-  UpdateCollection,
-  GetPages,
-  CreatePage,
-  UpdatePage,
-  // Export metafield operations
-  FetchMetafieldDefinitions,
-  CreateMetafieldDefinition,
-  UpdateMetafieldDefinition,
-  DeleteMetafieldDefinition,
-  GetMetaobjectDefinitionType,
-  GetMetaobjectDefinitionId,
+  CollectionCreate,
+  CollectionDelete,
+  CollectionFetchById,
+  CollectionFetchByHandle,
+  CollectionFetchAll,
+  CollectionUpdate,
+  ProductDelete,
+  ProductFetchByHandle,
+  ProductFetchAll,
+  PageFetchAll,
+  PageCreate,
+  PageUpdate,
+  // Metafield operations
+  MetafieldDefinitionsFetch,
+  MetafieldDefinitionCreate,
+  MetafieldDefinitionUpdate,
+  MetafieldDefinitionDelete,
+  MetaobjectDefinitionTypeFetch,
+  MetaobjectDefinitionIdFetch,
+  // Metaobject operations
+  MetaobjectFetch,
+  MetaobjectFetchById,
   MetaobjectFetchDefinitions,
-  MetaobjectFetchAllDefinitions
+  MetaobjectFetchAllDefinitions,
+  MetaobjectFetchDefinitionById,
+  MetaobjectCreate,
+  MetaobjectUpdate,
+  MetaobjectCreateDefinition,
+  MetaobjectUpdateDefinition
 };

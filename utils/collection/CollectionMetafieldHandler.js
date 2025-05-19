@@ -1,5 +1,5 @@
 const logger = require('../logger');
-const FetchMetafieldDefinitionsQuery = require('../../graphql/FetchMetafieldDefinitions.graphql.js');
+const FetchMetafieldDefinitionsQuery = require('../../graphql/MetafieldDefinitionsFetch.graphql.js');
 
 class CollectionMetafieldHandler {
   constructor(sourceClient, targetClient, options) {
