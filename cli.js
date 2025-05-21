@@ -157,12 +157,11 @@ class MetaSyncCli {
     // Check if resource type was provided
     if (!this.options.resource) {
       logger.newline();
-      logger.info(chalk.bold("Available resource types:"));
-      logger.indent();
+      logger.startSection(chalk.bold("Available resource types:"));
       validResourceTypes.forEach(type => {
         logger.info(`${chalk.cyan(type)}`, 0, 'main');
       });
-      logger.unindent();
+      logger.endSection();
       logger.newline();
       logger.info(`Specify the resource type with ${chalk.yellow('--resource <type>')} option`);
       logger.info(`Example: ${chalk.green('metasync definitions metafields --resource products --namespace custom')}`);
@@ -266,10 +265,7 @@ class MetaSyncCli {
 
     // Use blank line and proper indentation with blank line after
     logger.newline();
-    logger.info(`Available metaobject definition types:`);
-
-    // Increase indentation level before listing types
-    logger.indent();
+    logger.startSection(`Available metaobject definition types:`);
 
     definitions.forEach(def => {
       // Using 'main' type for info to get the bullet point
@@ -277,7 +273,7 @@ class MetaSyncCli {
     });
 
     // Reset indentation after the list
-    logger.unindent();
+    logger.endSection();
   }
 
   async _listMetafieldDefinitions() {
@@ -307,9 +303,7 @@ class MetaSyncCli {
       // Process each resource type
       for (const resourceType of metafieldResourceTypes) {
         // Log the resource type
-        logger.section(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
-
-        logger.indent();
+        logger.startSection(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
 
         // Get the strategy for this resource type
         const ResourceStrategyClass = strategyLoader.getDefinitionStrategyForResource(resourceType);
@@ -337,8 +331,8 @@ class MetaSyncCli {
           logger.warn(`No sync strategy available for ${resourceType} definitions.`);
         }
 
-        // Unindent after this resource type is done
-        logger.unindent();
+        // End section for this resource type
+        logger.endSection();
       }
 
       return { definitionResults: combinedResults, dataResults: null };

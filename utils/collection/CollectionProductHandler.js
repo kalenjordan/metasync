@@ -232,8 +232,7 @@ class CollectionProductHandler {
    * @returns {Boolean} Success status
    */
   async syncCollectionProducts(sourceCollectionId, targetCollectionId) {
-    logger.info(`Syncing products between collections`);
-    logger.indent();
+    logger.startSection(`Syncing products between collections`);
 
     // Fetch products from source collection
     const sourceProducts = await this.fetchCollectionProducts(
@@ -244,7 +243,7 @@ class CollectionProductHandler {
 
     if (sourceProducts.length === 0) {
       logger.info(`No products found in source collection`);
-      logger.unindent();
+      logger.endSection();
       return true;
     }
 
@@ -311,7 +310,7 @@ class CollectionProductHandler {
 
     if (productsToAdd.length === 0) {
       logger.info(`All products are already in the target collection - nothing to add`);
-      logger.unindent();
+      logger.endSection();
       return true;
     }
 
@@ -320,11 +319,11 @@ class CollectionProductHandler {
     // Add products to the target collection
     if (productsToAdd.length > 0) {
       const success = await this.addProductsToCollection(targetCollectionId, productsToAdd);
-      logger.unindent();
+      logger.endSection();
       return success;
     } else {
       logger.warn(`No matching products found in target shop to add to collection`);
-      logger.unindent();
+      logger.endSection();
       return true;
     }
   }

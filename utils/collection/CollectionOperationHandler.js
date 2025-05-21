@@ -423,8 +423,7 @@ class CollectionOperationHandler {
   }
 
   _logOperationErrors(operation, collectionTitle, errors) {
-    logger.error(`Failed to ${operation} collection "${collectionTitle}":`);
-    logger.indent();
+    logger.startSection(`Failed to ${operation} collection "${collectionTitle}":`);
 
     // Check for metafield definition errors
     const metafieldErrors = errors.filter(err =>
@@ -435,8 +434,7 @@ class CollectionOperationHandler {
     );
 
     if (metafieldErrors.length > 0) {
-      logger.error(`Metafield Definition Errors:`);
-      logger.indent();
+      logger.startSection(`Metafield Definition Errors:`);
 
       // If collection has metafields, try to log which one is causing problems
       if (this.lastProcessedCollection && this.lastProcessedCollection.metafields) {
@@ -444,8 +442,7 @@ class CollectionOperationHandler {
           ? this.lastProcessedCollection.metafields.edges.map(edge => edge.node)
           : this.lastProcessedCollection.metafields;
 
-        logger.error(`Collection has the following metafields:`);
-        logger.indent();
+        logger.startSection(`Collection has the following metafields:`);
 
         metafields.forEach(metafield => {
           if (metafield.namespace && metafield.key) {
@@ -454,7 +451,7 @@ class CollectionOperationHandler {
           }
         });
 
-        logger.unindent();
+        logger.endSection();
 
         // Check for metafield conditions in rule set
         if (this.lastProcessedCollection.ruleSet && this.lastProcessedCollection.ruleSet.rules && this.ruleSetHandler) {
@@ -465,12 +462,11 @@ class CollectionOperationHandler {
         logger.error(`Could not find metafield information for this collection.`);
       }
 
-      logger.unindent();
+      logger.endSection();
     }
 
     // Log errors with proper formatting
-    logger.error(`API Errors:`);
-    logger.indent();
+    logger.startSection(`API Errors:`);
 
     errors.forEach(err => {
       if (err.field) {
@@ -483,8 +479,8 @@ class CollectionOperationHandler {
       }
     });
 
-    logger.unindent();
-    logger.unindent();
+    logger.endSection();
+    logger.endSection();
   }
 
   prepareMetafields(collection) {

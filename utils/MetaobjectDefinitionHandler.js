@@ -362,16 +362,14 @@ class MetaobjectDefinitionHandler {
     }
 
     logger.info(``);
-    logger.info(`Available metaobject definition types:`);
-
-    logger.indent();
+    logger.startSection(`Available metaobject definition types:`);
 
     definitions.forEach((def) => {
       logger.info(`${def.type} (${def.name || "No name"})`, 0, "main");
     });
 
     logger.info(``);
-    logger.unindent();
+    logger.endSection();
 
     logger.info(`Please run the command again with --key <type> to specify which metaobject type to sync.`);
   }

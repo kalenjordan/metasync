@@ -28,10 +28,7 @@ class ProductVariantHandler {
    * @returns {Promise<boolean>} - Success status
    */
   async updateProductVariants(productId, sourceVariants, logPrefix = '') {
-    logger.info(`Preparing to update variants for product ID: ${productId}`, 'main');
-
-    // Indent all variant operations
-    logger.indent();
+    logger.startSection(`Preparing to update variants for product ID: ${productId}`);
 
     // First, fetch current variants from the target product to get their IDs
     const targetVariantsQuery = `#graphql
@@ -101,7 +98,7 @@ class ProductVariantHandler {
 
     } catch (error) {
       logger.error(`Error fetching target product variants: ${error.message}`);
-      logger.unindent(); // Unindent before returning on error
+      logger.endSection(); // End section before returning on error
       return false;
     }
 
@@ -333,8 +330,8 @@ class ProductVariantHandler {
       logger.info(`No new variants to create`);
     }
 
-    // Unindent after all operations
-    logger.unindent();
+    // End variant operations section
+    logger.endSection();
 
     // Return overall success status
     return updateSuccess && createSuccess;
@@ -345,10 +342,7 @@ class ProductVariantHandler {
    * @private
    */
   async _updateExistingVariants(productId, variantsToUpdate, metafieldUpdates, imageUpdates) {
-    logger.info(`Updating ${variantsToUpdate.length} existing variants for product ID: ${productId}`);
-
-    // Indent for variant update operations
-    logger.indent();
+    logger.startSection(`Updating ${variantsToUpdate.length} existing variants for product ID: ${productId}`);
 
     const updateMutation = `#graphql
       mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -385,7 +379,7 @@ class ProductVariantHandler {
 
         if (result.productVariantsBulkUpdate.userErrors.length > 0) {
           logger.error(`Failed to update variants:`, result.productVariantsBulkUpdate.userErrors);
-          logger.unindent();
+          logger.endSection();
           return false;
         }
 
@@ -393,10 +387,7 @@ class ProductVariantHandler {
 
         // Handle variant image updates
         if (imageUpdates.length > 0) {
-          logger.info(`Updating images for ${imageUpdates.length} variants`);
-
-          // Indent for image operations
-          logger.indent();
+          logger.startSection(`Updating images for ${imageUpdates.length} variants`);
 
           for (const update of imageUpdates) {
             if (this.options.notADrill) {
@@ -406,8 +397,7 @@ class ProductVariantHandler {
             }
           }
 
-          // Unindent after image operations
-          logger.unindent();
+          logger.endSection();
         }
 
         // Sync metafields for each variant
@@ -426,19 +416,19 @@ class ProductVariantHandler {
           }
         }
 
-        // Unindent after all variant operations
-        logger.unindent();
+        // End variant update section
+        logger.endSection();
         return true;
       } catch (error) {
         logger.error(`Error updating variants: ${error.message}`);
-        logger.unindent();
+        logger.endSection();
         return false;
       }
     } else {
       logger.info(`[DRY RUN] Would update ${variantsToUpdate.length} variants for product ID: ${productId}`);
 
-      // Indent for dry run details
-      logger.indent();
+      // Section for dry run details
+      logger.startSection();
 
       if (imageUpdates.length > 0) {
         logger.info(`[DRY RUN] Would update images for ${imageUpdates.length} variants`);
@@ -450,11 +440,11 @@ class ProductVariantHandler {
         }
       }
 
-      // Unindent after dry run details
-      logger.unindent();
+      // End dry run details
+      logger.endSection();
 
-      // Unindent after variant operations
-      logger.unindent();
+      // End variant update section
+      logger.endSection();
 
       return true;
     }
@@ -465,10 +455,7 @@ class ProductVariantHandler {
    * @private
    */
   async _createNewVariants(productId, variantsToCreate) {
-    logger.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`);
-
-    // Indent for variant creation operations
-    logger.indent();
+    logger.startSection(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`);
 
     // Remove the sourceMetafields, sourceImage, and sourceOptions from the input as they're not part of the API
     const createInputs = variantsToCreate.map(({ sourceMetafields, sourceImage, sourceOptions, ...rest }) => rest);
@@ -525,16 +512,19 @@ class ProductVariantHandler {
         }
 
         logger.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants`, 1);
+        logger.endSection();
         return true;
       } catch (error) {
         logger.error(`Error creating new variants: ${error.message}`, 3);
+        logger.endSection();
         return false;
       }
     } else {
       logger.info(`[DRY RUN] Would create ${createInputs.length} new variants for product`, 2);
+      logger.endSection();
       return true;
-    }
   }
+}
 
   /**
    * Find the index of a variant in the created variants array by matching option values

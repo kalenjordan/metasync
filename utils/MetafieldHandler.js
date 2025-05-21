@@ -26,10 +26,7 @@ class MetafieldHandler {
     if (!metafields || metafields.length === 0) return true;
 
     // Log how many metafields we're syncing - use main log type for bullet point
-    logger.info(`Syncing ${metafields.length} metafields for ID: ${ownerId}`, 'main');
-
-    // Increase indentation for all metafield processing
-    logger.indent();
+    logger.startSection(`Syncing ${metafields.length} metafields for ID: ${ownerId}`);
 
     // Split metafields into batches of 25 (Shopify limit per metafieldsSet mutation)
     const metafieldBatches = [];
@@ -48,8 +45,7 @@ class MetafieldHandler {
     // Process each batch
     for (let batchIndex = 0; batchIndex < metafieldBatches.length; batchIndex++) {
       const metafieldBatch = metafieldBatches[batchIndex];
-      logger.indent();
-      logger.info(`Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`);
+      logger.startSection(`Processing batch ${batchIndex + 1}/${metafieldBatches.length} (${metafieldBatch.length} metafields)`);
 
       // Prepare metafields inputs for this batch
       const metafieldsInput = metafieldBatch.map(metafield => ({
@@ -111,11 +107,11 @@ class MetafieldHandler {
 
             // Log individual metafields if debug is enabled
             if (this.debug) {
-              logger.indent();
+              logger.startSection();
               result.metafieldsSet.metafields.forEach(metafield => {
                 logger.debug(`Set metafield ${metafield.namespace}.${metafield.key}`);
               });
-              logger.unindent();
+              logger.endSection();
             }
           }
         } catch (error) {
@@ -127,27 +123,27 @@ class MetafieldHandler {
 
         // Log individual metafields if debug is enabled
         if (this.debug) {
-          logger.indent();
+          logger.startSection();
           metafieldBatch.forEach(metafield => {
             logger.debug(`[DRY RUN] Would set metafield ${metafield.namespace}.${metafield.key}`);
           });
-          logger.unindent();
+          logger.endSection();
         }
       }
 
-      // Unindent after batch processing
-      logger.unindent();
+      // End batch section
+      logger.endSection();
     }
 
     // Return success status
     if (this.options.notADrill) {
       logger.info(`Metafields sync complete: ${successCount} successful, ${failedCount} failed`);
       // Unindent after all metafield processing
-      logger.unindent();
+      logger.endSection();
       return failedCount === 0;
     } else {
       // Unindent after all metafield processing
-      logger.unindent();
+      logger.endSection();
       return true;
     }
   }

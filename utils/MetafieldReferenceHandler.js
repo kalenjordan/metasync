@@ -62,10 +62,7 @@ class MetafieldReferenceHandler {
     };
 
     // Log the start of reference transformation
-    logger.info(`Starting reference transformation for ${metafields.length} metafields`);
-
-    // Indent all subsequent logs within the transformation process
-    logger.indent();
+    logger.startSection(`Starting reference transformation for ${metafields.length} metafields`);
 
     for (const metafield of metafields) {
       // Skip if no type (shouldn't happen)
@@ -177,8 +174,8 @@ class MetafieldReferenceHandler {
       `${refCount} single references, ${listCount} list references, ` +
       `${stats.blanked} blanked due to errors, ${unsupportedCount} unsupported types`);
 
-    // Unindent before returning
-    logger.unindent();
+    // End transformation section
+    logger.endSection();
 
     return {
       transformedMetafields,
@@ -335,7 +332,7 @@ class MetafieldReferenceHandler {
       logger.info(`Found ${sourceIds.length} source ${refType} IDs in list`);
 
       // Increase indentation for all ID processing
-      logger.indent();
+      logger.startSection();
 
       const targetIds = [];
 
@@ -416,7 +413,7 @@ class MetafieldReferenceHandler {
       }
 
       // Decrease indentation after processing all IDs
-      logger.unindent();
+      logger.endSection();
 
       if (targetIds.length > 0) {
         const transformedValue = JSON.stringify(targetIds);
