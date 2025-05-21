@@ -15,8 +15,6 @@ class MetaobjectSyncStrategy {
   }
 
     async sync() {
-    // Add debug logging to see the options we're receiving
-    logger.debug(`MetaobjectSyncStrategy sync() called with options: ${JSON.stringify(this.options, null, 2)}`);
 
     // Handle listing definitions if type is missing
     if (!this.options.type) {

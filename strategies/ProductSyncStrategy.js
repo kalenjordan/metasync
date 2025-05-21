@@ -84,11 +84,6 @@ class ProductSyncStrategy {
   async sync() {
     logger.info(`Syncing products...`);
 
-    // Debug: Log all options to help diagnose issues
-    if (this.debug) {
-      logger.debug(`Options received by ProductSyncStrategy:`, this.options);
-    }
-
     // Check if we're in delete mode
     if (this.options.delete) {
       return await this._handleDeleteMode();

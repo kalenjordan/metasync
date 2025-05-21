@@ -162,11 +162,6 @@ class AllResourcesSyncStrategy {
       // Also update the strategy's options directly
       this.metaobjectStrategy.options.type = "all";
 
-      logger.debug(`Set metaobject type to 'all' for data sync. Options: ${JSON.stringify({
-        type: this.options.type,
-        command: this.options.command,
-      }, null, 2)}`);
-
       const result = await this.metaobjectStrategy.sync();
 
       // Restore original values

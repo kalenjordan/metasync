@@ -376,11 +376,6 @@ class MetaSyncCli {
     }
 
     if (StrategyClass) {
-      // Debugging output for options
-      if (this.options.debug) {
-        logger.debug(`Options before creating strategy: ${JSON.stringify(this.options, null, 2)}`);
-      }
-
       const syncStrategy = new StrategyClass(this.sourceClient, this.targetClient, this.options);
 
       // Run the strategy's sync method

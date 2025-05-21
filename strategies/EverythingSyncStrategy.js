@@ -147,12 +147,6 @@ class EverythingSyncStrategy {
       this.allResourcesDataStrategy.options.type = "all";
       this.allResourcesDataStrategy.metaobjectStrategy.options.type = "all";
 
-      logger.debug(`Before syncing all data - options: ${JSON.stringify({
-        command: this.options.command,
-        resource: this.options.resource,
-        type: this.options.type
-      }, null, 2)}`);
-
       // Use the AllResourcesSyncStrategy to sync all data at once
       const allDataResults = await this.allResourcesDataStrategy.sync();
       this._mergeResults(results, allDataResults);
