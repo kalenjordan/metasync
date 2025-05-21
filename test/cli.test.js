@@ -15,7 +15,7 @@ describe('metasync CLI tool', () => {
     const { stdout } = await execa('node', [cliPath, '--help'])
     expect(stdout).toContain('Metasync - A CLI tool for synchronizing Shopify resources')
     expect(stdout).toContain('metasync definitions metafields')
-    expect(stdout).toContain('metasync definitions metaobject')
+    expect(stdout).toContain('metasync definitions metaobjects')
     expect(stdout).toContain('metasync data')
   })
 
