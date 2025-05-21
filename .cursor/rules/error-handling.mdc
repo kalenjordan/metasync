@@ -12,7 +12,7 @@ This project follows specific error handling patterns to maintain clean code and
 - **Don't add try/catch blocks** unless specifically requested
 - Let errors bubble up to be handled by higher-level error handlers
 - The main error handling occurs in the CLI entry point [cli.js](mdc:cli.js)
-- Use the centralized logger for error reporting [utils/logger.js](mdc:utils/logger.js)
+- Use the centralized logger for error reporting [utils/Logger.js](mdc:utils/Logger.js)
 
 ## Error Flow
 

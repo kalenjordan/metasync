@@ -1,4 +1,4 @@
-const logger = require("./utils/logger");
+const logger = require("./utils/Logger");
 module.exports = {
   // Automatically clear mock calls and instances between tests
   clearMocks: true,

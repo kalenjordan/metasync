@@ -1,4 +1,4 @@
-const logger = require("../utils/logger");
+const logger = require("../utils/Logger");
 const chalk = require('chalk');
 const ErrorHandler = require('../utils/ErrorHandler');
 
