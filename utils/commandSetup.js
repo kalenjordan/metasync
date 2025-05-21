@@ -48,7 +48,7 @@ Metasync - A CLI tool for synchronizing Shopify resources
 USAGE:
   metasync definitions metafields --resource <resource> --namespace <namespace> [options]
   metasync definitions metafields --resource all --namespace <namespace> [options]
-  metasync definitions metaobject --type <type> [options]
+  metasync definitions metaobjects --type <type> [options]
   metasync data <resource> [options]
 
 COMMON OPTIONS:
@@ -71,7 +71,7 @@ Metasync - Definitions Command
 USAGE:
   metasync definitions metafields --resource <resource> --namespace <namespace> [options]
   metasync definitions metafields --resource all --namespace <namespace> [options]
-  metasync definitions metaobject --type <type> [options]
+  metasync definitions metaobjects --type <type> [options]
 
 COMMON OPTIONS:
   -h, --help            Display help
@@ -83,7 +83,7 @@ COMMON OPTIONS:
 
 COMMANDS:
   metafields            Sync metafield definitions
-  metaobject            Sync metaobject definitions
+  metaobjects           Sync metaobject definitions
 
 Examples:
   metasync definitions metafields --resource products --namespace custom
@@ -92,7 +92,7 @@ Examples:
   metasync definitions metafields --resource all --namespace all
   metasync definitions metafields --resource products --namespace custom1,custom2,custom3
   metasync definitions metafields --resource products --namespace custom --delete --live
-  metasync definitions metaobject --type territory
+  metasync definitions metaobjects --type territory
 `;
 
   // Data command help text
@@ -327,7 +327,7 @@ Syncs data for all supported resource types including:
 - Variants data
 
 Note: This command only syncs data, not definitions. For metaobjects, ensure definitions
-are synced first using: metasync definitions metaobject
+are synced first using: metasync definitions metaobjects
 
 Options:
   --batch-size <size>     Number of items to process in each batch
@@ -354,7 +354,7 @@ Options:
   if (program.args.length > 0 && !mergedOptions.command) {
     logger.warn(`Note: Command structure has changed. Try using one of these commands instead:`);
     logger.info(`  metasync definitions metafields --resource <resource> --namespace <namespace>`);
-    logger.info(`  metasync definitions metaobject --type <type>`);
+    logger.info(`  metasync definitions metaobjects --type <type>`);
     logger.info(`  metasync data products|metaobjects|pages [options]`);
   }
 
