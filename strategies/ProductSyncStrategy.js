@@ -194,27 +194,11 @@ class ProductSyncStrategy {
 
     while (hasNextPage) {
       try {
-        const query = `
-          query GetProducts($first: Int!, $after: String) {
-            products(first: $first, after: $after) {
-              edges {
-                node {
-                  id
-                  title
-                  handle
-                }
-                cursor
-              }
-              pageInfo {
-                hasNextPage
-                endCursor
-              }
-            }
-          }
-        `;
+        // Use the external GraphQL query file instead of inline query
+        const productsQuery = require('../graphql/ProductFetchAll.graphql.js');
 
         const response = await this.targetClient.graphql(
-          query,
+          productsQuery,
           { first: 100, after: cursor },
           'GetProducts'
         );
