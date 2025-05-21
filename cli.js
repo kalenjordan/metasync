@@ -6,15 +6,15 @@ const { execSync } = require('child_process');
 const Shopify = require('shopify-api-node');
 const ShopifyClient = require('./utils/ShopifyClient');
 const { SHOPIFY_API_VERSION } = require('./constants');
-const commandSetup = require('./utils/commandSetup');
-const shopConfig = require('./utils/shopConfig');
+const commandSetup = require('./utils/CommandSetup');
+const shopConfig = require('./utils/ShopConfig');
 const chalk = require('chalk');
 require('dotenv').config();
 
 // Import strategies
-const strategyLoader = require('./utils/strategyLoader');
+const strategyLoader = require('./utils/StrategyLoader');
 const ShopifyIDUtils = require('./utils/ShopifyIDUtils');
-const logger = require('./utils/logger');
+const logger = require('./utils/Logger');
 const { MetaobjectFetchDefinitions } = require('./graphql');
 
 class MetaSyncCli {

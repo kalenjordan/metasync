@@ -1,4 +1,4 @@
-const logger = require("../utils/logger");
+const logger = require("../utils/Logger");
 const MetaobjectDefinitionHandler = require("../utils/MetaobjectDefinitionHandler");
 const MetaobjectDataHandler = require("../utils/MetaobjectDataHandler");
 

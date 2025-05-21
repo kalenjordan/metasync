@@ -17,7 +17,7 @@ This project syncs Shopify Metaobject and Metafield definitions between stores.
     - Selecting and executing the appropriate sync strategy based on the `--resource-type` option.
     - Displaying the final summary.
 
-- **`utils/ShopifyClient.js`**: [utils/ShopifyClient.js](mdc:utils/ShopifyClient.js) provides a wrapper around the `shopify-api-node` client to centralize GraphQL call logging using `consola`. It formats debug logs based on the `--debug` flag.
+- **`utils/ShopifyClient.js`**: [utils/ShopifyClient.js](mdc:utils/ShopifyClient.js) provides a wrapper around the `shopify-api-node` client to centralize GraphQL call logging using the project's logger. It formats debug logs based on the `--debug` flag.
 
 - **`.shops.json`**: [`.shops.json`](mdc:.shops.json) (not committed, example in `.shops.example.json`) stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`).
 
@@ -56,9 +56,9 @@ The project uses specialized utility classes to handle specific aspects of Shopi
     - **`MetafieldFilterUtils.js`**: [utils/MetafieldFilterUtils.js](mdc:utils/MetafieldFilterUtils.js) filters metafields based on namespace and key constraints.
     - **`SyncResultTracker.js`**: [utils/SyncResultTracker.js](mdc:utils/SyncResultTracker.js) tracks operation results and formats them for display.
     - **`ShopifyIDUtils.js`**: [utils/ShopifyIDUtils.js](mdc:utils/ShopifyIDUtils.js) provides utility methods for Shopify ID validation and conversion.
-    - **`logger.js`**: [logger.js](mdc:utils/logger.js) provides consistent log formatting with indentation, symbols, and color coding.
+    - **`Logger.js`**: [Logger.js](mdc:utils/Logger.js) provides consistent log formatting with indentation, symbols, and color coding.
     - **`ErrorHandler.js`**: [utils/ErrorHandler.js](mdc:utils/ErrorHandler.js) provides standardized error handling.
-    - **`commandSetup.js`**: [utils/commandSetup.js](mdc:utils/commandSetup.js) handles command-line interface setup.
+    - **`CommandSetup.js`**: [utils/CommandSetup.js](mdc:utils/CommandSetup.js) handles command-line interface setup.
 
 The utility classes follow a composition pattern, where strategy classes initialize and use these utilities rather than inheriting from them. This approach improves modularity and maintainability by breaking down complex operations into specialized components.
 

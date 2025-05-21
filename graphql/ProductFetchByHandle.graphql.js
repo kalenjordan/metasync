@@ -1,4 +1,4 @@
-const logger = require("../utils/logger");
+const logger = require("../utils/Logger");
 /**
  * GraphQL query to fetch a product by its handle with all details
  */

@@ -12,7 +12,7 @@
  */
 ;
 const chalk = require('chalk');
-const logger = require('../utils/logger');
+const logger = require('../utils/Logger');
 
 // Import all required strategies
 const ProductSyncStrategy = require('./ProductSyncStrategy');
