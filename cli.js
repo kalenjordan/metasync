@@ -14,6 +14,7 @@ require('dotenv').config();
 // Import strategies
 const strategyLoader = require('./utils/StrategyLoader');
 const logger = require('./utils/Logger');
+const { MetaobjectFetchAllDefinitions } = require('./graphql');
 
 class MetaSyncCli {
   constructor(options = {}) {
