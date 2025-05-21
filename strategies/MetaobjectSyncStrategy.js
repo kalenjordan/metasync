@@ -14,15 +14,25 @@ class MetaobjectSyncStrategy {
     this.dataHandler = new MetaobjectDataHandler(targetClient, options);
   }
 
-  async sync() {
-    // Handle listing definitions if key is missing
-    if (!this.options.key) {
+    async sync() {
+    // Add debug logging to see the options we're receiving
+    logger.debug(`MetaobjectSyncStrategy sync() called with options: ${JSON.stringify(this.options, null, 2)}`);
+
+    // Handle listing definitions if type is missing
+    if (!this.options.type) {
+      logger.info(`Type option is missing. Options: ${JSON.stringify({
+        type: this.options.type,
+        key: this.options.key,
+        command: this.options.command,
+        resource: this.options.resource
+      }, null, 2)}`);
+
       await this.definitionHandler.listAvailableDefinitions(this.sourceClient);
       return { definitionResults: null, dataResults: null }; // Indicate no sync occurred
     }
 
     // Special case: "--type all" should fetch all definitions
-    const shouldFetchAllTypes = this.options.key === "all";
+    const shouldFetchAllTypes = this.options.type === "all";
 
     // Determine what to sync based on command/strategy type
     const isSyncingDefinitions = this.options.command === "definitions";
@@ -35,12 +45,12 @@ class MetaobjectSyncStrategy {
     // Sync definitions if requested by command
     if (isSyncingDefinitions) {
       // If syncing all types, pass null to fetch all definitions
-      const fetchType = shouldFetchAllTypes ? null : this.options.key;
+      const fetchType = shouldFetchAllTypes ? null : this.options.type;
       const defSync = await this.definitionHandler.syncDefinitions(this.sourceClient, fetchType);
       definitionResults = defSync.results;
       definitionTypes = defSync.definitionTypes;
     } else if (isSyncingData) {
-      // If only syncing data, use the provided key as the type
+      // If only syncing data, use the provided type
       // For "all", we need to fetch all available types first
       if (shouldFetchAllTypes) {
         // Create temporary source handler to fetch all definitions
@@ -49,7 +59,7 @@ class MetaobjectSyncStrategy {
         definitionTypes = allDefinitions.map((def) => def.type);
         logger.info(`Found ${definitionTypes.length} definition types to sync data for`);
       } else {
-        definitionTypes = [this.options.key];
+        definitionTypes = [this.options.type];
       }
 
       // Sync data
@@ -61,7 +71,7 @@ class MetaobjectSyncStrategy {
     } else {
       // Default: sync both definitions and data
       // If syncing all types, pass null to fetch all definitions
-      const fetchType = shouldFetchAllTypes ? null : this.options.key;
+      const fetchType = shouldFetchAllTypes ? null : this.options.type;
       const defSync = await this.definitionHandler.syncDefinitions(this.sourceClient, fetchType);
       definitionResults = defSync.results;
       definitionTypes = defSync.definitionTypes;

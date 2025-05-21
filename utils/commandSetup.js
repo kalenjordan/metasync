@@ -9,6 +9,7 @@ function setupCommandLineOptions() {
   // Check if we're running a specific command to determine the appropriate help text
   const isDataCommand = process.argv.length > 2 && process.argv[2] === 'data';
   const isDefinitionsCommand = process.argv.length > 2 && process.argv[2] === 'definitions';
+  const isEverythingCommand = process.argv.length > 2 && process.argv[2] === 'everything';
 
   // Define common options for all commands
   const addCommonOptions = (command) => {
@@ -50,6 +51,7 @@ USAGE:
   metasync definitions metafields --resource all --namespace <namespace> [options]
   metasync definitions metaobject --type <type> [options]
   metasync data <resource> [options]
+  metasync everything --source <shop> --target <shop> [options]
 
 COMMON OPTIONS:
   -h, --help            Display help
@@ -62,6 +64,7 @@ COMMON OPTIONS:
 COMMANDS:
   definitions           Sync only the definitions, not the data
   data                  Sync data for specified resources (no definitions)
+  everything            Sync ALL definitions and data in the correct order
 `;
 
   // Definitions command help text
@@ -118,14 +121,43 @@ COMMANDS:
   customers             Sync customer data
   orders                Sync order data
   variants              Sync variant data
+  all                   Sync all resource types' data in one command
 
 Examples:
   metasync data products --handle my-product --source shopA --target shopB
   metasync data metaobjects --type territory --source shopA --target shopB
 `;
 
+  // Everything command help text
+  const everythingHelpText = `
+Metasync - Everything Command
+
+USAGE:
+  metasync everything [options]
+
+Syncs EVERYTHING in the correct order:
+1. All metafield definitions (products, companies, orders, variants, customers, collections)
+2. Metaobject definitions
+3. All resource data (products, metaobjects, pages, collections, customers, orders, variants)
+
+This is the most comprehensive sync command - use it to fully sync all resources between shops.
+
+COMMON OPTIONS:
+  -h, --help             Display help
+  --source <shop>        Source shop name (must exist in .shops.json)
+  --target <shop>        Target shop name (defaults to source if not specified)
+  --live                 Make actual changes (default is dry run)
+  --debug                Enable debug logging
+  --limit <number>       Limit the number of items to process (default: 3)
+  --batch-size <size>    Number of items to process in each batch (default: 25)
+  --namespace <namespace> Namespace filter for metafield definitions (default: all)
+
+Example:
+  metasync everything --source shopA --target shopB --live
+`;
+
   // Configure help for the different contexts
-  if (!isDataCommand && !isDefinitionsCommand) {
+  if (!isDataCommand && !isDefinitionsCommand && !isEverythingCommand) {
     customizeHelp(program, globalHelpText);
   }
 
@@ -164,10 +196,7 @@ Examples:
       // Set command type
       mergedOptions.command = "definitions";
       mergedOptions.resource = "metaobjects";
-      // Map type to key for backwards compatibility
-      if (cmdOptions.type) {
-        mergedOptions.key = cmdOptions.type;
-      }
+      // Use type directly
     });
 
   // Add common options to define subcommands
@@ -287,10 +316,8 @@ Options:
       // Set command type
       mergedOptions.command = "data";
 
-      // Map type to key for metaobjects (for backwards compatibility)
-      if (pluralResource === "metaobjects" && cmdOptions.type) {
-        mergedOptions.key = cmdOptions.type;
-      }
+      // Use type directly for metaobjects
+      // Previously mapped type to key for backwards compatibility but this is no longer needed
     });
 
     // Add common options
@@ -334,6 +361,26 @@ Options:
 `;
   customizeHelp(allCmd, allHelpText);
 
+  // Everything command (as a top-level command)
+  const everythingCommand = program
+    .command("everything")
+    .description("Sync all definitions and data in the correct order")
+    .option("--batch-size <size>", "Number of items to process in each batch", 25)
+    .option("--namespace <namespace>", "Namespace filter for metafield definitions (default: all)", "all")
+    .action((cmdOptions) => {
+      // Merge command options with main options
+      Object.assign(mergedOptions, cmdOptions);
+      // Set command type to identify our custom command type
+      mergedOptions.command = "everything";
+    });
+
+  // Add common options to everything command
+  addCommonOptions(everythingCommand);
+
+  if (isEverythingCommand) {
+    customizeHelp(everythingCommand, everythingHelpText);
+  }
+
   // For legacy support, show new command structure if someone uses older commands
   program
     .on('command:*', function (operands) {
@@ -356,6 +403,7 @@ Options:
     logger.info(`  metasync definitions metafields --resource <resource> --namespace <namespace>`);
     logger.info(`  metasync definitions metaobject --type <type>`);
     logger.info(`  metasync data products|metaobjects|pages [options]`);
+    logger.info(`  metasync everything --source shopA --target shopB`);
   }
 
   return mergedOptions;

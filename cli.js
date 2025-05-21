@@ -15,7 +15,9 @@ require('dotenv').config();
 const strategyLoader = require('./utils/strategyLoader');
 const ShopifyIDUtils = require('./utils/ShopifyIDUtils');
 const logger = require('./utils/logger');
-const { MetaobjectFetchDefinitions } = require('./graphql');
+const {
+  MetaobjectFetchAllDefinitions,
+} = require('./graphql');
 
 class MetaSyncCli {
   constructor(options = {}) {
@@ -152,6 +154,11 @@ class MetaSyncCli {
   }
 
   _validateResourceType() {
+    // Skip validation for the everything command - it handles its own resource types
+    if (this.options.command === "everything") {
+      return true;
+    }
+
     const validResourceTypes = ['metaobjects', 'products', 'companies', 'orders', 'variants', 'customers', 'pages', 'collections', 'all'];
 
     // Check if resource type was provided
@@ -182,7 +189,14 @@ class MetaSyncCli {
     const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers', 'collections'];
 
     // Command-specific validations
-    if (this.options.command === "definitions") {
+    if (this.options.command === "everything") {
+      // Everything command requires source and optional target
+      if (!this.options.source) {
+        logger.error('Error: Source shop name is required for the everything command');
+        return false;
+      }
+      return true;
+    } else if (this.options.command === "definitions") {
       // Check if namespace is provided for metafield resources
       if (metafieldResourceTypes.includes(this.options.resource) && !this.options.namespace) {
         logger.newline();
@@ -225,8 +239,8 @@ class MetaSyncCli {
       }
 
       // Validations for data command
-      // For metaobject, type/key is required when syncing data
-      if (this.options.resource === 'metaobjects' && !this.options.key) {
+      // For metaobject, type is required when syncing data
+      if (this.options.resource === 'metaobjects' && !this.options.type) {
         logger.error(`Error: --type is required when syncing metaobject data.`);
         process.exit(1);
       }
@@ -243,7 +257,7 @@ class MetaSyncCli {
     const metafieldResourceTypes = ['products', 'companies', 'orders', 'variants', 'customers', 'collections'];
 
     // Determine if we need to list definitions and exit
-    if (this.options.resource === 'metaobjects' && !this.options.key) {
+    if (this.options.resource === 'metaobjects' && !this.options.type) {
       logger.info(`No specific metaobject type specified (--type). Fetching available types...`);
       return true;
     }
@@ -294,6 +308,19 @@ class MetaSyncCli {
     // Select the appropriate strategy based on resource and command mode
     let StrategyClass;
 
+    // Handle the "everything" command - use the EverythingSyncStrategy
+    if (this.options.command === "everything") {
+      StrategyClass = strategyLoader.getEverythingStrategy();
+
+      if (StrategyClass) {
+        const syncStrategy = new StrategyClass(this.sourceClient, this.targetClient, this.options);
+        return await syncStrategy.sync();
+      } else {
+        logger.error(`No strategy available for the everything command.`);
+        return null;
+      }
+    }
+
     // Special case for 'all' resource type in definitions mode
     if (this.options.command === "definitions" && this.options.resource.toLowerCase() === 'all') {
       logger.info(`Syncing all metafield resource types...`);
@@ -307,9 +334,7 @@ class MetaSyncCli {
       // Process each resource type
       for (const resourceType of metafieldResourceTypes) {
         // Log the resource type
-        logger.section(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
-
-        logger.indent();
+        logger.startSection(`RESOURCE TYPE: ${resourceType.toUpperCase()}`);
 
         // Get the strategy for this resource type
         const ResourceStrategyClass = strategyLoader.getDefinitionStrategyForResource(resourceType);
@@ -381,7 +406,14 @@ class MetaSyncCli {
     let outputResults = '';
 
     // Set output based on command
-    if (this.options.command === "definitions") {
+    if (this.options.command === "everything") {
+      // Special handling for everything command
+      outputTitle = `Everything Sync Results:`;
+      outputResults = `Definitions: ${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
+      if (dataResults && dataResults.created !== undefined) {
+        outputResults += `\nObjects: ${dataResults.created} created, ${dataResults.updated} updated, ${dataResults.skipped} skipped, ${dataResults.failed} failed`;
+      }
+    } else if (this.options.command === "definitions") {
       outputTitle = `Definition Sync Results for ${this.options.resource.toUpperCase()}:`;
       outputResults = `${definitionResults.created} created, ${definitionResults.updated} updated, ${definitionResults.skipped} skipped, ${definitionResults.failed} failed`;
 
@@ -437,14 +469,16 @@ class MetaSyncCli {
   }
 
   async fetchMetaobjectDefinitions(client, type = null) {
-    const variables = type ? { type } : undefined;
     try {
       const response = await client.graphql(
-        MetaobjectFetchDefinitions,
-        variables,
-        'FetchMetaobjectDefinitions'
+        MetaobjectFetchAllDefinitions,
+        undefined,
+        'FetchAllMetaobjectDefinitions'
       );
-      return response.metaobjectDefinitions.nodes;
+
+      // Filter in code if a type is specified
+      const definitions = response.metaobjectDefinitions.nodes;
+      return type ? definitions.filter(def => def.type === type) : definitions;
     } catch (error) {
       logger.error(`Error fetching metaobject definitions: ${error.message}`);
       return [];

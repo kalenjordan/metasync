@@ -29,7 +29,6 @@ const MetaobjectDefinitionIdFetch = require('./MetaobjectDefinitionIdFetch.graph
 // Metaobject operations
 const MetaobjectFetch = require('./MetaobjectFetch.graphql');
 const MetaobjectFetchById = require('./MetaobjectFetchById.graphql');
-const MetaobjectFetchDefinitions = require('./MetaobjectFetchDefinitions.graphql');
 const MetaobjectFetchAllDefinitions = require('./MetaobjectFetchAllDefinitions.graphql');
 const MetaobjectFetchDefinitionById = require('./MetaobjectFetchDefinitionById.graphql');
 const MetaobjectCreate = require('./MetaobjectCreate.graphql');
@@ -60,7 +59,6 @@ module.exports = {
   // Metaobject operations
   MetaobjectFetch,
   MetaobjectFetchById,
-  MetaobjectFetchDefinitions,
   MetaobjectFetchAllDefinitions,
   MetaobjectFetchDefinitionById,
   MetaobjectCreate,

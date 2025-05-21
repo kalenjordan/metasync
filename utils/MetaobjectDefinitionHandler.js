@@ -1,7 +1,6 @@
 const logger = require("./logger");
 const ErrorHandler = require("./ErrorHandler");
 // Import GraphQL queries/mutations
-const FETCH_METAOBJECT_DEFINITIONS = require("../graphql/MetaobjectFetchDefinitions.graphql");
 const FETCH_ALL_METAOBJECT_DEFINITIONS = require("../graphql/MetaobjectFetchAllDefinitions.graphql");
 const CREATE_METAOBJECT_DEFINITION = require("../graphql/MetaobjectCreateDefinition.graphql");
 const UPDATE_METAOBJECT_DEFINITION = require("../graphql/MetaobjectUpdateDefinition.graphql");
@@ -350,7 +349,7 @@ class MetaobjectDefinitionHandler {
   }
 
   async listAvailableDefinitions(sourceClient) {
-    logger.info(`No specific metaobject type specified (--key). Fetching available types...`);
+    logger.info(`No specific metaobject type specified (--type). Fetching available types...`);
 
     // Create a temporary handler for the source client
     const sourceHandler = new MetaobjectDefinitionHandler(sourceClient, this.options);
@@ -373,7 +372,7 @@ class MetaobjectDefinitionHandler {
     logger.info(``);
     logger.unindent();
 
-    logger.info(`Please run the command again with --key <type> to specify which metaobject type to sync.`);
+    logger.info(`Please run the command again with --type <type> to specify which metaobject type to sync.`);
   }
 }
 

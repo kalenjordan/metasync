@@ -152,11 +152,27 @@ class AllResourcesSyncStrategy {
 
   async _syncMetaobjects() {
     try {
-      // Make sure it's in data mode
+      // Make sure it's in data mode and has a type
       const originalCommand = this.options.command;
+      const originalType = this.options.type;
+
       this.options.command = "data";
+      this.options.type = "all";
+
+      // Also update the strategy's options directly
+      this.metaobjectStrategy.options.type = "all";
+
+      logger.debug(`Set metaobject type to 'all' for data sync. Options: ${JSON.stringify({
+        type: this.options.type,
+        command: this.options.command,
+      }, null, 2)}`);
+
       const result = await this.metaobjectStrategy.sync();
+
+      // Restore original values
       this.options.command = originalCommand;
+      this.options.type = originalType;
+
       return result;
     } catch (error) {
       logger.error(chalk.red('❌ Metaobject Sync Failed:'), error.message);
