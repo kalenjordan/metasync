@@ -93,7 +93,7 @@ class ProductBaseHandler {
 
     if (this.options.notADrill) {
       try {
-        logger.info(`Updating base product data`, 'main');
+        logger.startSection(`Updating base product data`, 2, 'main');
         const result = await this.client.graphql(
           mutation,
           { productUpdateInput: updateInput },
@@ -102,18 +102,22 @@ class ProductBaseHandler {
 
         if (result.productUpdate.userErrors.length > 0) {
           logger.error(`Failed to update product "${productInput.title}"`, result.productUpdate.userErrors);
+          logger.endSection();
           return null;
         }
 
         const updatedProduct = result.productUpdate.product;
         logger.success(`Base product data updated successfully`);
+        logger.endSection();
         return updatedProduct;
       } catch (error) {
         logger.error(`Error updating product: ${error.message}`);
+        logger.endSection();
         return null;
       }
     } else {
       logger.info(`[DRY RUN] Would update product "${productInput.title}"`, 'main');
+      logger.endSection();
       return { id: productId, title: productInput.title, handle: productInput.handle };
     }
   }

@@ -149,8 +149,9 @@ class ProductVariantHandler {
 
     // Upload new variant images if needed
     if (variantImagesToUpload.length > 0 && this.imageHandler && this.options.notADrill) {
-      logger.info(`Uploading ${variantImagesToUpload.length} variant images`);
+      logger.startSection(`Uploading ${variantImagesToUpload.length} variant images`, 2, 'main');
       await this.imageHandler.syncProductImages(productId, variantImagesToUpload);
+      logger.endSection();
 
       // Refresh image IDs after upload
       try {
@@ -465,10 +466,7 @@ class ProductVariantHandler {
    * @private
    */
   async _createNewVariants(productId, variantsToCreate) {
-    logger.info(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`);
-
-    // Indent for variant creation operations
-    logger.indent();
+    logger.startSection(`Creating ${variantsToCreate.length} new variants for product ID: ${productId}`);
 
     // Remove the sourceMetafields, sourceImage, and sourceOptions from the input as they're not part of the API
     const createInputs = variantsToCreate.map(({ sourceMetafields, sourceImage, sourceOptions, ...rest }) => rest);
@@ -525,13 +523,15 @@ class ProductVariantHandler {
         }
 
         logger.success(`Successfully created ${result.productVariantsBulkCreate.productVariants.length} variants`, 1);
+        logger.endSection();
         return true;
       } catch (error) {
         logger.error(`Error creating new variants: ${error.message}`, 3);
+        logger.endSection();
         return false;
       }
     } else {
-      logger.info(`[DRY RUN] Would create ${createInputs.length} new variants for product`, 2);
+      logger.endSection(`[DRY RUN] Would create ${createInputs.length} new variants for product`, 2);
       return true;
     }
   }
