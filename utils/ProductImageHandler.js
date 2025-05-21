@@ -26,8 +26,6 @@ class ProductImageHandler {
   async syncProductImages(productId, sourceImages, logPrefix = '') {
     if (!sourceImages || sourceImages.length === 0) return true;
 
-    logger.info(`Processing ${sourceImages.length} images for product`, 2, 'main');
-
     // Step 1: Get existing images to avoid duplicates
     const existingImagesQuery = `#graphql
       query getProductMedia($productId: ID!) {
@@ -54,9 +52,9 @@ class ProductImageHandler {
     try {
       const response = await this.client.graphql(existingImagesQuery, { productId }, 'GetProductMedia');
       existingImages = response.product.media.edges.map(edge => edge.node);
-      logger.info(`Found ${existingImages.length} existing images on product`, 3);
+      logger.info(`Found ${existingImages.length} existing images on product`);
     } catch (error) {
-      logger.error(`Error fetching existing product images: ${error.message}`, 3);
+      logger.error(`Error fetching existing product images: ${error.message}`);
       return false;
     }
 

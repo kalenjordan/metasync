@@ -84,11 +84,6 @@ class ProductSyncStrategy {
   async sync() {
     logger.info(`Syncing products...`);
 
-    // Debug: Log all options to help diagnose issues
-    if (this.debug) {
-      logger.debug(`Options received by ProductSyncStrategy:`, this.options);
-    }
-
     // Check if we're in delete mode
     if (this.options.delete) {
       return await this._handleDeleteMode();
@@ -198,27 +193,11 @@ class ProductSyncStrategy {
 
     while (hasNextPage) {
       try {
-        const query = `
-          query GetProducts($first: Int!, $after: String) {
-            products(first: $first, after: $after) {
-              edges {
-                node {
-                  id
-                  title
-                  handle
-                }
-                cursor
-              }
-              pageInfo {
-                hasNextPage
-                endCursor
-              }
-            }
-          }
-        `;
+        // Use the external GraphQL query file instead of inline query
+        const productsQuery = require('../graphql/ProductFetchAll.graphql.js');
 
         const response = await this.targetClient.graphql(
-          query,
+          productsQuery,
           { first: 100, after: cursor },
           'GetProducts'
         );

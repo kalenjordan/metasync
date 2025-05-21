@@ -102,14 +102,12 @@ function debug(message) {
  * Increase indentation level
  * @param {number} levels - Number of levels to indent (default: 1)
  */
-function startSection(message, levels = 1) {
-  if (message) {
-    info(message);
-  }
-  return _indent(levels);
+function startSection(message) {
+  info(message);
+  return _indent();
 }
 
-function endSection(message, levels = 1) {
+function endSection(message) {
   if (message) {
     info(message);
   }
@@ -118,7 +116,7 @@ function endSection(message, levels = 1) {
     newline();
   }
 
-  _unindent(levels);
+  _unindent();
 }
 
 

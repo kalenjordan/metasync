@@ -11,6 +11,7 @@ const PageSyncStrategy = require('../strategies/PageSyncStrategy');
 const ProductSyncStrategy = require('../strategies/ProductSyncStrategy');
 const CollectionSyncStrategy = require('../strategies/CollectionSyncStrategy');
 const AllResourcesSyncStrategy = require('../strategies/AllResourcesSyncStrategy');
+const EverythingSyncStrategy = require('../strategies/EverythingSyncStrategy');
 
 // Definition strategies mapping
 const definitionStrategies = {
@@ -30,7 +31,7 @@ const dataStrategies = {
   pages: PageSyncStrategy,
   collections: CollectionSyncStrategy,
   metaobjects: MetaobjectSyncStrategy,
-  all: AllResourcesSyncStrategy,
+  all: AllResourcesSyncStrategy
   // Add other data strategies as they're implemented
 };
 
@@ -52,7 +53,16 @@ function getDataStrategyForResource(resource) {
   return dataStrategies[resource] || null;
 }
 
+/**
+ * Get the strategy for the "everything" command
+ * @returns {Object} - The EverythingSyncStrategy class
+ */
+function getEverythingStrategy() {
+  return EverythingSyncStrategy;
+}
+
 module.exports = {
   getDefinitionStrategyForResource,
-  getDataStrategyForResource
+  getDataStrategyForResource,
+  getEverythingStrategy
 };

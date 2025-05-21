@@ -146,8 +146,9 @@ class ProductVariantHandler {
 
     // Upload new variant images if needed
     if (variantImagesToUpload.length > 0 && this.imageHandler && this.options.notADrill) {
-      logger.info(`Uploading ${variantImagesToUpload.length} variant images`);
+      logger.startSection(`Uploading ${variantImagesToUpload.length} variant images`, 2, 'main');
       await this.imageHandler.syncProductImages(productId, variantImagesToUpload);
+      logger.endSection();
 
       // Refresh image IDs after upload
       try {
@@ -520,8 +521,7 @@ class ProductVariantHandler {
         return false;
       }
     } else {
-      logger.info(`[DRY RUN] Would create ${createInputs.length} new variants for product`, 2);
-      logger.endSection();
+      logger.endSection(`[DRY RUN] Would create ${createInputs.length} new variants for product`);
       return true;
   }
 }

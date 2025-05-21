@@ -31,14 +31,6 @@ When reporting errors, use the logger's error function:
 logger.error(`Error message: ${error.message}`);
 ```
 
-For debugging purposes, stack traces can be conditionally logged:
-
-```javascript
-if (debug) {
-  logger.debug(error.stack);
-}
-```
-
 ## API Error Handling
 
 When dealing with Shopify API errors, use the existing utilities in ShopifyClient to handle and log them appropriately. Let API errors bubble up unless there's a specific recovery action.

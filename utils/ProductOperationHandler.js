@@ -42,7 +42,10 @@ class ProductOperationHandler {
       handle: product.handle,
       status: product.status || 'ACTIVE',
       tags: product.tags,
-      options: product.options.map(opt => opt.name)
+      productOptions: product.options.map(opt => ({
+        name: opt.name,
+        values: Array.isArray(opt.values) ? opt.values.map(value => ({ name: value })) : []
+      }))
       // Don't include variants directly as we'll use productVariantsBulkCreate for better control
     };
 
@@ -76,7 +79,9 @@ class ProductOperationHandler {
 
         // Step 3: Upload images if any
         if (newProduct.id && product.images && product.images.length > 0) {
+          logger.startSection(`Processing ${product.images.length} images for new product`, 2, 'main');
           await this.imageHandler.syncProductImages(newProduct.id, product.images);
+          logger.endSection();
         }
 
         // Step 4: Process and create metafields
@@ -194,7 +199,9 @@ class ProductOperationHandler {
 
         // Step 2: Sync images
         if (updatedProduct.id && product.images && product.images.length > 0) {
+          logger.startSection(`Processing ${product.images.length} images for existing product`);
           await this.imageHandler.syncProductImages(updatedProduct.id, product.images);
+          logger.endSection();
         }
 
         // Step 3: Process and update metafields
