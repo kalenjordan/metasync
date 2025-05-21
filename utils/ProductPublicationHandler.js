@@ -73,10 +73,7 @@ class ProductPublicationHandler {
       );
     }
 
-    logger.info(`Syncing product publication to ${publicationsToProcess.length} channels`);
-
-    // Increase indentation for publication operations
-    logger.indent();
+    logger.startSection(`Syncing product publication to ${publicationsToProcess.length} channels`);
 
     // First, get available channels and publications in the target store
     const getPublicationsQuery = `#graphql
@@ -120,7 +117,7 @@ class ProductPublicationHandler {
       }
     } catch (error) {
       logger.error(`Error fetching target store publications: ${error.message}`);
-      logger.unindent();
+      logger.endSection();
       return false;
     }
 
@@ -225,7 +222,7 @@ class ProductPublicationHandler {
     // If no publications to create, we're done
     if (publicationsToCreate.length === 0) {
       logger.info(`No new publication channels to add`);
-      logger.unindent();
+      logger.endSection();
       return true;
     }
 
@@ -258,25 +255,25 @@ class ProductPublicationHandler {
 
         if (result.publishablePublish.userErrors.length > 0) {
           logger.error(`Failed to publish product:`, result.publishablePublish.userErrors);
-          logger.unindent();
+          logger.endSection();
           return false;
         }
 
         logger.success(`Successfully published product to ${publicationsToCreate.length} channels`);
 
-        // Unindent before returning
-        logger.unindent();
+        // End publish section before returning
+        logger.endSection();
         return true;
       } catch (error) {
         logger.error(`Error publishing product: ${error.message}`);
-        logger.unindent();
+        logger.endSection();
         return false;
       }
     } else {
       logger.info(`[DRY RUN] Would publish product to ${publicationsToCreate.length} channels: ${publicationsToCreate.map(p => p.channelHandle).join(', ')}`);
 
-      // Unindent before returning
-      logger.unindent();
+      // End publish section before returning
+      logger.endSection();
       return true;
     }
   }

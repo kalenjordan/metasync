@@ -82,8 +82,7 @@ class CollectionPublicationHandler {
       return true;
     }
 
-    logger.info(`Syncing collection publication to ${validPublications.length} channels`);
-    logger.indent();
+    logger.startSection(`Syncing collection publication to ${validPublications.length} channels`);
 
     // Get current publications for this collection
     const getCollectionPublicationsQuery = `#graphql
@@ -180,7 +179,7 @@ class CollectionPublicationHandler {
     // If no publications to create, we're done
     if (publicationsToCreate.length === 0) {
       logger.info(`No new publication channels to add`);
-      logger.unindent();
+      logger.endSection();
       return true;
     }
 
@@ -212,21 +211,21 @@ class CollectionPublicationHandler {
 
         if (result.publishablePublish.userErrors.length > 0) {
           logger.error(`Failed to publish collection:`, result.publishablePublish.userErrors);
-          logger.unindent();
+          logger.endSection();
           return false;
         }
 
         logger.success(`Successfully published collection to ${publicationsToCreate.length} channels`);
-        logger.unindent();
+        logger.endSection();
         return true;
       } catch (error) {
         logger.error(`Error publishing collection: ${error.message}`);
-        logger.unindent();
+        logger.endSection();
         return false;
       }
     } else {
       logger.info(`[DRY RUN] Would publish collection to ${publicationsToCreate.length} channels: ${publicationsToCreate.map(p => p.channelHandle).join(', ')}`);
-      logger.unindent();
+      logger.endSection();
       return true;
     }
   }

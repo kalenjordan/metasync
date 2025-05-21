@@ -39,7 +39,7 @@ class ProductMetafieldProcessor {
     // Print each transformed metafield for debugging
     if (this.debug) {
       // Increase indentation for debug details
-      logger.indent();
+      logger.startSection();
 
       transformedMetafields.forEach(metafield => {
         // Skip logging blanked metafields
@@ -61,7 +61,7 @@ class ProductMetafieldProcessor {
       });
 
       // Reset indentation after debug details
-      logger.unindent();
+      logger.endSection();
     }
 
     await this.metafieldHandler.syncMetafields(productId, transformedMetafields);

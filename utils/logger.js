@@ -80,7 +80,7 @@ function log(message) {
  * Increase indentation level
  * @param {number} levels - Number of levels to indent (default: 1)
  */
-function indent(levels = 1) {
+function _indent(levels = 1) {
   indentLevel += levels;
   return indentLevel;
 }
@@ -89,7 +89,7 @@ function indent(levels = 1) {
  * Decrease indentation level
  * @param {number} levels - Number of levels to unindent (default: 1)
  */
-function unindent(levels = 1) {
+function _unindent(levels = 1) {
   indentLevel = Math.max(0, indentLevel - levels);
   return indentLevel;
 }
@@ -103,8 +103,10 @@ function debug(message) {
  * @param {number} levels - Number of levels to indent (default: 1)
  */
 function startSection(message, levels = 1) {
-  info(message);
-  return indent(levels);
+  if (message) {
+    info(message);
+  }
+  return _indent(levels);
 }
 
 function endSection(message, levels = 1) {
@@ -116,7 +118,7 @@ function endSection(message, levels = 1) {
     newline();
   }
 
-  unindent(levels);
+  _unindent(levels);
 }
 
 
@@ -172,7 +174,7 @@ function logProductAction(message, title, handle, type = 'update') {
  */
 function endProductAction() {
   // Unindent to return to the previous level
-  unindent();
+  _unindent();
 }
 
 /**
@@ -286,8 +288,6 @@ module.exports = {
   initializeLogFile,
   closeLogFile,
   getLogFilePath,
-  indent,
-  unindent,
   startSection,
   endSection,
   resetIndent,

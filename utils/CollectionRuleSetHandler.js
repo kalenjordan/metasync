@@ -27,8 +27,7 @@ class CollectionRuleSetHandler {
     }
 
     // Log the whole ruleSet for debugging
-    logger.info(`Collection ruleSet details:`);
-    logger.indent();
+    logger.startSection(`Collection ruleSet details:`);
     logger.info(`Rules count: ${collection.ruleSet.rules.length}`);
     logger.info(`Applied disjunctively: ${collection.ruleSet.appliedDisjunctively}`);
 
@@ -38,8 +37,7 @@ class CollectionRuleSetHandler {
     );
 
     if (metafieldConditions.length > 0) {
-      logger.info(`Collection has ${metafieldConditions.length} metafield conditions in its rule set`);
-      logger.indent();
+      logger.startSection(`Collection has ${metafieldConditions.length} metafield conditions in its rule set`);
 
       // Check if conditionObject is present for any rules
       const hasConditionObject = metafieldConditions.some(rule => rule.conditionObject);
@@ -50,8 +48,7 @@ class CollectionRuleSetHandler {
 
       // Log each metafield condition for diagnosis purposes only
       metafieldConditions.forEach((rule, index) => {
-        logger.info(`Rule ${index + 1}: ${rule.column}`);
-        logger.indent();
+        logger.startSection(`Rule ${index + 1}: ${rule.column}`);
 
         if (!rule.conditionObject) {
           logger.error(`Metafield rule ${index + 1} is missing conditionObject`);
@@ -91,13 +88,13 @@ class CollectionRuleSetHandler {
           logger.error(`✗ No matching definition found for ${def.namespace}.${def.key} with ownerType=${def.ownerType}`);
         }
 
-        logger.unindent();
+        logger.endSection();
       });
 
-      logger.unindent();
+      logger.endSection();
     }
 
-    logger.unindent();
+    logger.endSection();
     return metafieldConditions.length > 0;
   }
 
@@ -175,8 +172,7 @@ class CollectionRuleSetHandler {
     );
 
     if (metafieldRules.length > 0) {
-      logger.info(`Smart collection uses ${metafieldRules.length} metafield conditions in its rules`);
-      logger.indent();
+      logger.startSection(`Smart collection uses ${metafieldRules.length} metafield conditions in its rules`);
 
       for (const rule of metafieldRules) {
         if (!rule.conditionObject || !rule.conditionObject.metafieldDefinition) {
@@ -190,8 +186,7 @@ class CollectionRuleSetHandler {
           throw new Error(`Missing ownerType in metafield definition for collection ${collection.title}`);
         }
 
-        logger.info(`Metafield rule: ${def.namespace}.${def.key}`);
-        logger.indent();
+        logger.startSection(`Metafield rule: ${def.namespace}.${def.key}`);
         logger.info(`Owner type: ${def.ownerType}`);
         logger.info(`Relation: ${rule.relation}`);
         logger.info(`Condition: ${rule.condition}`);
@@ -199,10 +194,10 @@ class CollectionRuleSetHandler {
         // These would use a special CollectionRuleMetafieldCondition type in Shopify GraphQL
         logger.info(`⚠ This collection uses metafield conditions which may require specific metafield definitions`);
         logger.info(`  with the MetafieldCapabilitySmartCollectionCondition capability for owner type: ${def.ownerType}`);
-        logger.unindent();
+        logger.endSection();
       }
 
-      logger.unindent();
+      logger.endSection();
     }
   }
 
@@ -220,8 +215,7 @@ class CollectionRuleSetHandler {
     );
 
     if (metafieldRules.length > 0) {
-      logger.error(`Smart collection uses metafield rules:`);
-      logger.indent();
+      logger.startSection(`Smart collection uses metafield rules:`);
 
       metafieldRules.forEach((rule, index) => {
         if (rule.conditionObject && rule.conditionObject.metafieldDefinition) {
@@ -241,7 +235,7 @@ class CollectionRuleSetHandler {
       logger.error(`3. The MetafieldCapabilitySmartCollectionCondition capability`);
       logger.error(`You can do this in Shopify Admin: Settings > Custom data > Product properties`);
 
-      logger.unindent();
+      logger.endSection();
     }
   }
 }

@@ -18,10 +18,7 @@ class ErrorHandler {
     if (!userErrors || userErrors.length === 0) return 0;
 
     // Log the overall error message
-    logger.error(`Failed to process ${batchInfo}:`);
-
-    // Increase indentation for all error details
-    logger.indent();
+    logger.startSection(`Failed to process ${batchInfo}:`);
 
     // Handle each user error
     userErrors.forEach(err => {
@@ -42,9 +39,9 @@ class ErrorHandler {
               // Log value preview if available
               if (details.valuePreview) {
                 // Indent one more level for value preview
-                logger.indent();
+                logger.startSection();
                 logger.error(`Value: ${details.valuePreview}`);
-                logger.unindent();
+                logger.endSection();
               }
               return;
             }
@@ -60,7 +57,7 @@ class ErrorHandler {
     });
 
     // Reset indentation after error handling
-    logger.unindent();
+    logger.endSection();
 
     return userErrors.length;
   }

@@ -176,12 +176,11 @@ class BaseMetafieldSyncStrategy {
 
         // Log the GraphQL errors if available
         if (error.graphQLErrors && error.graphQLErrors.length) {
-          logger.error('GraphQL API errors:');
-          logger.indent();
+          logger.startSection('GraphQL API errors:');
           error.graphQLErrors.forEach(err => {
             logger.error(err.message);
           });
-          logger.unindent();
+          logger.endSection();
         }
 
         return null;
@@ -301,12 +300,11 @@ class BaseMetafieldSyncStrategy {
 
         // Log the GraphQL errors if available
         if (error.graphQLErrors && error.graphQLErrors.length) {
-          logger.error('GraphQL API errors:');
-          logger.indent();
+          logger.startSection('GraphQL API errors:');
           error.graphQLErrors.forEach(err => {
             logger.error(err.message);
           });
-          logger.unindent();
+          logger.endSection();
         }
 
         return null;
@@ -393,14 +391,13 @@ class BaseMetafieldSyncStrategy {
         return { results: { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 }, definitionKeys: [] };
       }
 
-      logger.info(`Found ${targetDefinitions.length} definition(s) to delete in target.`);
+      logger.startSection(`Found ${targetDefinitions.length} definition(s) to delete in target.`);
 
       // Log each definition to be deleted
-      logger.indent();
       targetDefinitions.forEach(def => {
         logger.info(`${def.namespace}.${def.key} (${def.name || 'unnamed'}): ${def.type.name}`, 0, 'main');
       });
-      logger.unindent();
+      logger.endSection();
 
       const results = { created: 0, updated: 0, skipped: 0, failed: 0, deleted: 0 };
       let processedCount = 0;
@@ -415,10 +412,7 @@ class BaseMetafieldSyncStrategy {
         }
 
         const definitionFullKey = `${definition.namespace}.${definition.key}`;
-        logger.info(`Deleting ${this.resourceName} definition: ${definitionFullKey}`);
-
-        // Indent the dry run message to appear under the delete message
-        logger.indent();
+        logger.startSection(`Deleting ${this.resourceName} definition: ${definitionFullKey}`);
         const deleted = await this.deleteMetafieldDefinition(this.targetClient, definition);
 
         if (deleted) {
@@ -428,7 +422,7 @@ class BaseMetafieldSyncStrategy {
           results.failed++;
         }
 
-        logger.unindent();
+        logger.endSection();
 
         processedCount++;
       }
@@ -532,10 +526,7 @@ class BaseMetafieldSyncStrategy {
       const targetDefinition = targetDefinitionMap[definitionFullKey];
 
       if (targetDefinition) {
-        logger.info(`Updating ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
-
-        // Increase indentation for update operation and output
-        logger.indent();
+        logger.startSection(`Updating ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
 
         // Pass the potentially modified definitionToSync
         const updated = await this.updateMetafieldDefinition(this.targetClient, definitionToSync, targetDefinition);
@@ -547,12 +538,9 @@ class BaseMetafieldSyncStrategy {
           results.failed++;
         }
 
-        logger.unindent();
+        logger.endSection();
       } else {
-        logger.info(`Creating ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
-
-        // Increase indentation for create operation and output
-        logger.indent();
+        logger.startSection(`Creating ${this.resourceName} definition: ${chalk.bold(definitionFullKey)}`);
 
         // Pass the potentially modified definitionToSync
         const created = await this.createMetafieldDefinition(this.targetClient, definitionToSync);
@@ -568,7 +556,7 @@ class BaseMetafieldSyncStrategy {
           }
         }
 
-        logger.unindent();
+        logger.endSection();
       }
       processedCount++;
     }
@@ -607,16 +595,13 @@ class BaseMetafieldSyncStrategy {
     Object.keys(namespaceGroups).sort().forEach(namespace => {
       // Get current indent and log with purple color
       const indent = logger.getIndent();
-      logger.info(`Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
-
-      // Increase indentation for contents under this namespace
-      logger.indent();
+      logger.startSection(`Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
 
       namespaceGroups[namespace].forEach(def => {
         logger.info(`${def.key} (${def.name || "No name"})`);
       });
 
-      logger.unindent();
+      logger.endSection();
     });
 
     logger.info(`\nPlease run the command again with --namespace <namespace> to specify which ${this.resourceName} namespace to sync.`);
@@ -630,10 +615,7 @@ class BaseMetafieldSyncStrategy {
   async logNamespaceHeading(namespace) {
     // Get current indent and log with purple color
     const indent = logger.getIndent();
-    logger.info(`${indent}Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
-
-    // Increase indentation for everything under this namespace
-    logger.indent();
+    logger.startSection(`Found Namespace: ${chalk.magenta.bold(`${namespace}`)}`);
   }
 
   async sync() {

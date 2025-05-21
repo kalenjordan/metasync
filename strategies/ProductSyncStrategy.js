@@ -160,10 +160,9 @@ class ProductSyncStrategy {
     let deleteCount = 0;
     let failCount = 0;
 
-    logger.indent();
+    logger.startSection('Deleting products');
     for (const product of productsToDelete) {
-      logger.info(`Deleting product: ${product.title} (${product.handle})`);
-      logger.indent();
+      logger.startSection(`Deleting product: ${product.title} (${product.handle})`);
       logger.info(`Deleting product with ID: ${product.id}`);
 
       const deleted = await this.productHandler.deleteProduct(product.id);
@@ -176,9 +175,9 @@ class ProductSyncStrategy {
         failCount++;
         logger.error(`Failed to delete product: ${product.title}`);
       }
-      logger.unindent();
+      logger.endSection();
     }
-    logger.unindent();
+    logger.endSection();
 
     logger.success(`Finished delete operation.`);
     logger.info(`Deleted: ${deleteCount}, Failed: ${failCount}`);

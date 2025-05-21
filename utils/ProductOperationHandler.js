@@ -107,7 +107,7 @@ class ProductOperationHandler {
       logger.info(`[DRY RUN] Would create product "${product.title}"`, 'main');
 
       // Indent dry run details
-      logger.indent();
+      logger.startSection();
       logger.info(`[DRY RUN] Would create ${product.variants ? product.variants.length : 0} variant(s)`);
       logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
 
@@ -119,7 +119,7 @@ class ProductOperationHandler {
       }
 
       // Unindent after dry run details
-      logger.unindent();
+      logger.endSection();
 
       return {
         id: "dry-run-id",
@@ -225,7 +225,7 @@ class ProductOperationHandler {
       logger.info(`[DRY RUN] Would update product "${product.title}"`, 'main');
 
       // Indent dry run details
-      logger.indent();
+      logger.startSection();
       logger.info(`[DRY RUN] Would update ${product.variants ? product.variants.length : 0} variant(s)`);
       logger.info(`[DRY RUN] Would sync ${product.images ? product.images.length : 0} image(s) and ${product.metafields ? product.metafields.length : 0} metafield(s)`);
 
@@ -237,7 +237,7 @@ class ProductOperationHandler {
       }
 
       // Unindent after dry run details
-      logger.unindent();
+      logger.endSection();
 
       return {
         id: existingProduct.id,
