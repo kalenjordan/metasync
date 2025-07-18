@@ -4,7 +4,7 @@
  * Handles tracking and aggregating results from sync operations.
  * Provides methods to track success/failure counts and generate summary reports.
  */
-const logger = require('./logger');
+const logger = require('./Logger');
 
 class SyncResultTracker {
   constructor() {

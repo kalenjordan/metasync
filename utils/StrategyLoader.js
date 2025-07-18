@@ -10,6 +10,7 @@ const CollectionMetafieldSyncStrategy = require('../strategies/CollectionMetafie
 const PageSyncStrategy = require('../strategies/PageSyncStrategy');
 const ProductSyncStrategy = require('../strategies/ProductSyncStrategy');
 const CollectionSyncStrategy = require('../strategies/CollectionSyncStrategy');
+const MenuSyncStrategy = require('../strategies/MenuSyncStrategy');
 const AllResourcesSyncStrategy = require('../strategies/AllResourcesSyncStrategy');
 const EverythingSyncStrategy = require('../strategies/EverythingSyncStrategy');
 
@@ -30,6 +31,7 @@ const dataStrategies = {
   products: ProductSyncStrategy,
   pages: PageSyncStrategy,
   collections: CollectionSyncStrategy,
+  menus: MenuSyncStrategy,
   metaobjects: MetaobjectSyncStrategy,
   all: AllResourcesSyncStrategy
   // Add other data strategies as they're implemented

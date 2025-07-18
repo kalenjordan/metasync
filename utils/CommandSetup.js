@@ -14,8 +14,8 @@ function setupCommandLineOptions() {
   // Define common options for all commands
   const addCommonOptions = (command) => {
     return command
-      .option("--source <n>", "Source shop name (must exist in .shops.json)")
-      .option("--target <n>", "Target shop name (must exist in .shops.json). Defaults to source shop if not specified")
+      .option("--source <n>", "Source shop name (must exist in ~/metasync.yaml)")
+      .option("--target <n>", "Target shop name (must exist in ~/metasync.yaml). Defaults to source shop if not specified")
       .option("--live", "Make actual changes (default is dry run)", false)
       .option("--debug", "Enable debug logging", false)
       .option("--batch-size <number>", "Batch size for pagination", 25)
@@ -55,7 +55,7 @@ USAGE:
 
 COMMON OPTIONS:
   -h, --help            Display help
-  --source <shop>        Source shop name (must exist in .shops.json)
+  --source <shop>        Source shop name (must exist in ~/metasync.yaml)
   --target <shop>        Target shop name (defaults to source if not specified)
   --live                 Make actual changes (default is dry run)
   --debug                Enable debug logging
@@ -78,7 +78,7 @@ USAGE:
 
 COMMON OPTIONS:
   -h, --help            Display help
-  --source <shop>        Source shop name (must exist in .shops.json)
+  --source <shop>        Source shop name (must exist in ~/metasync.yaml)
   --target <shop>        Target shop name (defaults to source if not specified)
   --live                 Make actual changes (default is dry run)
   --debug                Enable debug logging
@@ -107,7 +107,7 @@ USAGE:
 
 COMMON OPTIONS:
   -h, --help            Display help
-  --source <shop>        Source shop name (must exist in .shops.json)
+  --source <shop>        Source shop name (must exist in ~/metasync.yaml)
   --target <shop>        Target shop name (defaults to source if not specified)
   --live                 Make actual changes (default is dry run)
   --debug                Enable debug logging
@@ -144,7 +144,7 @@ This is the most comprehensive sync command - use it to fully sync all resources
 
 COMMON OPTIONS:
   -h, --help             Display help
-  --source <shop>        Source shop name (must exist in .shops.json)
+  --source <shop>        Source shop name (must exist in ~/metasync.yaml)
   --target <shop>        Target shop name (defaults to source if not specified)
   --live                 Make actual changes (default is dry run)
   --debug                Enable debug logging
@@ -213,8 +213,8 @@ Example:
   }
 
   // Define resources and their options for data commands
-  const resourceSingular = ["product", "metaobject", "page", "collection", "customer", "order", "variant"];
-  const resourcePlural = ["products", "metaobjects", "pages", "collections", "customers", "orders", "variants"];
+  const resourceSingular = ["product", "metaobject", "page", "collection", "menu", "customer", "order", "variant"];
+  const resourcePlural = ["products", "metaobjects", "pages", "collections", "menus", "customers", "orders", "variants"];
 
   resourcePlural.forEach((pluralResource, index) => {
     const singularResource = resourceSingular[index];
@@ -349,6 +349,7 @@ Syncs data for all supported resource types including:
 - Metaobjects data
 - Pages data
 - Collections data
+- Menus data
 - Customers data
 - Orders data
 - Variants data

@@ -1,6 +1,6 @@
 const Shopify = require('shopify-api-node');
 const chalk = require('chalk');
-const logger = require('./logger');
+const logger = require('./Logger');
 
 class ShopifyClient {
   /**

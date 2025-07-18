@@ -17,6 +17,9 @@ const ProductFetchAll = require('./ProductFetchAll.graphql');
 const PageFetchAll = require('./PageFetchAll.graphql');
 const PageCreate = require('./PageCreate.graphql');
 const PageUpdate = require('./PageUpdate.graphql');
+const MenuFetchAll = require('./MenuFetchAll.graphql');
+const MenuCreate = require('./MenuCreate.graphql');
+const MenuUpdate = require('./MenuUpdate.graphql');
 
 // Metafield operations
 const MetafieldDefinitionsFetch = require('./MetafieldDefinitionsFetch.graphql');
@@ -49,6 +52,9 @@ module.exports = {
   PageFetchAll,
   PageCreate,
   PageUpdate,
+  MenuFetchAll,
+  MenuCreate,
+  MenuUpdate,
   // Metafield operations
   MetafieldDefinitionsFetch,
   MetafieldDefinitionCreate,

@@ -28,13 +28,41 @@ class MetaSyncCli {
     this._initializeClients();
   }
 
+  /**
+   * Handle source shop not found error with helpful information
+   * @param {string} shopName - The shop name that was not found
+   */
+    _handleSourceShopNotFound(shopName) {
+    const shopInfo = shopConfig.getAllShopNames();
+
+    logger.error(`Source shop "${shopName}" not found in ~/metasync.yaml`);
+    logger.info(`Configuration file: ${shopInfo.filePath}`);
+
+    if (shopInfo.shopNames.length === 0) {
+      logger.info('No shops found in configuration file.');
+      logger.info('Please add shop configurations to ~/metasync.yaml');
+    } else {
+      logger.newline();
+      logger.info('Available shops in configuration:');
+      shopInfo.shopNames.forEach(name => {
+        logger.info(`  • ${name}`);
+      });
+    }
+
+    logger.newline();
+    logger.info('Example usage:');
+    logger.info(`  metasync definitions metafields --resource products --namespace custom --source ${shopInfo.shopNames[0] || 'your-shop-name'}`);
+
+    process.exit(1);
+  }
+
   _initializeClients() {
     // Source shop configuration
     const sourceShopName = this.options.source;
     const sourceShopConfig = shopConfig.getShopConfig(sourceShopName);
 
     if (!sourceShopConfig) {
-      throw new Error(`Source shop "${sourceShopName}" not found in .shops.json`);
+      this._handleSourceShopNotFound(sourceShopName);
     }
 
     // Target shop configuration - either specified or same as source
@@ -46,7 +74,7 @@ class MetaSyncCli {
     let targetShopConfig = shopConfig.getShopConfig(targetShopName);
 
     if (!targetShopConfig) {
-      throw new Error(`Target shop "${targetShopName}" not found in .shops.json`);
+      throw new Error(`Target shop "${targetShopName}" not found in ~/metasync.yaml`);
     }
 
     // Check and store protection status
@@ -55,10 +83,10 @@ class MetaSyncCli {
     // If trying to make changes and target shop is protected, exit with error
     if (this.options.notADrill && this.targetShopProtected) {
       logger.error(`Error: Target shop "${targetShopName}" is protected. No changes can be made.`);
-      logger.info(`To allow changes, add "protected": false to this shop in .shops.json`);
+      logger.info(`To allow changes, add "protected": false to this shop in ~/metasync.yaml`);
       process.exit(1);
     } else if (!this.targetShopProtected) {
-      logger.startSection(`Target shop ${chalk.cyan(targetShopName)} is ${chalk.green('unprotected')} in .shops.json`);
+      logger.startSection(`Target shop ${chalk.cyan(targetShopName)} is ${chalk.green('unprotected')} in ~/metasync.yaml`);
     } else {
       logger.startSection(`Target shop "${targetShopName}" is protected (default).`);
     }
@@ -156,7 +184,7 @@ class MetaSyncCli {
       return true;
     }
 
-    const validResourceTypes = ['metaobjects', 'products', 'companies', 'orders', 'variants', 'customers', 'pages', 'collections', 'all'];
+    const validResourceTypes = ['metaobjects', 'products', 'companies', 'orders', 'variants', 'customers', 'pages', 'collections', 'menus', 'all'];
 
     // Check if resource type was provided
     if (!this.options.resource) {
@@ -485,7 +513,26 @@ async function main() {
   }
 
   if (!shopConfig.getShopConfig(options.source)) {
-    logger.error("Error: Source shop not found in .shops.json");
+        const shopInfo = shopConfig.getAllShopNames();
+
+    logger.error(`Source shop "${options.source}" not found in ~/metasync.yaml`);
+    logger.info(`Configuration file: ${shopInfo.filePath}`);
+
+    if (shopInfo.shopNames.length === 0) {
+      logger.info('No shops found in configuration file.');
+      logger.info('Please add shop configurations to ~/metasync.yaml');
+    } else {
+      logger.newline();
+      logger.info('Available shops in configuration:');
+      shopInfo.shopNames.forEach(name => {
+        logger.info(`  • ${name}`);
+      });
+    }
+
+    logger.newline();
+    logger.info('Example usage:');
+    logger.info(`  metasync definitions metafields --resource products --namespace custom --source ${shopInfo.shopNames[0] || 'your-shop-name'}`);
+
     process.exit(1);
   }
 

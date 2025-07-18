@@ -1,15 +1,16 @@
 const execa = require('execa')
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
 
 const cliPath = path.join(__dirname, '../cli.js')
 
 // Helper to check if the shops config exists (for conditional testing)
-const shopsConfigExists = fs.existsSync(path.join(__dirname, '../.shops.json'))
+const shopsConfigExists = fs.existsSync(path.join(os.homedir(), 'metasync.yaml'))
 
-// Skip all tests if .shops.json doesn't exist
+// Skip all tests if ~/metasync.yaml doesn't exist
 if (!shopsConfigExists) {
-  describe.skip('Define Metafields Command Tests (skipped - missing .shops.json)', () => {
+  describe.skip('Define Metafields Command Tests (skipped - missing ~/metasync.yaml)', () => {
     it('dummy test', () => {
       expect(true).toBe(true)
     })

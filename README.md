@@ -16,37 +16,30 @@ npm link
 
 ## Configuration
 
-Create a `.shops.json` file in the root directory based on the provided `.shops.json.example` file:
+Create a `metasync.yaml` file in your home directory (`~/metasync.yaml`) based on the provided `metasync.example.yaml` file:
 
-```json
-[
-  {
-    "name": "my-dev-shop",
-    "domain": "my-dev-shop.myshopify.com",
-    "accessToken": "shpat_example_token_for_dev_shop",
-    "protected": false
-  },
-  {
-    "name": "my-test-shop",
-    "domain": "my-test-shop.myshopify.com",
-    "accessToken": "shpat_example_token_for_test_shop"
-  }
-]
+```yaml
+- name: my-dev-shop
+  domain: my-dev-shop.myshopify.com
+  accessToken: shpat_example_token_for_dev_shop
+  protected: false
+
+- name: my-test-shop
+  domain: my-test-shop.myshopify.com
+  accessToken: shpat_example_token_for_test_shop
 ```
 
 Replace the example values with your actual shop names, domains and access tokens. You'll need an access token with the necessary permissions for the resources you want to sync.
 
 ### Shop Protection
 
-By default all shops are protected from accidental modifications. To allow changes to be made to a shop you must explicitly set `"protected": false` in your `.shops.json` file for that shop:
+By default all shops are protected from accidental modifications. To allow changes to be made to a shop you must explicitly set `protected: false` in your `~/metasync.yaml` file for that shop:
 
-```json
-{
-  "name": "my-shop",
-  "domain": "my-shop.myshopify.com",
-  "accessToken": "shpat_access_token",
-  "protected": false
-}
+```yaml
+- name: my-shop
+  domain: my-shop.myshopify.com
+  accessToken: shpat_access_token
+  protected: false
 ```
 
 If a shop is protected and you try to make changes with the `--live` flag the tool will exit with an error.

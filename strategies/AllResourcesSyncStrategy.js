@@ -6,6 +6,7 @@
  * - Metaobjects
  * - Pages
  * - Collections
+ * - Menus
  * - Customers
  * - Orders
  * - Variants
@@ -19,6 +20,7 @@ const ProductSyncStrategy = require('./ProductSyncStrategy');
 const MetaobjectSyncStrategy = require('./MetaobjectSyncStrategy');
 const PageSyncStrategy = require('./PageSyncStrategy');
 const CollectionSyncStrategy = require('./CollectionSyncStrategy');
+const MenuSyncStrategy = require('./MenuSyncStrategy');
 const CustomerMetafieldSyncStrategy = require('./CustomerMetafieldSyncStrategy');
 const OrderMetafieldSyncStrategy = require('./OrderMetafieldSyncStrategy');
 const VariantMetafieldSyncStrategy = require('./VariantMetafieldSyncStrategy');
@@ -35,6 +37,7 @@ class AllResourcesSyncStrategy {
     this.metaobjectStrategy = new MetaobjectSyncStrategy(sourceClient, targetClient, options);
     this.pageStrategy = new PageSyncStrategy(sourceClient, targetClient, options);
     this.collectionStrategy = new CollectionSyncStrategy(sourceClient, targetClient, options);
+    this.menuStrategy = new MenuSyncStrategy(sourceClient, targetClient, options);
     this.customerStrategy = new CustomerMetafieldSyncStrategy(sourceClient, targetClient, options);
     this.orderStrategy = new OrderMetafieldSyncStrategy(sourceClient, targetClient, options);
     this.variantStrategy = new VariantMetafieldSyncStrategy(sourceClient, targetClient, options);
@@ -72,18 +75,23 @@ class AllResourcesSyncStrategy {
       const collectionResults = await this._syncCollections();
       this._mergeResults(results, collectionResults);
 
-      // 5. Sync Customers (metafields only)
-      logger.info(chalk.cyan('🔄 Step 5: Syncing Customers Metafields'));
+      // 5. Sync Menus
+      logger.info(chalk.cyan('🔄 Step 5: Syncing Menus Data'));
+      const menuResults = await this._syncMenus();
+      this._mergeResults(results, menuResults);
+
+      // 6. Sync Customers (metafields only)
+      logger.info(chalk.cyan('🔄 Step 6: Syncing Customers Metafields'));
       const customerResults = await this._syncCustomers();
       this._mergeResults(results, customerResults);
 
-      // 6. Sync Orders (metafields only)
-      logger.info(chalk.cyan('🔄 Step 6: Syncing Orders Metafields'));
+      // 7. Sync Orders (metafields only)
+      logger.info(chalk.cyan('🔄 Step 7: Syncing Orders Metafields'));
       const orderResults = await this._syncOrders();
       this._mergeResults(results, orderResults);
 
-      // 7. Sync Variants (metafields only)
-      logger.info(chalk.cyan('🔄 Step 7: Syncing Variants Metafields'));
+      // 8. Sync Variants (metafields only)
+      logger.info(chalk.cyan('🔄 Step 8: Syncing Variants Metafields'));
       const variantResults = await this._syncVariants();
       this._mergeResults(results, variantResults);
 
@@ -197,6 +205,19 @@ class AllResourcesSyncStrategy {
       return result;
     } catch (error) {
       logger.error(chalk.red('❌ Collection Sync Failed:'), error.message);
+      return {
+        dataResults: { created: 0, updated: 0, skipped: 0, failed: 0 },
+        metafieldResults: { processed: 0, transformed: 0, blanked: 0, errors: 0 }
+      };
+    }
+  }
+
+  async _syncMenus() {
+    try {
+      const result = await this.menuStrategy.sync();
+      return result;
+    } catch (error) {
+      logger.error(chalk.red('❌ Menu Sync Failed:'), error.message);
       return {
         dataResults: { created: 0, updated: 0, skipped: 0, failed: 0 },
         metafieldResults: { processed: 0, transformed: 0, blanked: 0, errors: 0 }

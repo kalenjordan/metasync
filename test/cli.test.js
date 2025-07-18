@@ -1,11 +1,12 @@
 const execa = require('execa')
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
 
 const cliPath = path.join(__dirname, '../cli.js')
 
 // Helper to check if the shops config exists (for conditional testing)
-const shopsConfigExists = fs.existsSync(path.join(__dirname, '../.shops.json'))
+const shopsConfigExists = fs.existsSync(path.join(os.homedir(), 'metasync.yaml'))
 
 describe('metasync CLI tool', () => {
   // Set a longer timeout for all tests
@@ -26,7 +27,7 @@ describe('metasync CLI tool', () => {
     expect(stdout).toContain('--namespace <namespace>')
   })
 
-  // Only run these tests if .shops.json exists
+  // Only run these tests if ~/metasync.yaml exists
   if (shopsConfigExists) {
     describe('Live API tests', () => {
       it('runs definitions metafields command for products', async () => {
@@ -51,8 +52,8 @@ describe('metasync CLI tool', () => {
       })
     })
   } else {
-    it('skips live API tests when .shops.json does not exist', () => {
-      console.log('Skipping live API tests: .shops.json not found')
+      it('skips live API tests when ~/metasync.yaml does not exist', () => {
+    console.log('Skipping live API tests: ~/metasync.yaml not found')
       expect(true).toBe(true)
     })
   }

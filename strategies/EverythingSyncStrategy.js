@@ -24,6 +24,7 @@ const MetaobjectSyncStrategy = require('./MetaobjectSyncStrategy');
 const ProductSyncStrategy = require('./ProductSyncStrategy');
 const PageSyncStrategy = require('./PageSyncStrategy');
 const CollectionSyncStrategy = require('./CollectionSyncStrategy');
+const MenuSyncStrategy = require('./MenuSyncStrategy');
 const AllResourcesSyncStrategy = require('./AllResourcesSyncStrategy');
 
 class EverythingSyncStrategy {
@@ -56,6 +57,7 @@ class EverythingSyncStrategy {
     this.productDataStrategy = new ProductSyncStrategy(sourceClient, targetClient, { ...this.options });
     this.pageDataStrategy = new PageSyncStrategy(sourceClient, targetClient, { ...this.options });
     this.collectionDataStrategy = new CollectionSyncStrategy(sourceClient, targetClient, { ...this.options });
+    this.menuDataStrategy = new MenuSyncStrategy(sourceClient, targetClient, { ...this.options });
 
     // We'll use AllResourcesSyncStrategy for syncing all data at once
     this.allResourcesDataStrategy = new AllResourcesSyncStrategy(sourceClient, targetClient, { ...this.options });

@@ -11,7 +11,7 @@ This project syncs Shopify Metaobject and Metafield definitions between stores.
 
 - **`cli.js`**: [cli.js](mdc:cli.js) e main entry point for the command-line tool. It handles:
     - Parsing command-line arguments using `commander`.
-    - Reading store credentials from `.shops.json`.
+    - Reading store credentials from `~/metasync.yaml`.
     - Setting up Shopify API clients using `shopify-api-node`.
     - Wrapping the clients with `ShopifyClient` for logging.
     - Selecting and executing the appropriate sync strategy based on the `--resource-type` option.
@@ -19,7 +19,7 @@ This project syncs Shopify Metaobject and Metafield definitions between stores.
 
 - **`utils/ShopifyClient.js`**: [utils/ShopifyClient.js](mdc:utils/ShopifyClient.js) provides a wrapper around the `shopify-api-node` client to centralize GraphQL call logging using the project's logger. It formats debug logs based on the `--debug` flag.
 
-- **`.shops.json`**: [`.shops.json`](mdc:.shops.json) (not committed, example in `.shops.example.json`) stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`).
+- **`~/metasync.yaml`**: Stores the domain and access tokens for different Shopify stores, referenced by name (e.g., `--source shop1`). Example in `metasync.example.yaml`.
 
 ## Strategy Pattern
 
